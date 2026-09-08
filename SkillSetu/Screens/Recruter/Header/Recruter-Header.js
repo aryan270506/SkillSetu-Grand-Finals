@@ -16,6 +16,7 @@ import RecruiterDashboard from '../Dashboard/Recruter-Dashboard';
 import Internship from '../Internship/Internship';
 import Applications from '../Applications/Applications';
 import Interviews from '../Interviews/Interviews';
+import RecruterProfile from '../Profile/Profile';
 
 const COLORS = {
   headerBg: '#FFFFFF',
@@ -291,7 +292,9 @@ export default function RecruterHeader({ user, onLogout }) {
 
       {/* Screen Body */}
       <View style={styles.screenBody}>
-        {activeTab === 'Internships' ? (
+        {activeTab === 'My Profile' ? (
+          <RecruterProfile />
+        ) : activeTab === 'Internships' ? (
           <Internship onOpenPostModal={() => setShowPostModal(true)} />
         ) : activeTab === 'Applications' ? (
           <Applications />
