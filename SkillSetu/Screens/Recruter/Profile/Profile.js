@@ -257,37 +257,7 @@ export default function RecruterProfile() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Sub Navigation Bar */}
-        <View style={styles.subNavBar}>
-          <View style={styles.subTabsLeft}>
-            {[
-              'Company Profile',
-              'Internship Postings (24)',
-              'Hiring Team & Roles',
-              'Recruitment Branding',
-              'Verification Status',
-            ].map((tab) => {
-              const isActive = activeSubTab.startsWith(tab.split(' ')[0]);
-              return (
-                <Pressable
-                  key={tab}
-                  onPress={() => setActiveSubTab(tab)}
-                  style={[styles.subTabItem, isActive && styles.subTabActive]}
-                >
-                  <Text style={[styles.subTabText, isActive && styles.subTabActiveText]}>
-                    {tab}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={styles.subTabsRight}>
-            <View style={styles.statusBadgeGreen}>
-              <View style={styles.greenDot} />
-              <Text style={styles.statusBadgeText}>Publicly Visible</Text>
-            </View>
-            <Text style={styles.lastUpdatedText}>Last updated: Yesterday, 4:50 PM</Text>
-          </View>
-        </View>
+
 
         {/* Page Header */}
         <View style={styles.headerSection}>
@@ -345,10 +315,10 @@ export default function RecruterProfile() {
               </View>
             </View>
             <View style={styles.heroRightActions}>
-              <HoverButton style={styles.previewBtn} onPress={() => {}}>
+              <HoverButton style={styles.previewBtn} onPress={() => { }}>
                 <Text style={styles.previewBtnText}>👁️ Preview Student View</Text>
               </HoverButton>
-              <HoverButton style={styles.shareBtn} onPress={() => {}}>
+              <HoverButton style={styles.shareBtn} onPress={() => { }}>
                 <Text style={styles.shareBtnText}>🔗 Share Public Profile</Text>
               </HoverButton>
             </View>
@@ -575,7 +545,7 @@ export default function RecruterProfile() {
                   <Text style={styles.cardHeaderIcon}>💼</Text>
                   <Text style={styles.cardHeaderTitle}>Active Internships</Text>
                 </View>
-                <HoverButton style={styles.postNewBtn} onPress={() => {}}>
+                <HoverButton style={styles.postNewBtn} onPress={() => { }}>
                   <Text style={styles.postNewBtnText}>+ Post New Role</Text>
                 </HoverButton>
               </View>
@@ -600,13 +570,13 @@ export default function RecruterProfile() {
                       📍 {role.loc}  •  💰 {role.stipend}  •  ⏱️ {role.dur}  •  👥 {role.apps}
                     </Text>
                   </View>
-                  <HoverButton style={styles.viewInternshipBtn} onPress={() => {}}>
+                  <HoverButton style={styles.viewInternshipBtn} onPress={() => { }}>
                     <Text style={styles.viewInternshipBtnText}>View Internship ›</Text>
                   </HoverButton>
                 </View>
               ))}
 
-              <HoverButton style={styles.viewAllInternshipsBtn} onPress={() => {}}>
+              <HoverButton style={styles.viewAllInternshipsBtn} onPress={() => { }}>
                 <Text style={styles.viewAllInternshipsBtnText}>View All 24 Internships ➔</Text>
               </HoverButton>
             </HoverCard>
@@ -705,7 +675,7 @@ export default function RecruterProfile() {
                   <Text style={styles.sidebarCardTitle}>Hiring Team</Text>
                   <Text style={styles.teamCountBadge}>4</Text>
                 </View>
-                <HoverButton style={styles.addRecruiterBtn} onPress={() => {}}>
+                <HoverButton style={styles.addRecruiterBtn} onPress={() => { }}>
                   <Text style={styles.addRecruiterBtnText}>+ Add Recruiter</Text>
                 </HoverButton>
               </View>
@@ -737,7 +707,7 @@ export default function RecruterProfile() {
             <HoverCard style={styles.sectionCard}>
               <View style={styles.cardHeaderRow}>
                 <Text style={styles.sidebarCardTitle}>Company Locations</Text>
-                <HoverButton style={styles.addLocationBtn} onPress={() => {}}>
+                <HoverButton style={styles.addLocationBtn} onPress={() => { }}>
                   <Text style={styles.addLocationBtnText}>+ Add Location</Text>
                 </HoverButton>
               </View>
