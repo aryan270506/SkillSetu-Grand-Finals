@@ -538,73 +538,74 @@ export default function Students() {
               {STUDENTS_DATA.map((student) => {
                 const isSelected = selectedStudent.id === student.id;
                 return (
-                  <HoverCard
-                    key={student.id}
-                    style={styles.studentCard}
-                    isSelected={isSelected}
-                    onPress={() => setSelectedStudent(student)}
-                  >
-                    <View style={styles.studentCardHeader}>
-                      <View style={styles.studentAvatarCol}>
-                        <View style={[styles.avatarCircle, { backgroundColor: student.avatarBg }]}>
-                          <Text style={styles.avatarText}>{student.avatar}</Text>
+                  <View key={student.id} style={styles.studentCardWrapper}>
+                    <HoverCard
+                      style={styles.studentCard}
+                      isSelected={isSelected}
+                      onPress={() => setSelectedStudent(student)}
+                    >
+                      <View style={styles.studentCardHeader}>
+                        <View style={styles.studentAvatarCol}>
+                          <View style={[styles.avatarCircle, { backgroundColor: student.avatarBg }]}>
+                            <Text style={styles.avatarText}>{student.avatar}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.studentNameCol}>
+                          <View style={styles.studentNameRow}>
+                            <Text style={styles.studentName}>{student.name}</Text>
+                            {student.verified && <Text style={styles.verifiedCheck}>✓</Text>}
+                          </View>
+                          <Text style={styles.studentDegree}>{student.degree}</Text>
+                          <Text style={styles.studentCgpa}>CGPA: {student.cgpa}</Text>
+                        </View>
+
+                        <Pressable style={styles.bookmarkIconBtn}>
+                          <Text style={styles.bookmarkIconText}>🏷️</Text>
+                        </Pressable>
+                      </View>
+
+                      {/* Match Badges */}
+                      <View style={styles.matchBadgesRow}>
+                        <View style={styles.aiMatchTag}>
+                          <Text style={styles.aiMatchTagText}>✨ {student.matchTag}</Text>
+                        </View>
+                        <View style={styles.matchPctTag}>
+                          <Text style={styles.matchPctTagText}>{student.matchQuality}</Text>
                         </View>
                       </View>
 
-                      <View style={styles.studentNameCol}>
-                        <View style={styles.studentNameRow}>
-                          <Text style={styles.studentName}>{student.name}</Text>
-                          {student.verified && <Text style={styles.verifiedCheck}>✓</Text>}
-                        </View>
-                        <Text style={styles.studentDegree}>{student.degree}</Text>
-                        <Text style={styles.studentCgpa}>CGPA: {student.cgpa}</Text>
+                      {/* Skills Tags */}
+                      <View style={styles.skillsRow}>
+                        {student.skills.map((sk, idx) => (
+                          <View key={idx} style={styles.skillPill}>
+                            <Text style={styles.skillPillText}>{sk.name} ({sk.level})</Text>
+                          </View>
+                        ))}
                       </View>
 
-                      <Pressable style={styles.bookmarkIconBtn}>
-                        <Text style={styles.bookmarkIconText}>{student.bookmarked ? '🔖' : '🔖'}</Text>
-                      </Pressable>
-                    </View>
-
-                    {/* Match Badges */}
-                    <View style={styles.matchBadgesRow}>
-                      <View style={styles.aiMatchTag}>
-                        <Text style={styles.aiMatchTagText}>✨ {student.matchTag}</Text>
+                      {/* Stats & Availability */}
+                      <View style={styles.studentCardMeta}>
+                        <Text style={styles.metaItem}>
+                          <Text style={styles.metaBold}>{student.projectsCount}</Text> Projects  •  <Text style={styles.metaBold}>{student.certificationsCount}</Text> Certification
+                        </Text>
+                        <Text style={styles.metaAvailability}>• {student.availability}</Text>
                       </View>
-                      <View style={styles.matchPctTag}>
-                        <Text style={styles.matchPctTagText}>{student.matchQuality}</Text>
+
+                      {/* Action Buttons */}
+                      <View style={styles.cardActionsRow}>
+                        <HoverButton
+                          style={styles.viewProfileBtn}
+                          onPress={() => setSelectedStudent(student)}
+                        >
+                          <Text style={styles.viewProfileBtnText}>👁 View Profile</Text>
+                        </HoverButton>
+                        <HoverButton style={styles.shortlistBtn} onPress={() => {}}>
+                          <Text style={styles.shortlistBtnText}>+ Shortlist</Text>
+                        </HoverButton>
                       </View>
-                    </View>
-
-                    {/* Skills Tags */}
-                    <View style={styles.skillsRow}>
-                      {student.skills.map((sk, idx) => (
-                        <View key={idx} style={styles.skillPill}>
-                          <Text style={styles.skillPillText}>{sk.name} ({sk.level})</Text>
-                        </View>
-                      ))}
-                    </View>
-
-                    {/* Stats & Availability */}
-                    <View style={styles.studentCardMeta}>
-                      <Text style={styles.metaItem}>
-                        <Text style={styles.metaBold}>{student.projectsCount}</Text> Projects  •  <Text style={styles.metaBold}>{student.certificationsCount}</Text> Certification
-                      </Text>
-                      <Text style={styles.metaAvailability}>• {student.availability}</Text>
-                    </View>
-
-                    {/* Action Buttons */}
-                    <View style={styles.cardActionsRow}>
-                      <HoverButton
-                        style={styles.viewProfileBtn}
-                        onPress={() => setSelectedStudent(student)}
-                      >
-                        <Text style={styles.viewProfileBtnText}>👁️ View Profile</Text>
-                      </HoverButton>
-                      <HoverButton style={styles.shortlistBtn} onPress={() => {}}>
-                        <Text style={styles.shortlistBtnText}>+ Shortlist</Text>
-                      </HoverButton>
-                    </View>
-                  </HoverCard>
+                    </HoverCard>
+                  </View>
                 );
               })}
             </View>
@@ -1134,9 +1135,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 16,
   },
+  studentCardWrapper: {
+    width: '48.5%',
+    minWidth: 320,
+  },
   studentCard: {
-    flex: 1,
-    minWidth: 280,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 16,
@@ -1176,7 +1179,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   studentName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: COLORS.textMain,
   },
@@ -1191,15 +1194,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   studentCgpa: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: COLORS.textMain,
+    marginTop: 2,
   },
   bookmarkIconBtn: {
     padding: 2,
   },
   bookmarkIconText: {
-    fontSize: 16,
+    fontSize: 14,
+    color: '#CBD5E1',
   },
 
   // Badges
@@ -1210,15 +1215,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   aiMatchTag: {
-    backgroundColor: COLORS.mintBg,
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   aiMatchTagText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.primaryTeal,
+    fontWeight: '700',
+    color: '#1D4ED8',
   },
   matchPctTag: {
     backgroundColor: '#F1F5F9',
@@ -1273,24 +1278,26 @@ const styles = StyleSheet.create({
   // Card Actions
   cardActionsRow: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    gap: 10,
   },
   viewProfileBtn: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 8,
-    borderRadius: 6,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
   },
   viewProfileBtnText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.textMain,
   },
   shortlistBtn: {
-    flex: 1,
     backgroundColor: COLORS.primaryTeal,
-    paddingVertical: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 6,
     alignItems: 'center',
   },
