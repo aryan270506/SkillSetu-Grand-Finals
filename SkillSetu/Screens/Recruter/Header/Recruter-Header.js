@@ -18,6 +18,7 @@ import Applications from '../Applications/Applications';
 import Interviews from '../Interviews/Interviews';
 import RecruterProfile from '../Profile/Profile';
 import Students from '../Students/Students';
+import Analytics from '../Analytics/Analytics';
 
 const COLORS = {
   headerBg: '#FFFFFF',
@@ -303,6 +304,8 @@ export default function RecruterHeader({ user, onLogout }) {
           <Applications />
         ) : activeTab === 'Interviews' ? (
           <Interviews />
+        ) : activeTab === 'Analytics' ? (
+          <Analytics />
         ) : (
           <RecruiterDashboard
             user={user}
