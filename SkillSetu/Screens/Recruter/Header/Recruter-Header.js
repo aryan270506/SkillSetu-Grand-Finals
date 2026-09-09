@@ -17,6 +17,7 @@ import Internship from '../Internship/Internship';
 import Applications from '../Applications/Applications';
 import Interviews from '../Interviews/Interviews';
 import RecruterProfile from '../Profile/Profile';
+import Students from '../Students/Students';
 
 const COLORS = {
   headerBg: '#FFFFFF',
@@ -296,6 +297,8 @@ export default function RecruterHeader({ user, onLogout }) {
           <RecruterProfile />
         ) : activeTab === 'Internships' ? (
           <Internship onOpenPostModal={() => setShowPostModal(true)} />
+        ) : activeTab === 'Students' ? (
+          <Students />
         ) : activeTab === 'Applications' ? (
           <Applications />
         ) : activeTab === 'Interviews' ? (
