@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Image,
   Platform,
   Pressable,
   SafeAreaView,
@@ -39,11 +40,33 @@ const COLORS = {
   success: '#1c7c55',     // Success Green
 };
 
-export default function StudentHeader({ user, onLogout }) {
+export default function StudentHeader({ user, onLogout, onUpdateUser }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
   const isDesktop = width >= 1024;
-  const [profileData, setProfileData] = useState(DEFAULT_MOCK_PROFILE);
+  const [profileData, setProfileData] = useState(() => ({
+    ...DEFAULT_MOCK_PROFILE,
+    resumeAnalysis: {
+      resumeFile: '',
+      parseTime: '',
+      score: 0,
+      scoreText: '',
+      scoreBreakdown: {},
+      extractedData: {
+        projects: [],
+        rawProjects: [],
+        experience: [],
+        coreTechnologies: [],
+        normalizedSkills: [],
+        identifiedSkillDomains: [],
+        education: [],
+        certifications: [],
+        achievements: [],
+        links: {},
+      },
+    },
+  }));
+
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -168,12 +191,15 @@ export default function StudentHeader({ user, onLogout }) {
             user={user}
             profileCompletion={calculateProfileCompletion()}
             onNavigateToProfile={() => setActiveTab('Profile')}
+            profileData={profileData}
+            setProfileData={setProfileData}
           />
         );
       case 'Profile':
         return (
           <Profile
             user={user}
+            updateUser={onUpdateUser}
             profileData={profileData}
             setProfileData={setProfileData}
             onFinish={() => setActiveTab('Dashboard')}
@@ -597,9 +623,16 @@ export default function StudentHeader({ user, onLogout }) {
               onPress={() => setShowDropdown(!showDropdown)}
               style={({ pressed }) => [styles.avatarButton, pressed && styles.pressed]}
             >
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>{avatarLetter}</Text>
-              </View>
+              {(profileData?.personalInfo?.profileImage || user?.profile_image) ? (
+                <Image
+                  source={{ uri: profileData?.personalInfo?.profileImage || user?.profile_image }}
+                  style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: '#0D9488' }}
+                />
+              ) : (
+                <View style={styles.avatarCircle}>
+                  <Text style={styles.avatarText}>{avatarLetter}</Text>
+                </View>
+              )}
               {!isCompact && (
                 <View style={styles.profileNameWrap}>
                   <Text style={styles.profileName} numberOfLines={1}>

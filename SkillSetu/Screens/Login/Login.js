@@ -51,6 +51,7 @@ export default function Login({ onLoginSuccess }) {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [isOtpVerified, setIsOtpVerified] = useState(false);
   const [securePassword, setSecurePassword] = useState(true);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [focusedField, setFocusedField] = useState('');
@@ -118,8 +119,14 @@ export default function Login({ onLoginSuccess }) {
   function useStudentDemo() {
     setAuthMode('login');
     updateRole('student');
-    setEmail('student@skillsetu.com');
-    setPassword('student123');
+    setEmail('');
+    setPassword('');
+    setAuthState((current) => ({
+      ...current,
+      status: 'error',
+      error: 'Demo logins are disabled for students. Please sign up or log in with your registered account.',
+      message: '',
+    }));
   }
 
   function useRecruiterDemo() {
@@ -127,6 +134,18 @@ export default function Login({ onLoginSuccess }) {
     updateRole('recruiter');
     setEmail('recruiter@techcorp.com');
     setPassword('recruiter123');
+  }
+
+  function formatErrorMessage(detail, fallback) {
+    if (!detail) return fallback;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((err) => err.msg || JSON.stringify(err)).join(', ');
+    }
+    if (typeof detail === 'object') {
+      return detail.msg || detail.message || JSON.stringify(detail);
+    }
+    return String(detail);
   }
 
   function resetFeedback() {
@@ -194,7 +213,7 @@ export default function Login({ onLoginSuccess }) {
     }, 900);
   }
 
-  function handleSendOtp() {
+  async function handleSendOtp() {
     setTouched((current) => ({ ...current, email: true }));
 
     if (!isValidEmail(email)) {
@@ -214,19 +233,43 @@ export default function Login({ onLoginSuccess }) {
       message: '',
     }));
 
-    setTimeout(() => {
-      setOtpSent(true);
-      setOtp('');
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/student/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        setOtpSent(true);
+        setIsOtpVerified(false);
+        setOtp('');
+        setAuthState((current) => ({
+          ...current,
+          status: 'success',
+          error: '',
+          message: `OTP sent to ${email.trim()} from abhoge5@gmail.com.`,
+        }));
+      } else {
+        setAuthState((current) => ({
+          ...current,
+          status: 'error',
+          error: formatErrorMessage(data.detail, 'Failed to send OTP. Please try again.'),
+          message: '',
+        }));
+      }
+    } catch (err) {
       setAuthState((current) => ({
         ...current,
-        status: 'success',
-        error: '',
-        message: `OTP sent to ${email.trim()}.`,
+        status: 'error',
+        error: 'Could not connect to backend server (http://127.0.0.1:8000).',
+        message: '',
       }));
-    }, 700);
+    }
   }
 
-  function handleVerifyOtp() {
+  async function handleVerifyOtp() {
     if (!otp.trim()) {
       setAuthState((current) => ({
         ...current,
@@ -244,14 +287,38 @@ export default function Login({ onLoginSuccess }) {
       message: '',
     }));
 
-    setTimeout(() => {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/student/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), otp: otp.trim() }),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        setIsOtpVerified(true);
+        setAuthState((current) => ({
+          ...current,
+          status: 'success',
+          error: '',
+          message: `OTP verified successfully! You can now click Create Account.`,
+        }));
+      } else {
+        setAuthState((current) => ({
+          ...current,
+          status: 'error',
+          error: formatErrorMessage(data.detail, 'Invalid OTP.'),
+          message: '',
+        }));
+      }
+    } catch (err) {
       setAuthState((current) => ({
         ...current,
-        status: 'success',
-        error: '',
-        message: `OTP ${otp.trim()} verified successfully.`,
+        status: 'error',
+        error: 'Could not connect to backend server.',
+        message: '',
       }));
-    }, 700);
+    }
   }
 
   function validateRecruiterStep(step) {
@@ -272,10 +339,6 @@ export default function Login({ onLoginSuccess }) {
       if (!companyName.trim())
         nextErrors.companyName = 'Company / organization name is required.';
       if (!orgType) nextErrors.orgType = 'Please select an organization type.';
-      if (!industry.trim()) nextErrors.industry = 'Industry is required.';
-      if (!companySize) nextErrors.companySize = 'Please select a company size.';
-      if (!orgLocation.trim())
-        nextErrors.orgLocation = 'Organization location is required.';
     }
 
     if (step === 3) {
@@ -292,11 +355,8 @@ export default function Login({ onLoginSuccess }) {
     const nextErrors = validateRecruiterStep(recruiterStep);
     setRecruiterErrors(nextErrors);
 
-    if (Object.keys(nextErrors).length > 0) return;
-
-    if (recruiterStep < 3) {
-      setRecruiterStep((current) => current + 1);
-      setAuthState((current) => ({ ...current, status: 'empty', error: '', message: '' }));
+    if (Object.keys(nextErrors).length === 0) {
+      setRecruiterStep((current) => Math.min(3, current + 1));
     }
   }
 
@@ -338,7 +398,38 @@ export default function Login({ onLoginSuccess }) {
     }, 900);
   }
 
-  function handleSignIn() {
+  async function handleSignIn() {
+    if (authState.role === 'recruiter') {
+      // Keep recruiter demo / simulation login
+      setAuthState((current) => ({
+        ...current,
+        status: 'loading',
+        error: '',
+        message: '',
+      }));
+
+      setTimeout(() => {
+        setAuthState((current) => ({
+          ...current,
+          status: 'success',
+          error: '',
+          message: 'Welcome back to SkillSetu.',
+        }));
+        if (onLoginSuccess) {
+          setTimeout(() => {
+            onLoginSuccess({
+              role: 'recruiter',
+              email: email.trim() || 'recruiter@techcorp.com',
+              name: name.trim() || 'TechCorp HR Manager',
+              companyName: companyName.trim() || 'TechCorp Global',
+            });
+          }, 800);
+        }
+      }, 900);
+      return;
+    }
+
+    // Student Authentication strictly via PostgreSQL DB
     setAuthState((current) => ({
       ...current,
       status: 'loading',
@@ -346,27 +437,45 @@ export default function Login({ onLoginSuccess }) {
       message: '',
     }));
 
-    setTimeout(() => {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/student/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        setAuthState((current) => ({
+          ...current,
+          status: 'success',
+          error: '',
+          message: `Welcome back, ${data.user.name}!`,
+        }));
+        if (onLoginSuccess) {
+          setTimeout(() => {
+            onLoginSuccess(data.user);
+          }, 800);
+        }
+      } else {
+        setAuthState((current) => ({
+          ...current,
+          status: 'error',
+          error: formatErrorMessage(data.detail, 'Login failed. Invalid credentials.'),
+          message: '',
+        }));
+      }
+    } catch (err) {
       setAuthState((current) => ({
         ...current,
-        status: 'success',
-        error: '',
-        message: 'Welcome back to SkillSetu.',
+        status: 'error',
+        error: 'Could not connect to backend server.',
+        message: '',
       }));
-      if (onLoginSuccess) {
-        setTimeout(() => {
-          onLoginSuccess({
-            role: authState.role,
-            email: email.trim() || (authState.role === 'recruiter' ? 'recruiter@techcorp.com' : 'student@skillsetu.com'),
-            name: name.trim() || (authState.role === 'recruiter' ? 'TechCorp HR Manager' : 'Aarav Sharma'),
-            companyName: authState.role === 'recruiter' ? (companyName.trim() || 'TechCorp Global') : undefined,
-          });
-        }, 800);
-      }
-    }, 900);
+    }
   }
 
-  function handleCreateAccount() {
+  async function handleCreateAccount() {
     const nextTouched = {
       name: true,
       email: true,
@@ -415,30 +524,57 @@ export default function Login({ onLoginSuccess }) {
       return;
     }
 
-    setAuthState((current) => ({
-      ...current,
-      status: 'loading',
-      error: '',
-      message: '',
-    }));
-
-    setTimeout(() => {
+    if (!isOtpVerified) {
       setAuthState((current) => ({
         ...current,
-        status: 'success',
-        error: '',
-        message: `Account created for ${name.trim()}.`,
+        status: 'error',
+        error: 'Please click "Send OTP" and verify your email before creating an account.',
+        message: '',
       }));
-      if (onLoginSuccess) {
-        setTimeout(() => {
-          onLoginSuccess({
-            role: authState.role,
-            email: email.trim(),
-            name: name.trim(),
-          });
-        }, 800);
+      return;
+    }
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/student/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          password: password.trim(),
+          phone: phone.trim(),
+        }),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        setAuthState((current) => ({
+          ...current,
+          status: 'success',
+          error: '',
+          message: `Account registered in database for ${name.trim()}!`,
+        }));
+        if (onLoginSuccess) {
+          setTimeout(() => {
+            onLoginSuccess(data.user);
+          }, 800);
+        }
+      } else {
+        setAuthState((current) => ({
+          ...current,
+          status: 'error',
+          error: formatErrorMessage(data.detail, 'Failed to create student account.'),
+          message: '',
+        }));
       }
-    }, 900);
+    } catch (err) {
+      setAuthState((current) => ({
+        ...current,
+        status: 'error',
+        error: 'Could not connect to backend server.',
+        message: '',
+      }));
+    }
   }
 
   return (

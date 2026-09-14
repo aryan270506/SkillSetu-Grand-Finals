@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { calculateSkillIndex } from './skillIndexCalculator';
 
 const COLORS = {
   canvas: '#f8f9fa',       // Soft Off-white Background
@@ -124,12 +125,27 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
   );
 }
 
-export default function Dashboard({ user, profileCompletion, onNavigateToProfile }) {
+export default function Dashboard({ user, profileCompletion, onNavigateToProfile, profileData, setProfileData }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const isWide = width >= 1024;
 
   const displayName = user?.name || 'Aryan';
+
+  // GitHub Analysis Real Data States
+  const [githubState, setGithubState] = useState({
+    loading: true,
+    error: false,
+    connected: false,
+    reposAnalyzed: 0,
+    skills: [],
+    username: '',
+  });
+
+  const [selectedSkillModal, setSelectedSkillModal] = useState(null);
+  const [isSkillIndexModalOpen, setIsSkillIndexModalOpen] = useState(false);
+  const [activeEvidencePop, setActiveEvidencePop] = useState(null);
+  const [showAllSkills, setShowAllSkills] = useState(false);
 
   // Action plan states
   const [actions, setActions] = useState([
@@ -138,6 +154,159 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
     { id: 3, text: 'Take technical mock interview', completed: false },
     { id: 4, text: 'Update resume with new Python project', completed: false },
   ]);
+
+  // Fetch real GitHub analysis from Backend API
+  const fetchGithubAnalysis = React.useCallback(async () => {
+    if (!user || !user.email) return;
+    setGithubState(prev => ({ ...prev, loading: true, error: false }));
+
+    try {
+      const emailQuery = encodeURIComponent(user.email.trim());
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/github/status?email=${emailQuery}`);
+      const data = await res.json();
+
+      if (res.ok && data.status === 'success' && data.connection) {
+        const conn = data.connection;
+        if (conn.connected) {
+          // If skills exist or can be analyzed
+          let skillsList = conn.skills || [];
+
+          // If no analyzed skills present, trigger analyze-selected
+          if ((!skillsList || skillsList.length === 0) && conn.repositories && conn.repositories.length > 0) {
+            try {
+              const analyzeRes = await fetch('http://127.0.0.1:8000/api/v1/github/analyze-selected', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: user.email.trim(),
+                  selected_repo_ids: conn.repositories.map(r => String(r.id))
+                })
+              });
+              const analyzeData = await analyzeRes.json();
+              if (analyzeRes.ok && analyzeData.skills) {
+                skillsList = analyzeData.skills;
+              }
+            } catch (err) {
+              console.error('Error auto-analyzing GitHub repositories:', err);
+            }
+          }
+
+          setGithubState({
+            loading: false,
+            error: false,
+            connected: true,
+            reposAnalyzed: conn.metrics?.reposAnalyzed || (conn.repositories || []).length,
+            skills: skillsList,
+            username: conn.username || '',
+          });
+        } else {
+          setGithubState({
+            loading: false,
+            error: false,
+            connected: false,
+            reposAnalyzed: 0,
+            skills: [],
+            username: '',
+          });
+        }
+      } else {
+        setGithubState({
+          loading: false,
+          error: true,
+          connected: false,
+          reposAnalyzed: 0,
+          skills: [],
+          username: '',
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching GitHub analysis for Student Dashboard:', err);
+      setGithubState({
+        loading: false,
+        error: true,
+        connected: false,
+        reposAnalyzed: 0,
+        skills: [],
+        username: '',
+      });
+    }
+  }, [user]);
+
+  React.useEffect(() => {
+    fetchGithubAnalysis();
+  }, [fetchGithubAnalysis]);
+
+  // Helper to map evidence score to evidence level label
+  const getEvidenceLevelText = (score) => {
+    if (score >= 90) return 'Very Strong Evidence';
+    if (score >= 75) return 'Strong Evidence';
+    if (score >= 50) return 'Good Evidence';
+    if (score >= 25) return 'Moderate Evidence';
+    return 'Limited Evidence';
+  };
+
+  // Calculate overall GitHub Skill Index using weighted Core Skill model
+  const skillIndexDetails = React.useMemo(() => {
+    return calculateSkillIndex(githubState.skills);
+  }, [githubState.skills]);
+
+  const overallGithubScore = skillIndexDetails.score;
+
+  // Consolidated and sorted user skills (percentage-wise descending)
+  const formattedSkills = React.useMemo(() => {
+    const map = new Map();
+
+    if (githubState.skills && Array.isArray(githubState.skills)) {
+      githubState.skills.forEach(s => {
+        const name = s.name || s.technology || s.tech;
+        if (name) {
+          const key = name.trim().toLowerCase();
+          const score = Math.round(s.score || s.percentage || s.evidenceScore || 0);
+          map.set(key, { name: name.trim(), score });
+        }
+      });
+    }
+
+    if (profileData) {
+      const norm = profileData.normalizedSkills || profileData.normalized_skills;
+      if (Array.isArray(norm)) {
+        norm.forEach(s => {
+          const name = s.skill_name || s.name || s.label;
+          if (name && !map.has(name.trim().toLowerCase())) {
+            const score = Math.round(s.score || s.confidence || 75);
+            map.set(name.trim().toLowerCase(), { name: name.trim(), score });
+          }
+        });
+      }
+    }
+
+    const defaultSkills = [
+      { name: 'Python', score: 88 },
+      { name: 'SQL', score: 81 },
+      { name: 'Git', score: 76 },
+      { name: 'JavaScript', score: 72 },
+      { name: 'React', score: 68 },
+      { name: 'HTML/CSS', score: 65 },
+      { name: 'FastAPI', score: 54 },
+      { name: 'TypeScript', score: 50 },
+      { name: 'Docker', score: 42 },
+      { name: 'Node.js', score: 38 },
+      { name: 'PostgreSQL', score: 35 },
+      { name: 'Linux', score: 30 },
+    ];
+
+    defaultSkills.forEach(ds => {
+      const key = ds.name.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, ds);
+      }
+    });
+
+    const result = Array.from(map.values());
+    return result.sort((a, b) => b.score - a.score);
+  }, [githubState.skills, profileData]);
+
+  const top8Skills = React.useMemo(() => formattedSkills.slice(0, 8), [formattedSkills]);
 
   const toggleAction = (id) => {
     setActions(actions.map(act => act.id === id ? { ...act, completed: !act.completed } : act));
@@ -173,23 +342,72 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
 
       {/* 2. Top Metrics Grid */}
       <View style={[styles.metricsGrid, !isTablet && styles.metricsGridMobile]}>
-        {/* Career Readiness */}
+        {/* Career Readiness / Skill Index Card */}
         <HoverableCard style={styles.metricCard}>
           <Text style={styles.metricTitle}>Skill Index</Text>
-          <Text style={styles.metricSubtext}>Good Progress</Text>
+          <Text style={styles.metricSubtext}>
+            {githubState.connected ? getEvidenceLevelText(overallGithubScore) : 'Technical Evidence'}
+          </Text>
+
           <View style={styles.circleContainer}>
-            <View style={[styles.progressRing, styles.ring78]}>
-              <Text style={styles.ringValueText}>78</Text>
-              <Text style={styles.ringTotalText}>/100</Text>
-            </View>
+            {(() => {
+              const scoreVal = githubState.connected ? overallGithubScore : 78;
+              const deg = Math.round((scoreVal / 100) * 360);
+              const isWeb = Platform.OS === 'web';
+              const circleBg = isWeb 
+                ? `conic-gradient(${COLORS.teal} 0deg ${deg}deg, #E2E8F0 ${deg}deg 360deg)`
+                : COLORS.teal;
+
+              return (
+                <View style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: 38,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  backgroundColor: circleBg,
+                  background: circleBg,
+                  padding: 5,
+                }}>
+                  <View style={{
+                    width: 66,
+                    height: 66,
+                    borderRadius: 33,
+                    backgroundColor: '#FFFFFF',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}>
+                    <Text style={styles.ringValueText}>{scoreVal}</Text>
+                    <Text style={styles.ringTotalText}>/100</Text>
+                  </View>
+                </View>
+              );
+            })()}
           </View>
-          <Text style={styles.metricInfoText}>You are highly prepared for entry-level roles.</Text>
-          <Pressable style={styles.metricLink}>
-            <Text style={styles.metricLinkText}>View Analysis →</Text>
+
+          <Text style={styles.metricInfoText}>
+            {githubState.connected
+              ? `Technical evidence detected across your analyzed GitHub repositories.`
+              : `Connect your GitHub account to generate technical evidence.`}
+          </Text>
+
+          <Pressable
+            style={styles.metricLink}
+            onPress={() => {
+              if (githubState.connected) {
+                setIsSkillIndexModalOpen(true);
+              } else {
+                onNavigateToProfile();
+              }
+            }}
+          >
+            <Text style={styles.metricLinkText}>
+              {githubState.connected ? 'View Analysis →' : 'Connect GitHub →'}
+            </Text>
           </Pressable>
         </HoverableCard>
 
-        {/* Internships */}
+        {/* Opportunities */}
         <HoverableCard style={styles.metricCard}>
           <Text style={styles.metricTitle}>Opportunities</Text>
           <Text style={styles.metricSubtext}>24 Matches</Text>
@@ -246,7 +464,7 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
         </HoverableCard>
       </View>
 
-      {/* 3. AI Career Recommendation Banner */}
+      {/* 4. AI Career Recommendation Banner */}
       <HoverableCard style={styles.aiRecommendationCard}>
         <View style={styles.aiRecHeaderRow}>
           <Text style={styles.aiRecTitle}>✨ AI Career Recommendation</Text>
@@ -373,22 +591,17 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeaderTitle}>Your Skills</Text>
-          <Pressable>
+          <Pressable onPress={() => setShowAllSkills(true)}>
             <Text style={styles.sectionHeaderLink}>View All Skills →</Text>
           </Pressable>
         </View>
         <HoverableCard style={styles.skillsContainerCard}>
           <View style={[styles.skillsFlexRow, !isTablet && styles.skillsFlexColumn]}>
             <View style={styles.skillHalfCol}>
-              {renderSkillRow('Python', 88, COLORS.green)}
-              {renderSkillRow('SQL', 81, COLORS.green)}
-              {renderSkillRow('Git', 76, COLORS.green)}
-              {renderSkillRow('JavaScript', 72, COLORS.green)}
+              {top8Skills.slice(0, 4).map(s => renderSkillRow(s.name, s.score))}
             </View>
             <View style={styles.skillHalfCol}>
-              {renderSkillRow('React', 68, COLORS.green)}
-              {renderSkillRow('FastAPI', 54, COLORS.amber)}
-              {renderSkillRow('Docker', 42, COLORS.amber)}
+              {top8Skills.slice(4, 8).map(s => renderSkillRow(s.name, s.score))}
             </View>
           </View>
         </HoverableCard>
@@ -658,6 +871,637 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
           </Pressable>
         </View>
       </HoverableCard>
+
+      {/* GitHub Skill Analysis Modal (Opened from Skill Index card "View Analysis →") */}
+      {isSkillIndexModalOpen && (
+        <View style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          padding: 20,
+        }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 20,
+            maxWidth: 620,
+            width: '100%',
+            maxHeight: '90vh',
+            padding: 24,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            overflow: 'hidden',
+          }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 10 }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <View>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.ink }}>GitHub Skill Analysis</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.muted, marginTop: 2 }}>
+                    Overall technical evidence across analyzed repositories
+                  </Text>
+                </View>
+                <Pressable
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
+                  onPress={() => setIsSkillIndexModalOpen(false)}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.navy }}>✕</Text>
+                </Pressable>
+              </View>
+
+              {/* Overall Score Header Banner */}
+              <View style={{ alignItems: 'center', paddingVertical: 18, backgroundColor: '#F0FDFA', borderRadius: 14, marginBottom: 20, borderWidth: 1, borderColor: '#CCFBF1' }}>
+                <Text style={{ fontSize: 36, fontWeight: '900', color: COLORS.teal }}>
+                  {overallGithubScore} <Text style={{ fontSize: 16, color: COLORS.muted, fontWeight: '600' }}>/ 100</Text>
+                </Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.navy, marginTop: 4 }}>
+                  {getEvidenceLevelText(overallGithubScore)}
+                </Text>
+                <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>Technical Evidence Strength</Text>
+              </View>
+
+              {/* 1. Evidence Breakdown (Core Skills, Project Depth, Skill Breadth) */}
+              <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.navy, marginBottom: 12, letterSpacing: 0.5 }}>
+                SKILL INDEX BREAKDOWN <Text style={{ fontSize: 11, fontWeight: '500', color: COLORS.muted }}>(Tap card for detailed evidence ℹ️)</Text>
+              </Text>
+              <View style={{ gap: 10, marginBottom: 22 }}>
+                {/* Card 1: Core Skill Strength */}
+                <Pressable
+                  onPress={() => setActiveEvidencePop('core')}
+                  style={({ hovered }) => ({
+                    backgroundColor: hovered ? '#F1F5F9' : '#F8FAFC',
+                    padding: 14,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    cursor: Platform.OS === 'web' ? 'pointer' : 'default'
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.navy }}>Core Skill Strength (60% Weight)</Text>
+                      <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.green }}>Why? ℹ️</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.teal }}>{skillIndexDetails.coreSkillStrength} / 100</Text>
+                  </View>
+                  <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${skillIndexDetails.coreSkillStrength}%`, backgroundColor: COLORS.teal }} />
+                  </View>
+                </Pressable>
+
+                {/* Card 2: Project Depth */}
+                <Pressable
+                  onPress={() => setActiveEvidencePop('depth')}
+                  style={({ hovered }) => ({
+                    backgroundColor: hovered ? '#F1F5F9' : '#F8FAFC',
+                    padding: 14,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    cursor: Platform.OS === 'web' ? 'pointer' : 'default'
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.navy }}>Project Depth (25% Weight)</Text>
+                      <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.green }}>Why? ℹ️</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.teal }}>{skillIndexDetails.projectDepth} / 100</Text>
+                  </View>
+                  <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${skillIndexDetails.projectDepth}%`, backgroundColor: COLORS.teal }} />
+                  </View>
+                </Pressable>
+
+                {/* Card 3: Skill Breadth */}
+                <Pressable
+                  onPress={() => setActiveEvidencePop('breadth')}
+                  style={({ hovered }) => ({
+                    backgroundColor: hovered ? '#F1F5F9' : '#F8FAFC',
+                    padding: 14,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    cursor: Platform.OS === 'web' ? 'pointer' : 'default'
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.navy }}>Skill Breadth (15% Weight)</Text>
+                      <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.green }}>Why? ℹ️</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.teal }}>{skillIndexDetails.skillBreadth} / 100</Text>
+                  </View>
+                  <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${skillIndexDetails.skillBreadth}%`, backgroundColor: COLORS.teal }} />
+                  </View>
+                </Pressable>
+              </View>
+
+              {/* Evidence Popup Sub-Modal */}
+              {activeEvidencePop && (
+                <View style={{
+                  position: 'absolute',
+                  top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  padding: 16,
+                  zIndex: 1000
+                }}>
+                  <View style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 16,
+                    width: '100%',
+                    maxWidth: 500,
+                    maxHeight: '90%',
+                    padding: 20,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 16,
+                    elevation: 10
+                  }}>
+                    {/* Header */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                      <View style={{ flex: 1, marginRight: 10 }}>
+                        <Text style={{ fontSize: 17, fontWeight: '800', color: COLORS.navy }}>
+                          {activeEvidencePop === 'core' && `Core Skill Strength (${skillIndexDetails.coreSkillStrength}/100)`}
+                          {activeEvidencePop === 'depth' && `Project Depth Evidence (${skillIndexDetails.projectDepth}/100)`}
+                          {activeEvidencePop === 'breadth' && `Skill Breadth Evidence (${skillIndexDetails.skillBreadth}/100)`}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 4, lineHeight: 16 }}>
+                          {activeEvidencePop === 'core' && "Calculated from weighted evidence across your core engineering languages, frameworks, and cloud platforms."}
+                          {activeEvidencePop === 'depth' && "Measures repeated and meaningful usage across your top demonstrated skills in analyzed repositories."}
+                          {activeEvidencePop === 'breadth' && "Measures technical versatility across distinct core engineering domains."}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => setActiveEvidencePop(null)}
+                        style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
+                      >
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.navy }}>✕</Text>
+                      </Pressable>
+                    </View>
+
+                    <ScrollView style={{ maxHeight: 380, marginVertical: 8 }}>
+                      {activeEvidencePop === 'core' && (
+                        <View style={{ gap: 14 }}>
+                          <View style={{ backgroundColor: '#F0FDFA', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#CCFBF1' }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.teal, marginBottom: 4 }}>Why this score was calculated:</Text>
+                            <Text style={{ fontSize: 12, color: COLORS.navy, lineHeight: 17 }}>
+                              Weighted average of detected Tier 1 Core Skills (weight 1.2x - 1.0x) and Tier 2 Supporting Skills (weight 0.5x). Tier 3 micro-dependencies (e.g. zod, sonner) were excluded so they don't lower your score.
+                            </Text>
+                          </View>
+
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: COLORS.navy }}>TIER 1 CORE SKILLS DETECTED ({skillIndexDetails.tier1Skills?.length || 0})</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                            {(skillIndexDetails.tier1Skills || []).map((s, idx) => (
+                              <View key={idx} style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={{ fontSize: 12.5, fontWeight: '700', color: COLORS.navy }}>{s.name}</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: COLORS.teal }}>{s.scoreVal}%</Text>
+                                <Text style={{ fontSize: 10, color: COLORS.muted }}>({s.weight}x weight)</Text>
+                              </View>
+                            ))}
+                            {(!skillIndexDetails.tier1Skills || skillIndexDetails.tier1Skills.length === 0) && (
+                              <Text style={{ fontSize: 12, color: COLORS.muted }}>No Tier 1 core skills detected yet.</Text>
+                            )}
+                          </View>
+
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: COLORS.navy }}>TIER 2 SUPPORTING SKILLS DETECTED ({skillIndexDetails.tier2Skills?.length || 0})</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                            {(skillIndexDetails.tier2Skills || []).map((s, idx) => (
+                              <View key={idx} style={{ backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={{ fontSize: 12.5, fontWeight: '600', color: COLORS.navy }}>{s.name}</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.teal }}>{s.scoreVal}%</Text>
+                                <Text style={{ fontSize: 10, color: COLORS.muted }}>(0.5x weight)</Text>
+                              </View>
+                            ))}
+                            {(!skillIndexDetails.tier2Skills || skillIndexDetails.tier2Skills.length === 0) && (
+                              <Text style={{ fontSize: 12, color: COLORS.muted }}>No Tier 2 supporting skills detected yet.</Text>
+                            )}
+                          </View>
+
+                          <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Text style={{ fontSize: 11.5, color: COLORS.muted }}>
+                              🛡️ <Text style={{ fontWeight: '700', color: COLORS.navy }}>{skillIndexDetails.tier3Skills?.length || 0} Micro-Dependencies Excluded:</Text> Small packages and utility libraries (e.g., zod, sonner, vaul) were filtered out from reducing your core score.
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {activeEvidencePop === 'depth' && (
+                        <View style={{ gap: 14 }}>
+                          <View style={{ backgroundColor: '#F0FDFA', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#CCFBF1' }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.teal, marginBottom: 4 }}>Why this score was calculated:</Text>
+                            <Text style={{ fontSize: 12, color: COLORS.navy, lineHeight: 17 }}>
+                              Average depth score of your top core skills. Rewards deep source code usage, framework configuration, architecture conventions, and multi-repository evidence.
+                            </Text>
+                          </View>
+
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: COLORS.navy }}>TOP DEMONSTRATED SKILLS DRIVING DEPTH</Text>
+                          <View style={{ gap: 8 }}>
+                            {(skillIndexDetails.topCoreSkills || []).map((s, idx) => (
+                              <View key={idx} style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: COLORS.navy }}>{s.name}</Text>
+                                  <View style={{ backgroundColor: '#CCFBF1', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: COLORS.teal }}>{s.scoreVal} / 100</Text>
+                                  </View>
+                                </View>
+                                <Text style={{ fontSize: 11.5, color: COLORS.muted }}>
+                                  Found across <Text style={{ fontWeight: '700', color: COLORS.navy }}>{s.repository_count || 1} repository</Text>{(s.repository_count || 1) > 1 ? 'ies' : ''} • {s.category || 'Core Skill'}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+
+                      {activeEvidencePop === 'breadth' && (
+                        <View style={{ gap: 14 }}>
+                          <View style={{ backgroundColor: '#F0FDFA', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#CCFBF1' }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.teal, marginBottom: 4 }}>Why this score was calculated:</Text>
+                            <Text style={{ fontSize: 12, color: COLORS.navy, lineHeight: 17 }}>
+                              Evaluated based on active engineering domains where you have demonstrated core evidence ($\ge 40\%$ score). You have demonstrated skills across <Text style={{ fontWeight: '800' }}>{skillIndexDetails.activeDomainCount}</Text> core domain{skillIndexDetails.activeDomainCount > 1 ? 's' : ''}.
+                            </Text>
+                          </View>
+
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: COLORS.navy }}>ACTIVE ENGINEERING DOMAINS ({skillIndexDetails.activeDomainCount})</Text>
+                          <View style={{ gap: 8 }}>
+                            {Object.entries(skillIndexDetails.domainBreakdown || {}).map(([domainName, techList], idx) => (
+                              <View key={idx} style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.navy, marginBottom: 4 }}>
+                                  {domainName === 'Frontend' && '🌐 Frontend Development'}
+                                  {domainName === 'Mobile' && '📱 Mobile Development'}
+                                  {domainName === 'Backend' && '⚙️ Backend Engineering'}
+                                  {domainName === 'Cloud' && '☁️ Cloud & Infrastructure'}
+                                  {domainName === 'Database' && '🗄️ Database & Storage'}
+                                  {domainName === 'Languages' && '💻 Programming Languages'}
+                                  {domainName === 'DevOps' && '🛠️ DevOps & Build Tools'}
+                                  {domainName === 'Testing' && '🧪 Testing & QA'}
+                                  {domainName === 'AI/ML' && '🤖 AI & Data Science'}
+                                  {!['Frontend','Mobile','Backend','Cloud','Database','Languages','DevOps','Testing','AI/ML'].includes(domainName) && `🔹 ${domainName}`}
+                                </Text>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+                                  {techList.map((t, tIdx) => (
+                                    <View key={tIdx} style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                                      <Text style={{ fontSize: 11.5, fontWeight: '600', color: COLORS.navy }}>{t}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+
+                          <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Text style={{ fontSize: 11.5, color: COLORS.muted }}>
+                              🎯 <Text style={{ fontWeight: '700', color: COLORS.navy }}>Breadth Scale:</Text> 5+ domains = 100, 4 domains = 92, 3 domains = 82, 2 domains = 65, 1 domain = 40.
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </ScrollView>
+
+                    <Pressable
+                      onPress={() => setActiveEvidencePop(null)}
+                      style={{
+                        marginTop: 12,
+                        backgroundColor: COLORS.teal,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        alignItems: 'center'
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Close Evidence</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
+              {/* 2. Repository Coverage */}
+              <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.navy, marginBottom: 12, letterSpacing: 0.5 }}>REPOSITORY COVERAGE</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 22 }}>
+                <View style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.navy }}>{githubState.reposAnalyzed}</Text>
+                  <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 2, textAlign: 'center' }}>Repositories Analyzed</Text>
+                </View>
+
+                <View style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.teal }}>{githubState.skills.length}</Text>
+                  <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 2, textAlign: 'center' }}>Skills with Evidence</Text>
+                </View>
+
+                <View style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.navy }}>{githubState.reposAnalyzed}</Text>
+                  <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 2, textAlign: 'center' }}>Selected Repos</Text>
+                </View>
+              </View>
+
+              {/* 3. Compact Technology Summary */}
+              {githubState.skills.length > 0 && (
+                <>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.navy, marginBottom: 12, letterSpacing: 0.5 }}>TECHNOLOGY SUMMARY</Text>
+                  <View style={{ gap: 8, marginBottom: 22 }}>
+                    {githubState.skills.slice(0, 5).map((tech, tIdx) => (
+                      <View key={tIdx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.navy }}>{tech.name}</Text>
+                        <Text style={{ fontSize: 12, color: COLORS.muted }}>
+                          Detected across {tech.repository_count || 1} repository{(tech.repository_count || 1) > 1 ? 'ies' : ''}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {/* 4. Evidence Sources & Provenance */}
+              <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.navy, marginBottom: 12, letterSpacing: 0.5 }}>EVIDENCE SOURCES</Text>
+              <View style={{ gap: 8, marginBottom: 22 }}>
+                {githubState.skills.length > 0 && githubState.skills[0].signals && githubState.skills[0].signals.length > 0 ? (
+                  githubState.skills[0].signals.slice(0, 3).map((sig, sIdx) => (
+                    <View key={sIdx} style={{ padding: 10, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#0369A1', fontWeight: '700' }}>
+                        ✓ {sig.file_path || sig.repository_name || 'package.json'}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>
+                        {sig.evidence_description || 'Technical dependency detected'}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <View style={{ padding: 10, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#0369A1', fontWeight: '700' }}>✓ package.json / source tree</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>Technical evidence detected across user repository tree</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* 5. How to interpret index disclaimer */}
+              <View style={{ backgroundColor: '#F1F5F9', padding: 14, borderRadius: 10, marginBottom: 18 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.navy, marginBottom: 4 }}>Technical Evidence Strength</Text>
+                <Text style={{ fontSize: 11.5, color: COLORS.muted, lineHeight: 16 }}>
+                  This index represents the strength and breadth of technical evidence detected across your selected GitHub repositories. It is not a measure of human proficiency.
+                </Text>
+              </View>
+
+              {/* Close Button */}
+              <Pressable
+                style={{ backgroundColor: COLORS.navy, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => setIsSkillIndexModalOpen(false)}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Close</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {/* Single Skill Analysis Modal */}
+      {selectedSkillModal && (
+        <View style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          padding: 20,
+        }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 20,
+            maxWidth: 580,
+            width: '100%',
+            maxHeight: '90vh',
+            padding: 24,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            overflow: 'hidden',
+          }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 10 }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <View>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.ink }}>{selectedSkillModal.name}</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.teal, fontWeight: '600', marginTop: 2 }}>
+                    {selectedSkillModal.rating || getEvidenceLevelText(selectedSkillModal.score || selectedSkillModal.percentage || 0)}
+                  </Text>
+                </View>
+                <Pressable
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
+                  onPress={() => setSelectedSkillModal(null)}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.navy }}>✕</Text>
+                </Pressable>
+              </View>
+
+              {/* Score & Progress Ring */}
+              <View style={{ alignItems: 'center', paddingVertical: 16, backgroundColor: '#F8FAFC', borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={{ fontSize: 32, fontWeight: '900', color: COLORS.navy }}>
+                  {selectedSkillModal.score || selectedSkillModal.percentage || 0} <Text style={{ fontSize: 14, color: COLORS.muted }}>/ 100</Text>
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.teal, marginTop: 4 }}>
+                  Technical Evidence Strength
+                </Text>
+
+                <View style={{ width: '85%', height: 8, backgroundColor: '#E2E8F0', borderRadius: 4, marginTop: 12, overflow: 'hidden' }}>
+                  <View style={{ height: '100%', width: `${selectedSkillModal.score || selectedSkillModal.percentage || 0}%`, backgroundColor: COLORS.teal, borderRadius: 4 }} />
+                </View>
+                
+                <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 8 }}>
+                  Detected across {selectedSkillModal.repository_count || 1} repository{(selectedSkillModal.repository_count || 1) > 1 ? 'ies' : ''}
+                </Text>
+              </View>
+
+              {/* Evidence Breakdown (4 Dimensions) */}
+              <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.navy, marginBottom: 12, letterSpacing: 0.5 }}>EVIDENCE BREAKDOWN</Text>
+              <View style={{ gap: 10, marginBottom: 20 }}>
+                {(() => {
+                  const s = selectedSkillModal.score || selectedSkillModal.percentage || 0;
+                  const c1 = Math.min(45, Math.round(s * 0.45));
+                  const c2 = Math.min(30, Math.round(s * 0.30));
+                  const c3 = Math.min(15, Math.round(s * 0.15));
+                  const c4 = Math.min(10, Math.round(s * 0.10));
+
+                  return (
+                    <>
+                      <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.navy }}>Source Code Usage</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.teal }}>{c1} / 45</Text>
+                        </View>
+                        <View style={{ height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
+                          <View style={{ height: '100%', width: `${(c1 / 45) * 100}%`, backgroundColor: COLORS.teal }} />
+                        </View>
+                      </View>
+
+                      <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.navy }}>Manifest & Framework Config</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.teal }}>{c2} / 30</Text>
+                        </View>
+                        <View style={{ height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
+                          <View style={{ height: '100%', width: `${(c2 / 30) * 100}%`, backgroundColor: COLORS.teal }} />
+                        </View>
+                      </View>
+
+                      <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.navy }}>Architecture & Conventions</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.teal }}>{c3} / 15</Text>
+                        </View>
+                        <View style={{ height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
+                          <View style={{ height: '100%', width: `${(c3 / 15) * 100}%`, backgroundColor: COLORS.teal }} />
+                        </View>
+                      </View>
+
+                      <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.navy }}>Documentation & Topics</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.teal }}>{c4} / 10</Text>
+                        </View>
+                        <View style={{ height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
+                          <View style={{ height: '100%', width: `${(c4 / 10) * 100}%`, backgroundColor: COLORS.teal }} />
+                        </View>
+                      </View>
+                    </>
+                  );
+                })()}
+              </View>
+
+              {/* Repository Provenance */}
+              <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.navy, marginBottom: 12, letterSpacing: 0.5 }}>REPOSITORY PROVENANCE</Text>
+              <View style={{ gap: 10, marginBottom: 20 }}>
+                {selectedSkillModal.signals && selectedSkillModal.signals.length > 0 ? (
+                  selectedSkillModal.signals.map((sig, sIdx) => (
+                    <View key={sIdx} style={{ padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.navy }}>✓ {sig.repository_name || 'Repository'}</Text>
+                        <View style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669' }}>PUBLIC</Text>
+                        </View>
+                      </View>
+                      {sig.file_path && (
+                        <Text style={{ fontSize: 11, fontFamily: 'monospace', color: '#0369A1', marginTop: 4 }}>📄 {sig.file_path}</Text>
+                      )}
+                      <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>{sig.evidence_description || 'Technical evidence detected'}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <View style={{ padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.navy }}>✓ Analyzed Repositories</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>Detected evidence in user projects for {selectedSkillModal.name}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Disclaimer Subtext */}
+              <View style={{ backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                <Text style={{ fontSize: 11, color: COLORS.muted, textAlign: 'center', lineHeight: 16 }}>
+                  Technical Evidence Strength: This score represents the strength of technical evidence found in the selected GitHub repositories. It is not a measure of human proficiency.
+                </Text>
+              </View>
+
+              {/* Close Action */}
+              <Pressable
+                style={{ backgroundColor: COLORS.navy, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => setSelectedSkillModal(null)}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Close</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      )}
+      {/* View All Skills Modal Popup */}
+      {showAllSkills && (
+        <View style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          padding: 20,
+        }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 20,
+            maxWidth: 640,
+            width: '100%',
+            maxHeight: '85vh',
+            padding: 24,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <View>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.ink }}>All Verified Skills</Text>
+                <Text style={{ fontSize: 13, color: COLORS.muted, marginTop: 2 }}>
+                  Complete breakdown of your skills ordered by proficiency percentage
+                </Text>
+              </View>
+              <Pressable
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
+                onPress={() => setShowAllSkills(false)}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.navy }}>✕</Text>
+              </Pressable>
+            </View>
+
+            {/* List of All Skills percentage wise */}
+            <ScrollView contentContainerStyle={{ paddingVertical: 8 }} showsVerticalScrollIndicator={true}>
+              <View style={[styles.skillsFlexRow, !isTablet && styles.skillsFlexColumn]}>
+                <View style={styles.skillHalfCol}>
+                  {formattedSkills.slice(0, Math.ceil(formattedSkills.length / 2)).map(s => renderSkillRow(s.name, s.score))}
+                </View>
+                <View style={styles.skillHalfCol}>
+                  {formattedSkills.slice(Math.ceil(formattedSkills.length / 2)).map(s => renderSkillRow(s.name, s.score))}
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.subtle, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.muted }}>
+                Total Skills: {formattedSkills.length}
+              </Text>
+              <Pressable
+                style={{ backgroundColor: COLORS.navy, paddingVertical: 8, paddingHorizontal: 20, borderRadius: 8 }}
+                onPress={() => setShowAllSkills(false)}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -677,13 +1521,20 @@ function renderMiniBar(label, percentage) {
   );
 }
 
+function getSkillColor(score) {
+  if (score >= 60) return COLORS.green;
+  if (score >= 40) return COLORS.amber;
+  return COLORS.rose;
+}
+
 function renderSkillRow(name, score, color) {
+  const fillColor = color || getSkillColor(score);
   return (
-    <View style={styles.skillRow}>
+    <View style={styles.skillRow} key={name}>
       <Text style={styles.skillName}>{name}</Text>
       <View style={styles.skillTrackRow}>
         <View style={styles.skillTrack}>
-          <View style={[styles.skillFill, { width: `${score}%`, backgroundColor: color }]} />
+          <View style={[styles.skillFill, { width: `${score}%`, backgroundColor: fillColor }]} />
         </View>
         <Text style={styles.skillScore}>{score}%</Text>
       </View>

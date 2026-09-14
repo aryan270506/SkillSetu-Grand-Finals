@@ -23,6 +23,7 @@ export default function App() {
     return (
       <StudentHeader
         user={user}
+        onUpdateUser={(updatedData) => setUser(updatedData)}
         onLogout={() => {
           setCurrentScreen('Login');
           setUser(null);
