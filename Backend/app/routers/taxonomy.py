@@ -491,3 +491,70 @@ def compute_internship_matches(email: str, db: Session = Depends(get_db)):
         "count": len(match_results),
         "data": match_results
     }
+
+
+# ----------------------------------------------------
+# 7. Taxonomy Admin & Groq Career-ESCO Mappings API
+# ----------------------------------------------------
+@router.get("/career-mappings")
+def get_career_mappings(
+    status_filter: Optional[str] = Query(None, description="Filter by status: validated, needs_review, pending, rejected"),
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN ENDPOINT: Retrieve all active SkillSetu career ↔ ESCO occupation mappings and validation status.
+    """
+    from app.services.esco_service import get_validated_esco_mapping
+    
+    careers = db.query(models.SkillSetuCareer).filter(models.SkillSetuCareer.is_visible == True).all()
+    results = []
+
+    for car in careers:
+        mapping = db.query(models.CareerOccupationMapping).filter(
+            models.CareerOccupationMapping.career_id == car.id
+        ).first()
+
+        if status_filter and mapping and mapping.mapping_status != status_filter:
+            continue
+
+        results.append({
+            "career_id": car.id,
+            "career_name": car.name,
+            "category": car.category,
+            "existing_esco_uri": car.esco_uri,
+            "mapped_esco_uri": mapping.esco_occupation_uri if mapping else None,
+            "confidence_score": mapping.confidence_score if mapping else 0.0,
+            "mapping_status": mapping.mapping_status if mapping else "unresolved",
+            "mapping_method": mapping.mapping_method if mapping else "none",
+            "reasoning_summary": mapping.reasoning_summary if mapping else None,
+            "validated_at": mapping.validated_at.isoformat() if (mapping and mapping.validated_at) else None
+        })
+
+    return {
+        "status": "success",
+        "total_careers": len(careers),
+        "mappings": results
+    }
+
+
+@router.post("/career-mappings/{career_id}/validate")
+def validate_career_mapping(
+    career_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN / INTERNAL ENDPOINT: Trigger server-side Groq semantic validation for a career against ESCO candidates.
+    Updates or creates CareerOccupationMapping entry in PostgreSQL.
+    """
+    from app.services.esco_service import validate_career_esco_mapping_with_groq
+
+    res = validate_career_esco_mapping_with_groq(career_id, db)
+    if "error" in res:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res["error"])
+
+    return {
+        "status": "success",
+        "message": f"Groq validation completed for '{career_id}'",
+        "result": res
+    }
+

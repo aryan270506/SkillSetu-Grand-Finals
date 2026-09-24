@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { createInitialProfile, fetchCompleteStudentProfile } from '../services/profileService';
 import {
   ActivityIndicator,
   Animated,
@@ -386,65 +387,10 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     return () => clearTimeout(timer);
   }, [locationSearch]);
 
-  // Auto-fill logged-in user info & fetch stored Step 3 career goals from DB on mount / user load
+  // Auto-fill logged-in user info & fetch stored career goals, resume, and GitHub status from DB
   React.useEffect(() => {
     if (user && user.email) {
-      setProfileData(prev => {
-        const pInfo = prev?.personalInfo || {};
-        const edu = prev?.education || {};
-        return {
-          ...prev,
-          personalInfo: {
-            ...pInfo,
-            fullName: user.name || pInfo.fullName || '',
-            email: user.email || pInfo.email || '',
-            phone: user.phone || pInfo.phone || '',
-            headline: user.headline || pInfo.headline || '',
-            location: user.location || pInfo.location || '',
-            yearsOfExperience: user.years_of_experience || pInfo.yearsOfExperience || '',
-            bio: user.bio || pInfo.bio || '',
-            profileImage: user.profile_image || pInfo.profileImage || '',
-          },
-          education: {
-            ...edu,
-            hasExtractedMarksheet: edu.hasExtractedMarksheet || Boolean(user.degree || user.university),
-            marksheetFileName: edu.marksheetFileName || (user.degree ? 'academic_marksheet.pdf' : ''),
-            cgpaDetected: renderVal(user.cgpa_or_percentage) || edu.cgpaDetected || '',
-            universityDetected: renderVal(user.university) || edu.universityDetected || '',
-            academicYearDetected: (user.start_year && user.graduation_year) ? `${renderVal(user.start_year)} - ${renderVal(user.graduation_year)}` : (renderVal(user.graduation_year) || edu.academicYearDetected || ''),
-            list: (user.degree || user.university) ? [
-              {
-                id: 'edu_user_db',
-                degree: renderVal(user.degree),
-                branch: renderVal(user.branch),
-                university: renderVal(user.university),
-                startYear: renderVal(user.start_year),
-                graduationYear: renderVal(user.graduation_year),
-                cgpa: renderVal(user.cgpa_or_percentage),
-              }
-            ] : (edu.list || []),
-          },
-          resumeAnalysis: {
-            resumeFile: user.resume_url ? user.resume_url.split('/').pop().replace(/^[0-9a-zA-Z_]+@.*\.com_/, '') : (prev?.resumeAnalysis?.resumeFile || ''),
-            parseTime: user.resume_url ? 'Saved in DB' : (prev?.resumeAnalysis?.parseTime || ''),
-            score: user.resume_score || prev?.resumeAnalysis?.score || 0,
-            scoreText: (user.resume_data && JSON.parse(user.resume_data).score_text) || prev?.resumeAnalysis?.scoreText || '',
-            scoreBreakdown: (user.resume_data && JSON.parse(user.resume_data).score_breakdown) || prev?.resumeAnalysis?.scoreBreakdown || {},
-            extractedData: (user.resume_data && JSON.parse(user.resume_data).extracted_data) || prev?.resumeAnalysis?.extractedData || {
-              projects: [],
-              experience: [],
-              coreTechnologies: [],
-              identifiedSkillDomains: [],
-              education: [],
-              certifications: [],
-              achievements: [],
-              links: {},
-            }
-          }
-        };
-      });
-
-
+      setProfileData(prev => createInitialProfile(user, prev));
 
       if (user.degree) setEduDegree(renderVal(user.degree));
       if (user.branch) setEduBranch(renderVal(user.branch));
@@ -452,115 +398,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
       if (user.start_year) setEduStart(renderVal(user.start_year));
       if (user.graduation_year) setEduGrad(renderVal(user.graduation_year));
 
-      // Fetch saved career goals & selections from PostgreSQL database
-      async function fetchSavedCareerGoals() {
-        try {
-          const res = await fetch(`http://127.0.0.1:8000/api/v1/taxonomy/student/career-goals?email=${encodeURIComponent(user.email.trim())}`);
-          const resData = await res.json();
-          if (res.ok && resData.status === 'success' && resData.data) {
-            const d = resData.data;
-            setProfileData(prev => ({
-              ...prev,
-              careerGoals: {
-                ...prev.careerGoals,
-                targetCareerId: d.target_career_id || '',
-                targetCareerIds: d.target_career_ids || [],
-                targetIndustryId: d.target_industry_id || '',
-                targetIndustryIds: d.target_industry_ids || [],
-                timeline: d.timeline || '',
-                careerGoal: d.career_goal_text || '',
-                skillIds: d.skill_ids || [],
-                preferredLocationIds: d.preferred_location_ids || [],
-                opportunityTypes: d.opportunity_types || [],
-                workPreferences: d.work_preferences || [],
-              }
-            }));
-          }
-        } catch (err) {
-          console.error('Error fetching stored career goals from DB:', err);
-        }
-      }
-      fetchSavedCareerGoals();
-
-      // Fetch stored GitHub connection status from Backend API
-      async function fetchGithubStatus() {
-        try {
-          const res = await fetch(`http://127.0.0.1:8000/api/v1/github/status?email=${encodeURIComponent(user.email.trim())}`);
-          const resData = await res.json();
-          if (res.ok && resData.status === 'success' && resData.connection) {
-            const conn = resData.connection;
-            if (conn.connected) {
-              setProfileData(prev => ({
-                ...prev,
-                githubLinks: {
-                  ...prev.githubLinks,
-                  githubUrl: conn.profile_url || `https://github.com/${conn.username}`,
-                  githubUsername: conn.username || '',
-                  githubConnected: true,
-                  githubMetrics: conn.metrics || { reposAnalyzed: (conn.repositories || []).length, projectsDetected: 0 },
-                  githubSkills: conn.skills || [],
-                  repositories: conn.repositories || [],
-                }
-              }));
-            } else {
-              setProfileData(prev => ({
-                ...prev,
-                githubLinks: {
-                  ...prev.githubLinks,
-                  githubUrl: '',
-                  githubUsername: '',
-                  githubConnected: false,
-                  githubMetrics: { reposAnalyzed: 0, projectsDetected: 0 },
-                  githubSkills: [],
-                  repositories: [],
-                }
-              }));
-            }
-          }
-        } catch (err) {
-          console.error('Error fetching GitHub status from DB:', err);
-        }
-      }
-      fetchGithubStatus();
-
-      // Fetch stored resume data from Backend API
-      async function fetchSavedResumeData() {
-        try {
-          const res = await fetch(`http://127.0.0.1:8000/api/v1/student/resume-data?email=${encodeURIComponent(user.email.trim())}`);
-          const resData = await res.json();
-          if (res.ok && resData.status === 'success' && resData.has_resume && resData.resume_data) {
-            const rData = resData.resume_data;
-            const extData = rData.extracted_data || {};
-            const fileName = resData.resume_url ? resData.resume_url.split('/').pop().replace(/^[0-9a-zA-Z_]+@.*\.com_/, '') : (rData.resume_file || 'resume.pdf');
-
-            setProfileData(prev => ({
-              ...prev,
-              resumeAnalysis: {
-                resumeFile: fileName,
-                parseTime: rData.parse_time || 'Saved in DB',
-                score: resData.resume_score || rData.score || 0,
-                scoreText: rData.score_text || 'Resume parsed & stored in DB',
-                scoreBreakdown: rData.score_breakdown || {},
-                extractedData: {
-                  projects: extData.projects || [],
-                  rawProjects: extData.raw_projects || [],
-                  experience: extData.experience || [],
-                  coreTechnologies: extData.coreTechnologies || [],
-                  normalizedSkills: extData.normalized_skills || [],
-                  identifiedSkillDomains: extData.identifiedSkillDomains || [],
-                  education: extData.education || [],
-                  certifications: extData.certifications || [],
-                  achievements: extData.achievements || [],
-                  links: extData.links || {},
-                }
-              }
-            }));
-          }
-        } catch (err) {
-          console.error('Error fetching stored resume data from DB:', err);
-        }
-      }
-      fetchSavedResumeData();
+      fetchCompleteStudentProfile(user, setProfileData);
     }
   }, [user]);
 

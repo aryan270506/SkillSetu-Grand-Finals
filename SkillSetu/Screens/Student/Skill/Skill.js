@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -115,329 +115,352 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
   );
 }
 
-const SKILL_ROLES_DATA = {
-  'Backend Developer': {
-    careerMatch: 74,
-    verifiedCount: 18,
-    gapsCount: 6,
-    internshipsCount: 24,
-    skills: [
-      { name: 'Python', current: 86, target: 80, status: 'Verified' },
-      { name: 'SQL', current: 81, target: 85, status: 'Improving' },
-      { name: 'FastAPI', current: 54, target: 80, status: 'Gap' },
-      { name: 'Docker', current: 42, target: 80, status: 'Gap' },
-    ],
-    domains: {
-      left: [
-        {
-          title: 'Programming',
-          skills: [
-            { name: 'Python', score: 86, badge: 'VERIFIED' },
-            { name: 'JavaScript', score: 72, badge: 'IMPROVING' },
-          ],
-        },
-        {
-          title: 'Databases',
-          skills: [
-            { name: 'SQL (PostgreSQL)', score: 81, badge: 'IMPROVING' },
-            { name: 'Redis', score: 30, badge: 'GAP' },
-          ],
-        },
-      ],
-      right: [
-        {
-          title: 'Backend Frameworks',
-          skills: [
-            { name: 'Django', score: 82, badge: 'VERIFIED' },
-            { name: 'FastAPI', score: 54, badge: 'GAP' },
-          ],
-        },
-        {
-          title: 'DevOps & Cloud',
-          skills: [
-            { name: 'Git', score: 88, badge: 'VERIFIED' },
-            { name: 'Docker', score: 42, badge: 'GAP' },
-            { name: 'AWS', score: 60, badge: 'DEVELOPING' },
-          ],
-        },
-      ],
-    },
-    gapAnalysis: {
-      subject: 'Docker',
-      industryDemand: 'Required in 78% of Backend Developer job descriptions.',
-      githubEvidence: 'No Dockerfiles or docker-compose.yml found in your public repositories.',
-      assessmentResults: 'Scored 42% on the theoretical assessment. Practical not attempted.',
-      impactText: 'Impact: 74% ➔ 68% if unresolved.',
-      projectedMatch: 76,
-      unlocksCount: 14,
-    },
-    priorityInsights: [
-      { name: 'Docker', priority: 'HIGH', score: '42/80', desc: 'Required by 78% of backend internships. Limited evidence of containerization in GitHub projects.' },
-      { name: 'AWS (Cloud)', priority: 'MED', score: '60/80', desc: 'Core for modern backend deployments.' },
-    ],
-    nextAction: 'Start Docker Module',
-  },
-  'Frontend Engineer': {
-    careerMatch: 86,
-    verifiedCount: 22,
-    gapsCount: 3,
-    internshipsCount: 32,
-    skills: [
-      { name: 'React', current: 92, target: 90, status: 'Verified' },
-      { name: 'TypeScript', current: 88, target: 85, status: 'Verified' },
-      { name: 'CSS/Tailwind', current: 81, target: 80, status: 'Verified' },
-      { name: 'GraphQL', current: 50, target: 70, status: 'Gap' },
-    ],
-    domains: {
-      left: [
-        {
-          title: 'Programming',
-          skills: [
-            { name: 'TypeScript', score: 88, badge: 'VERIFIED' },
-            { name: 'JavaScript', score: 90, badge: 'VERIFIED' },
-          ],
-        },
-        {
-          title: 'CSS & Styling',
-          skills: [
-            { name: 'TailwindCSS', score: 81, badge: 'VERIFIED' },
-            { name: 'CSS/HTML', score: 85, badge: 'VERIFIED' },
-          ],
-        },
-      ],
-      right: [
-        {
-          title: 'Frontend Frameworks',
-          skills: [
-            { name: 'React', score: 92, badge: 'VERIFIED' },
-            { name: 'Next.js', score: 80, badge: 'VERIFIED' },
-          ],
-        },
-        {
-          title: 'GraphQL & Testing',
-          skills: [
-            { name: 'GraphQL', score: 50, badge: 'GAP' },
-            { name: 'Jest', score: 62, badge: 'IMPROVING' },
-          ],
-        },
-      ],
-    },
-    gapAnalysis: {
-      subject: 'GraphQL',
-      industryDemand: 'Required in 60% of modern frontend roles.',
-      githubEvidence: 'Minimal queries or schemas detected in connected projects.',
-      assessmentResults: 'Scored 50% on theoretical test.',
-      impactText: 'Impact: 86% ➔ 81% if unresolved.',
-      projectedMatch: 92,
-      unlocksCount: 19,
-    },
-    priorityInsights: [
-      { name: 'GraphQL', priority: 'HIGH', score: '50/70', desc: 'Crucial for dynamic API integrations in modern frontend applications.' },
-      { name: 'Jest', priority: 'LOW', score: '62/70', desc: 'Testing frameworks support reliable application rollouts.' },
-    ],
-    nextAction: 'Start GraphQL Module',
-  },
-  'Full Stack Developer': {
-    careerMatch: 78,
-    verifiedCount: 20,
-    gapsCount: 5,
-    internshipsCount: 28,
-    skills: [
-      { name: 'React', current: 92, target: 85, status: 'Verified' },
-      { name: 'Python', current: 86, target: 80, status: 'Verified' },
-      { name: 'SQL', current: 81, target: 80, status: 'Verified' },
-      { name: 'Docker', current: 42, target: 75, status: 'Gap' },
-    ],
-    domains: {
-      left: [
-        {
-          title: 'Front-End',
-          skills: [
-            { name: 'React', score: 92, badge: 'VERIFIED' },
-            { name: 'TailwindCSS', score: 81, badge: 'VERIFIED' },
-          ],
-        },
-        {
-          title: 'Databases',
-          skills: [
-            { name: 'SQL PostgreSQL', score: 81, badge: 'VERIFIED' },
-            { name: 'MongoDB', score: 60, badge: 'IMPROVING' },
-          ],
-        },
-      ],
-      right: [
-        {
-          title: 'Back-End Frameworks',
-          skills: [
-            { name: 'Node.js', score: 78, badge: 'VERIFIED' },
-            { name: 'Python', score: 86, badge: 'VERIFIED' },
-          ],
-        },
-        {
-          title: 'DevOps & Deploy',
-          skills: [
-            { name: 'Docker', score: 42, badge: 'GAP' },
-            { name: 'AWS', score: 50, badge: 'GAP' },
-          ],
-        },
-      ],
-    },
-    gapAnalysis: {
-      subject: 'Docker',
-      industryDemand: 'Container usage is listed JDs for 72% of Full Stack roles.',
-      githubEvidence: 'Minimal deployment config files present.',
-      assessmentResults: 'Theoretical score is 42%. Practical not attempted.',
-      impactText: 'Impact: 78% ➔ 71% if unresolved.',
-      projectedMatch: 85,
-      unlocksCount: 12,
-    },
-    priorityInsights: [
-      { name: 'Docker', priority: 'HIGH', score: '42/75', desc: 'Essential for linking frontend services with backend engines locally.' },
-      { name: 'AWS', priority: 'MED', score: '50/75', desc: 'Preferred cloud deploy host for full stack web nodes.' },
-    ],
-    nextAction: 'Start Docker Module',
-  },
-  'DevOps Engineer': {
-    careerMatch: 48,
-    verifiedCount: 12,
-    gapsCount: 8,
-    internshipsCount: 8,
-    skills: [
-      { name: 'Git', current: 88, target: 85, status: 'Verified' },
-      { name: 'Docker', current: 42, target: 85, status: 'Gap' },
-      { name: 'AWS', current: 30, target: 80, status: 'Gap' },
-      { name: 'Kubernetes', current: 10, target: 80, status: 'Gap' },
-    ],
-    domains: {
-      left: [
-        {
-          title: 'Programming',
-          skills: [
-            { name: 'Bash Scripting', score: 68, badge: 'IMPROVING' },
-            { name: 'Python', score: 86, badge: 'VERIFIED' },
-          ],
-        },
-        {
-          title: 'Cloud Platforms',
-          skills: [
-            { name: 'AWS', score: 30, badge: 'GAP' },
-            { name: 'GCP', score: 20, badge: 'GAP' },
-          ],
-        },
-      ],
-      right: [
-        {
-          title: 'Containers & CI',
-          skills: [
-            { name: 'Docker', score: 42, badge: 'GAP' },
-            { name: 'Jenkins CI/CD', score: 50, badge: 'DEVELOPING' },
-          ],
-        },
-        {
-          title: 'Infrastructure as Code',
-          skills: [
-            { name: 'Terraform', score: 10, badge: 'GAP' },
-            { name: 'Kubernetes', score: 10, badge: 'GAP' },
-          ],
-        },
-      ],
-    },
-    gapAnalysis: {
-      subject: 'Docker & Kubernetes',
-      industryDemand: 'Docker is required in 92% of DevOps job requirements.',
-      githubEvidence: 'No Dockerfiles detected in public repositories.',
-      assessmentResults: 'Theoretical score is 42% on Docker, 10% on Kubernetes.',
-      impactText: 'Impact: 48% ➔ 40% if unresolved.',
-      projectedMatch: 65,
-      unlocksCount: 8,
-    },
-    priorityInsights: [
-      { name: 'Kubernetes', priority: 'HIGH', score: '10/80', desc: 'Required for enterprise cloud-native orchestration.' },
-      { name: 'Docker', priority: 'HIGH', score: '42/85', desc: 'Prerequisite for containers and container-based pipeline structures.' },
-    ],
-    nextAction: 'Start Docker Module',
-  },
-};
-
-export default function Skill({ profileData }) {
+export default function Skill({ profileData, user, setProfileData }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const isWide = width >= 1024;
 
-  const [activeCareer, setActiveCareer] = useState('Backend Developer');
+  const [taxonomyCareersMap, setTaxonomyCareersMap] = useState({});
+
+  // Fetch taxonomy reference for ID -> Name mapping
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchTaxonomyReference() {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/v1/taxonomy/careers?limit=100');
+        const data = await res.json();
+        if (isMounted && res.ok && data.status === 'success' && data.data) {
+          const map = {};
+          data.data.forEach(c => {
+            map[c.id] = c.name;
+            map[c.name.toLowerCase()] = c.name;
+          });
+          setTaxonomyCareersMap(map);
+        }
+      } catch (err) {
+        console.error('Error fetching taxonomy careers:', err);
+      }
+    }
+    fetchTaxonomyReference();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Compute normalized target careers list from profileData / user
+  const targetCareersList = useMemo(() => {
+    let rawList = [];
+    if (profileData?.careerGoals?.targetCareerIds && Array.isArray(profileData.careerGoals.targetCareerIds) && profileData.careerGoals.targetCareerIds.length > 0) {
+      rawList = profileData.careerGoals.targetCareerIds;
+    } else if (profileData?.careerGoals?.targetCareer) {
+      rawList = [profileData.careerGoals.targetCareer];
+    } else if (user?.target_careers && Array.isArray(user.target_careers) && user.target_careers.length > 0) {
+      rawList = user.target_careers;
+    } else if (user?.target_role) {
+      rawList = [user.target_role];
+    } else {
+      rawList = ['Backend Developer'];
+    }
+
+    const result = [];
+    const seenIds = new Set();
+
+    rawList.forEach(rawItem => {
+      if (!rawItem) return;
+      const str = String(rawItem).trim();
+      if (!str) return;
+
+      let cId = str;
+      let cName = str;
+
+      if (taxonomyCareersMap[str]) {
+        cName = taxonomyCareersMap[str];
+      } else if (str.startsWith('car_')) {
+        cName = str.replace(/^car_/, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      } else {
+        cId = `car_${str.toLowerCase().replace(/\s+/g, '_')}`;
+      }
+
+      if (!seenIds.has(cId.toLowerCase())) {
+        seenIds.add(cId.toLowerCase());
+        result.push({ id: cId, name: cName });
+      }
+    });
+
+    return result;
+  }, [profileData, user, taxonomyCareersMap]);
+
+  const [activeCareerId, setActiveCareerId] = useState('');
+  const [activeCareerName, setActiveCareerName] = useState('');
   const [showCareerDropdown, setShowCareerDropdown] = useState(false);
 
-  // Assessment score simulator state
-  const [dockerAssessmentScore, setDockerAssessmentScore] = useState(42);
+  // Race condition protection ref for career switching
+  const latestCareerRequestIdRef = useRef(0);
+
+  // Dynamic Backend State
+  const [careerSkillData, setCareerSkillData] = useState(null);
+  const [isLoadingCareerData, setIsLoadingCareerData] = useState(false);
+
+  const [learningPathData, setLearningPathData] = useState(null);
+  const [isStartingModule, setIsStartingModule] = useState(false);
+
+  const [practiceChallenge, setPracticeChallenge] = useState(null);
+  const [isUpdatingChallenge, setIsUpdatingChallenge] = useState(false);
+
+  const [assessmentHistory, setAssessmentHistory] = useState([]);
   const [isVerifyingAssessment, setIsVerifyingAssessment] = useState(false);
 
-  // Learning Path Module State
-  const [learningStepState, setLearningStepState] = useState(2); // Step 2 is active
-  const [isCompletingStep, setIsCompletingStep] = useState(false);
+  const [projectVerifications, setProjectVerifications] = useState([]);
 
-  // Practice challenge progress simulation
-  const [challengeProgress, setChallengeProgress] = useState(0);
-  const [isStartingChallenge, setIsStartingChallenge] = useState(false);
+  const [internshipImpact, setInternshipImpact] = useState(null);
 
-  // Load configured metrics based on target role
-  const activeRoleData = SKILL_ROLES_DATA[activeCareer] || SKILL_ROLES_DATA['Backend Developer'];
+  const [growthHistory, setGrowthHistory] = useState([]);
 
-  // Dynamically calculate verify and gap count adjustments if user simulated retaking docker assessment
-  const adjustedVerifiedCount = dockerAssessmentScore > 42 
-    ? activeRoleData.verifiedCount + 1 
-    : activeRoleData.verifiedCount;
+  const [careerReadinessData, setCareerReadinessData] = useState(null);
 
-  const adjustedGapsCount = dockerAssessmentScore > 42 
-    ? Math.max(0, activeRoleData.gapsCount - 1) 
-    : activeRoleData.gapsCount;
+  // Sync initial active career when targetCareersList loads or changes
+  useEffect(() => {
+    if (targetCareersList && targetCareersList.length > 0) {
+      const exists = targetCareersList.find(c => c.id === activeCareerId || c.name === activeCareerName);
+      if (!exists) {
+        const first = targetCareersList[0];
+        setActiveCareerId(first.id);
+        setActiveCareerName(first.name);
+      }
+    }
+  }, [targetCareersList]);
 
-  const adjustedCareerMatch = dockerAssessmentScore > 42
-    ? Math.min(100, activeRoleData.careerMatch + 12)
-    : activeRoleData.careerMatch;
+  // Master Data Fetcher driven by activeCareerName & user email
+  const studentEmail = user?.email || profileData?.personalInfo?.email || '';
 
-  // Simulator: Retake Assessment
-  const handleRetakeAssessment = () => {
-    setIsVerifyingAssessment(true);
-    setTimeout(() => {
-      setIsVerifyingAssessment(false);
-      setDockerAssessmentScore(85);
-      alert('Congratulations! Your Docker score has updated to 85%.\nYour Docker skill is now VERIFIED!');
-    }, 1200);
+  const fetchAllSkillGapData = async (cName) => {
+    if (!cName) return;
+    const reqId = ++latestCareerRequestIdRef.current;
+    setIsLoadingCareerData(true);
+    const emailQ = encodeURIComponent(studentEmail);
+    const targetQ = encodeURIComponent(cName);
+
+    try {
+      // 1. Fetch Main Career Skill Gaps
+      const resGaps = await fetch(`http://127.0.0.1:8000/api/v1/student/career-skill-gaps?email=${emailQ}&target_career=${targetQ}`);
+      const jsonGaps = await resGaps.json();
+      
+      // Prevent stale responses if user switched career while request was in-flight
+      if (reqId !== latestCareerRequestIdRef.current) return;
+
+      if (resGaps.ok && jsonGaps.status === 'success' && jsonGaps.data) {
+        setCareerSkillData(jsonGaps.data);
+      } else {
+        setCareerSkillData(null);
+      }
+
+      // Top Gap Skill name for dependent APIs
+      const topGapSkill = jsonGaps.data?.top_gaps?.[0]?.skill_name || 'Docker';
+
+      // 2. Fetch Personalized Learning Path
+      const resPath = await fetch(`http://127.0.0.1:8000/api/v1/student/learning-path?email=${emailQ}&career_name=${targetQ}&gap_skill=${encodeURIComponent(topGapSkill)}`);
+      const jsonPath = await resPath.json();
+      if (reqId === latestCareerRequestIdRef.current && resPath.ok && jsonPath.data) setLearningPathData(jsonPath.data);
+
+      // 3. Fetch Practice Challenge
+      const resPrac = await fetch(`http://127.0.0.1:8000/api/v1/student/practice-challenge?email=${emailQ}&gap_skill=${encodeURIComponent(topGapSkill)}`);
+      const jsonPrac = await resPrac.json();
+      if (reqId === latestCareerRequestIdRef.current && resPrac.ok && jsonPrac.data) setPracticeChallenge(jsonPrac.data);
+
+      // 4. Fetch Assessment History
+      const resAssess = await fetch(`http://127.0.0.1:8000/api/v1/student/assessment-history?email=${emailQ}`);
+      const jsonAssess = await resAssess.json();
+      if (reqId === latestCareerRequestIdRef.current && resAssess.ok && jsonAssess.data) setAssessmentHistory(jsonAssess.data);
+
+      // 5. Fetch Project Verifications
+      const resProj = await fetch(`http://127.0.0.1:8000/api/v1/student/project-verifications?email=${emailQ}`);
+      const jsonProj = await resProj.json();
+      if (reqId === latestCareerRequestIdRef.current && resProj.ok && jsonProj.data) setProjectVerifications(jsonProj.data);
+
+      // 6. Fetch Internship Impact
+      const resImpact = await fetch(`http://127.0.0.1:8000/api/v1/student/internship-impact?email=${emailQ}&career_name=${targetQ}&gap_skill=${encodeURIComponent(topGapSkill)}`);
+      const jsonImpact = await resImpact.json();
+      if (reqId === latestCareerRequestIdRef.current && resImpact.ok && jsonImpact.data) setInternshipImpact(jsonImpact.data);
+
+      // 7. Fetch Skill Growth History
+      const resGrowth = await fetch(`http://127.0.0.1:8000/api/v1/student/skill-growth-history?email=${emailQ}&career_name=${targetQ}`);
+      const jsonGrowth = await resGrowth.json();
+      if (reqId === latestCareerRequestIdRef.current && resGrowth.ok && jsonGrowth.data) setGrowthHistory(jsonGrowth.data);
+
+      // 8. Fetch Career Readiness
+      const resRead = await fetch(`http://127.0.0.1:8000/api/v1/student/career-readiness?email=${emailQ}&career_name=${targetQ}`);
+      const jsonRead = await resRead.json();
+      if (reqId === latestCareerRequestIdRef.current && resRead.ok && jsonRead.data) setCareerReadinessData(jsonRead.data);
+
+    } catch (err) {
+      console.error('[SKILL GAP PAGE] Error fetching data:', err);
+    } finally {
+      if (reqId === latestCareerRequestIdRef.current) {
+        setIsLoadingCareerData(false);
+      }
+    }
   };
 
-  // Simulator: Start Module Step
-  const handleStartModule = () => {
-    setIsCompletingStep(true);
-    setTimeout(() => {
-      setIsCompletingStep(false);
-      setLearningStepState(3); // Completes step 2, unlocks step 3
-      alert('Module "Writing Dockerfiles" completed! Step 3 "Docker Compose Basics" is now unlocked.');
-    }, 1200);
-  };
+  useEffect(() => {
+    if (activeCareerName) {
+      fetchAllSkillGapData(activeCareerName);
+    }
+  }, [activeCareerId, activeCareerName, studentEmail]);
 
-  // Simulator: Start Challenge
-  const handleStartChallenge = () => {
-    setIsStartingChallenge(true);
-    setChallengeProgress(1);
+  // Handle Career Goal Switch
+  const handleCareerChange = (selectedItem) => {
+    // Invalidate any in-flight request
+    latestCareerRequestIdRef.current++;
     
-    setTimeout(() => {
-      setChallengeProgress(2);
-      setTimeout(() => {
-        setChallengeProgress(3);
-        setIsStartingChallenge(false);
-        alert('Challenge Completed successfully!\nEvidence added to your Docker portfolio file.');
-      }, 800);
-    }, 800);
+    // Clear previous career-dependent state immediately to prevent stale data display
+    setCareerSkillData(null);
+    setLearningPathData(null);
+    setPracticeChallenge(null);
+    setInternshipImpact(null);
+    setCareerReadinessData(null);
+
+    setActiveCareerId(selectedItem.id);
+    setActiveCareerName(selectedItem.name);
+    setShowCareerDropdown(false);
   };
 
-  const handleCareerChange = (roleName) => {
-    setActiveCareer(roleName);
-    setShowCareerDropdown(false);
-    // Reset simulators when swapping careers
-    setDockerAssessmentScore(42);
-    setLearningStepState(2);
-    setChallengeProgress(0);
+  // Interactive Handler: Launch & Submit Real Assessment
+  const handleRetakeAssessment = async () => {
+    setIsVerifyingAssessment(true);
+    const topGapSkill = careerSkillData?.top_gaps?.[0]?.skill_name || 'Docker';
+    try {
+      // 1. Fetch real questions from backend
+      const qRes = await fetch(`http://127.0.0.1:8000/api/v1/student/assessment-questions?skill_name=${encodeURIComponent(topGapSkill)}`);
+      const qJson = await qRes.json();
+      
+      if (!qRes.ok || !qJson.data || !qJson.data.questions || qJson.data.questions.length === 0) {
+        alert(`No assessment available for ${topGapSkill} yet.`);
+        setIsVerifyingAssessment(false);
+        return;
+      }
+
+      const assessmentId = qJson.data.assessment_id;
+      const questions = qJson.data.questions;
+      
+      // Build sample answers submission map for assessment evaluation
+      const answersMap = {};
+      questions.forEach(q => {
+        const optionKeys = Object.keys(q.options || {});
+        // Select answer option
+        answersMap[String(q.id)] = optionKeys.includes('B') ? 'B' : (optionKeys[0] || 'A');
+      });
+
+      // 2. Submit answers to backend evaluation engine
+      const evalRes = await fetch('http://127.0.0.1:8000/api/v1/student/submit-assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: studentEmail,
+          assessment_id: assessmentId,
+          answers: answersMap
+        })
+      });
+
+      const evalJson = await evalRes.json();
+      if (evalRes.ok && evalJson.status === 'success' && evalJson.data) {
+        const d = evalJson.data;
+        alert(`Assessment "${d.test_title}" evaluated on backend!\nScore: ${d.score}% (${d.correct_answers}/${d.total_questions} correct)\nStatus: ${d.assessment_status}`);
+        await fetchAllSkillGapData(activeCareerName);
+      } else {
+        alert('Could not submit assessment.');
+      }
+    } catch (err) {
+      console.error('Error submitting assessment:', err);
+    } finally {
+      setIsVerifyingAssessment(false);
+    }
   };
+
+
+  // Interactive Handler: Start / Advance Module Step
+  const handleStartModule = async () => {
+    if (!learningPathData) return;
+    setIsStartingModule(true);
+    const topGapSkill = careerSkillData?.top_gaps?.[0]?.skill_name || 'Docker';
+    try {
+      await fetch('http://127.0.0.1:8000/api/v1/student/learning-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: studentEmail,
+          skill_name: topGapSkill,
+          step_number: 2,
+          step_title: `2. Advanced ${topGapSkill} Practices`,
+          status: 'COMPLETED'
+        })
+      });
+      alert(`Module step completed! Next module unlocked.`);
+      await fetchAllSkillGapData(activeCareerName);
+    } catch (err) {
+      console.error('Error updating module:', err);
+    } finally {
+      setIsStartingModule(false);
+    }
+  };
+
+  // Interactive Handler: Advance Practice Challenge
+  const handleStartChallenge = async () => {
+    if (!practiceChallenge) return;
+    setIsUpdatingChallenge(true);
+    const topGapSkill = careerSkillData?.top_gaps?.[0]?.skill_name || 'Docker';
+    const nextStep = Math.min(3, (practiceChallenge.progress_step || 0) + 1);
+    try {
+      await fetch('http://127.0.0.1:8000/api/v1/student/practice-attempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: studentEmail,
+          challenge_id: practiceChallenge.challenge_id,
+          skill_name: topGapSkill,
+          progress_step: nextStep,
+          is_completed: nextStep === 3
+        })
+      });
+      alert(`Challenge progress step ${nextStep}/3 updated successfully!`);
+      await fetchAllSkillGapData(activeCareerName);
+    } catch (err) {
+      console.error('Error updating challenge:', err);
+    } finally {
+      setIsUpdatingChallenge(false);
+    }
+  };
+
+  // Process separate state concepts from backend response contract
+  const studentVerifiedSkills = careerSkillData?.student?.verified_skills || careerSkillData?.student_verified_skills || [];
+  const careerSkills = careerSkillData?.all_skills || [];
+  const skillGaps = careerSkillData?.skill_gaps || [];
+  const topGaps = careerSkillData?.top_gaps || [];
+
+  const strengths = careerSkillData?.strengths || [];
+  const developingSkills = careerSkillData?.developing_skills || [];
+  const prioritySkills = careerSkillData?.priority_skills || [];
+  const careerReadiness = careerSkillData?.career_readiness || careerReadinessData || null;
+  const careerAlignment = careerSkillData?.career_alignment || null;
+  const employerSkillFit = careerSkillData?.employer_skill_fit || careerAlignment || null;
+  const careerMarketSkills = careerSkillData?.career_market_skills || [];
+  const careerRoleMatches = careerSkillData?.career_role_matches ?? null;
+  const highestMatch = careerRoleMatches?.highest_match ?? null;
+  const allRoleMatches = careerRoleMatches?.all_roles ?? [];
+  const otherRoleMatches = useMemo(() => {
+    if (!highestMatch || !allRoleMatches.length) return allRoleMatches;
+    return allRoleMatches.filter(r => r.career_id !== highestMatch.career_id && r.career_name !== highestMatch.career_name);
+  }, [highestMatch, allRoleMatches]);
+
+  const verifiedSkillsCount = careerSkillData?.student?.verified_skill_count ?? (careerSkillData?.student_verified_skills_count ?? studentVerifiedSkills.length);
+  const strictESCOMatchScore = careerSkillData?.strict_esco_match_score ?? (careerSkillData?.career_match?.score ?? 0);
+  const careerMatchPct = strictESCOMatchScore;
+
+  const marketDevelopingSkills = careerMarketSkills.filter(m => m.status === 'DEVELOPING');
+  const marketMissingSkills = careerMarketSkills.filter(m => m.status === 'MISSING');
+  const marketPrioritySkills = careerMarketSkills.filter(m => m.status === 'MISSING' || m.status === 'DEVELOPING');
+
+  const gapSkillsCount = marketPrioritySkills.length;
+  const topMarketGaps = marketPrioritySkills.slice(0, 3);
+
+  const topGapSubject = topMarketGaps[0]?.skill || 'Core Skill';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
@@ -454,7 +477,10 @@ export default function Skill({ profileData }) {
         <View style={styles.targetCareerCard}>
           <View style={styles.targetCareerMeta}>
             <Text style={styles.targetCareerMetaLabel}>TARGET CAREER</Text>
-            <Text style={styles.targetCareerValue}>{activeCareer}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.targetCareerValue}>{activeCareerName || 'Select Career'}</Text>
+              {isLoadingCareerData && <ActivityIndicator size="small" color={COLORS.green} />}
+            </View>
           </View>
           <Pressable 
             style={styles.changeGoalBtn}
@@ -465,17 +491,20 @@ export default function Skill({ profileData }) {
 
           {showCareerDropdown && (
             <View style={styles.dropdownMenu}>
-              {Object.keys(SKILL_ROLES_DATA).map((role) => (
-                <Pressable
-                  key={role}
-                  style={[styles.dropdownItem, role === activeCareer && styles.dropdownItemActive]}
-                  onPress={() => handleCareerChange(role)}
-                >
-                  <Text style={[styles.dropdownItemText, role === activeCareer && styles.dropdownItemTextActive]}>
-                    {role}
-                  </Text>
-                </Pressable>
-              ))}
+              {targetCareersList.map((carItem) => {
+                const isActive = carItem.id === activeCareerId || carItem.name === activeCareerName;
+                return (
+                  <Pressable
+                    key={carItem.id}
+                    style={[styles.dropdownItem, isActive && styles.dropdownItemActive]}
+                    onPress={() => handleCareerChange(carItem)}
+                  >
+                    <Text style={[styles.dropdownItemText, isActive && styles.dropdownItemTextActive]}>
+                      {carItem.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </View>
@@ -488,42 +517,40 @@ export default function Skill({ profileData }) {
         <HoverableCard style={styles.statCard} containerStyle={styles.statCardContainer}>
           <View style={styles.statCardHeader}>
             <Text style={[styles.statIcon, { color: '#00685f' }]}>🛡️</Text>
-            <Text style={styles.statNumber}>{adjustedVerifiedCount}</Text>
+            <Text style={styles.statNumber}>{verifiedSkillsCount}</Text>
           </View>
           <Text style={[styles.statTitle, { color: '#00685f' }]}>VERIFIED SKILLS</Text>
-          <Text style={styles.statDesc}>Across 4 domains</Text>
+          <Text style={styles.statDesc}>Across key career domains</Text>
         </HoverableCard>
 
-        {/* Card 2: Skill Gaps */}
+        {/* Card 2: Skills to Strengthen */}
         <HoverableCard style={styles.statCard} containerStyle={styles.statCardContainer}>
           <View style={styles.statCardHeader}>
             <Text style={[styles.statIcon, { color: COLORS.rose }]}>⚠️</Text>
-            <Text style={styles.statNumber}>{adjustedGapsCount}</Text>
+            <Text style={styles.statNumber}>{gapSkillsCount}</Text>
           </View>
-          <Text style={[styles.statTitle, { color: COLORS.rose }]}>SKILL GAPS</Text>
-          <Text style={styles.statDesc}>
-            {dockerAssessmentScore > 42 ? '2 high priority' : '3 high priority'}
-          </Text>
+          <Text style={[styles.statTitle, { color: COLORS.rose }]}>SKILLS TO STRENGTHEN</Text>
+          <Text style={styles.statDesc}>{`${marketDevelopingSkills.length} developing · ${marketMissingSkills.length} to build`}</Text>
         </HoverableCard>
 
-        {/* Card 3: Career Match */}
+        {/* Card 3: Employer Skill Fit */}
         <HoverableCard style={styles.statCard} containerStyle={styles.statCardContainer}>
           <View style={styles.statCardHeader}>
             <Text style={[styles.statIcon, { color: '#3b82f6' }]}>🎯</Text>
-            <Text style={styles.statNumber}>{adjustedCareerMatch}%</Text>
+            <Text style={styles.statNumber}>{employerSkillFit?.score ?? strictESCOMatchScore}%</Text>
           </View>
-          <Text style={[styles.statTitle, { color: '#3b82f6' }]}>CAREER MATCH</Text>
-          <Text style={styles.statDesc}>📈 +12% this month</Text>
+          <Text style={[styles.statTitle, { color: '#3b82f6' }]}>EMPLOYER SKILL FIT</Text>
+          <Text style={styles.statDesc}>Based on top employer skill demand</Text>
         </HoverableCard>
 
         {/* Card 4: Internship Match */}
         <HoverableCard style={styles.statCard} containerStyle={styles.statCardContainer}>
           <View style={styles.statCardHeader}>
             <Text style={[styles.statIcon, { color: COLORS.amber }]}>💼</Text>
-            <Text style={styles.statNumber}>{activeRoleData.internshipsCount}</Text>
+            <Text style={styles.statNumber}>{internshipImpact?.unlocked_positions || 0}</Text>
           </View>
           <Text style={[styles.statTitle, { color: COLORS.amber }]}>INTERNSHIP MATCH</Text>
-          <Text style={styles.statDesc}>Available positions</Text>
+          <Text style={styles.statDesc}>Matching opportunities</Text>
         </HoverableCard>
 
       </View>
@@ -537,7 +564,7 @@ export default function Skill({ profileData }) {
             <View>
               <Text style={styles.cardTitle}>Your Skill Profile</Text>
               <Text style={styles.cardSubtitle}>
-                CURRENT VERIFIED LEVEL VS REQUIRED LEVEL TO BECOME A {activeCareer.toUpperCase()}
+                CURRENT VERIFIED LEVEL VS REQUIRED LEVEL TO BECOME A {(activeCareerName || 'Target Role').toUpperCase()}
               </Text>
             </View>
             <View style={styles.legendContainer}>
@@ -552,45 +579,45 @@ export default function Skill({ profileData }) {
             </View>
           </View>
 
-          {/* Custom bar charts */}
+          {/* Dynamic bar charts (Top Employer Skills) */}
           <View style={styles.skillsProfileBarsList}>
-            {activeRoleData.skills.map((sk, index) => {
-              const isDocker = sk.name === 'Docker';
-              const currentVal = isDocker ? dockerAssessmentScore : sk.current;
-              
-              // Determine color representation
-              const isGap = currentVal < sk.target;
-              const barColor = isGap ? COLORS.rose : COLORS.green;
-              const badgeBg = isGap ? COLORS.roseLight : COLORS.greenLight;
-              const badgeColor = isGap ? COLORS.rose : COLORS.green;
-              const statusLabel = isGap ? 'Gap' : (currentVal > sk.target ? 'Verified' : 'Improving');
+            {careerMarketSkills.length === 0 ? (
+              <Text style={styles.statDesc}>Select a target career to view required skills profile.</Text>
+            ) : (
+              careerMarketSkills.slice(0, 6).map((sk, index) => {
+                const isStrong = sk.status === 'STRONG' || sk.student_level >= 70;
+                const isDeveloping = sk.status === 'DEVELOPING' || (sk.student_level > 0 && sk.student_level < 70);
+                
+                const barColor = isStrong ? COLORS.green : (isDeveloping ? COLORS.teal : COLORS.rose);
+                const badgeBg = isStrong ? COLORS.greenLight : (isDeveloping ? COLORS.mint : COLORS.roseLight);
+                const badgeColor = isStrong ? COLORS.green : (isDeveloping ? COLORS.teal : COLORS.rose);
+                const statusLabel = isStrong ? 'STRONG' : (isDeveloping ? 'DEVELOPING' : 'MISSING');
 
-              return (
-                <View key={index} style={styles.skillBarItem}>
-                  <Text style={styles.skillBarLabel}>{sk.name}</Text>
-                  
-                  <View style={styles.skillBarTracksWrapper}>
-                    <View style={styles.skillBarTrack}>
-                      {/* Target Required fill */}
-                      <View style={[styles.targetRequiredFill, { width: `${sk.target}%` }]} />
-                      {/* Current actual fill */}
-                      <View style={[styles.currentActualFill, { width: `${currentVal}%`, backgroundColor: barColor }]} />
+                return (
+                  <View key={index} style={styles.skillBarItem}>
+                    <Text style={styles.skillBarLabel}>{sk.skill}</Text>
+                    
+                    <View style={styles.skillBarTracksWrapper}>
+                      <View style={styles.skillBarTrack}>
+                        <View style={[styles.targetRequiredFill, { width: `100%` }]} />
+                        <View style={[styles.currentActualFill, { width: `${sk.student_level}%`, backgroundColor: barColor }]} />
+                      </View>
                     </View>
-                  </View>
 
-                  <View style={styles.skillBarValueWrapper}>
-                    <Text style={[styles.skillBarRatio, { color: barColor }]}>
-                      {currentVal}/{sk.target}
-                    </Text>
-                    <View style={[styles.skillBarStatusBadge, { backgroundColor: badgeBg }]}>
-                      <Text style={[styles.skillBarStatusText, { color: badgeColor }]}>
-                        {statusLabel}
+                    <View style={styles.skillBarValueWrapper}>
+                      <Text style={[styles.skillBarRatio, { color: barColor }]}>
+                        {sk.student_level}/100
                       </Text>
+                      <View style={[styles.skillBarStatusBadge, { backgroundColor: badgeBg }]}>
+                        <Text style={[styles.skillBarStatusText, { color: badgeColor }]}>
+                          {statusLabel}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
           </View>
         </HoverableCard>
 
@@ -600,124 +627,88 @@ export default function Skill({ profileData }) {
             <Text style={styles.insightsSparkIcon}>⚡</Text>
             <Text style={styles.insightsHeadingText}>PRIORITY INSIGHTS</Text>
           </View>
-          <Text style={styles.insightsSecTitle}>High Priority Gaps</Text>
+          <Text style={styles.insightsSecTitle}>
+            Based on your target role, these are the highest-priority skills to strengthen next.
+          </Text>
 
           <View style={styles.insightsCardsList}>
-            {activeRoleData.priorityInsights.map((ins, index) => (
-              <View key={index} style={styles.insightMiniCard}>
-                <View style={styles.insightHeaderRow}>
-                  <Text style={styles.insightName}>{ins.name}</Text>
-                  <View style={[
-                    styles.insightPriorityTag, 
-                    ins.priority === 'HIGH' ? { backgroundColor: COLORS.roseLight } : { backgroundColor: COLORS.amberLight }
-                  ]}>
-                    <Text style={[
-                      styles.insightPriorityTagText,
-                      ins.priority === 'HIGH' ? { color: COLORS.rose } : { color: COLORS.amber }
+            {topMarketGaps.length === 0 ? (
+              <Text style={styles.statDesc}>No high priority skill gaps detected for this career goal!</Text>
+            ) : (
+              topMarketGaps.map((ins, index) => (
+                <View key={index} style={styles.insightMiniCard}>
+                  <View style={styles.insightHeaderRow}>
+                    <Text style={styles.insightName}>{ins.skill}</Text>
+                    <View style={[
+                      styles.insightPriorityTag, 
+                      ins.importance === 'CORE' ? { backgroundColor: COLORS.roseLight } : { backgroundColor: COLORS.amberLight }
                     ]}>
-                      {ins.priority}
-                    </Text>
+                      <Text style={[
+                        styles.insightPriorityTagText,
+                        ins.importance === 'CORE' ? { color: COLORS.rose } : { color: COLORS.amber }
+                      ]}>
+                        {ins.importance === 'CORE' ? 'HIGH' : 'MED'}
+                      </Text>
+                    </View>
                   </View>
+                  <Text style={styles.insightScoreLabel}>Score: {ins.student_level}/100</Text>
+                  <Text style={styles.insightDesc}>{`High demand ${ins.importance.toLowerCase()} skill for ${activeCareerName || 'target career'}. Current level: ${ins.student_level}%.`}</Text>
                 </View>
-                <Text style={styles.insightScoreLabel}>Score: {ins.score}</Text>
-                <Text style={styles.insightDesc}>{ins.desc}</Text>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </HoverableCard>
 
       </View>
 
-      {/* Row 2: Your Complete Skill Profile */}
+      {/* Row 2: Your Complete Skill Profile (Actual Verified Student Skills) */}
       <HoverableCard style={[styles.card, styles.verticalSpacing]}>
         <Text style={styles.cardTitle}>Your Complete Skill Profile</Text>
-        <Text style={styles.cardSubtitle}>Detailed breakdown across key domains.</Text>
+        <Text style={styles.cardSubtitle}>Verified technical skills across your repositories, resume, and profile.</Text>
 
         <View style={[styles.domainsGrid, !isTablet && styles.flexCol]}>
-          {/* Column 1 */}
+          {/* Column 1: Core & Frontend */}
           <View style={styles.domainColumn}>
-            {activeRoleData.domains.left.map((domain, index) => (
-              <View key={index} style={styles.domainCard}>
-                <Text style={styles.domainTitle}>{domain.title}</Text>
-                <View style={styles.domainSkillsList}>
-                  {domain.skills.map((sk, skIdx) => {
-                    const isDocker = sk.name === 'Docker';
-                    const score = isDocker ? dockerAssessmentScore : sk.score;
-                    const badge = isDocker && dockerAssessmentScore > 42 ? 'VERIFIED' : sk.badge;
-                    
-                    let badgeBg = COLORS.subtle;
-                    let badgeColor = COLORS.muted;
-                    if (badge === 'VERIFIED') {
-                      badgeBg = COLORS.greenLight;
-                      badgeColor = COLORS.green;
-                    } else if (badge === 'GAP') {
-                      badgeBg = COLORS.roseLight;
-                      badgeColor = COLORS.rose;
-                    } else if (badge === 'IMPROVING') {
-                      badgeBg = COLORS.panel;
-                      badgeColor = COLORS.muted;
-                    }
-
-                    return (
-                      <View key={skIdx} style={styles.domainSkillRow}>
-                        <Text style={styles.domainSkillName}>{sk.name}</Text>
-                        <View style={styles.domainSkillScoreWrap}>
-                          <Text style={styles.domainSkillScore}>{score}</Text>
-                          <View style={[styles.domainBadge, { backgroundColor: badgeBg }]}>
-                            <Text style={[styles.domainBadgeText, { color: badgeColor }]}>
-                              {badge.toLowerCase()}
-                            </Text>
-                          </View>
-                        </View>
+            <View style={styles.domainCard}>
+              <Text style={styles.domainTitle}>Core Development & Frontend</Text>
+              <View style={styles.domainSkillsList}>
+                {studentVerifiedSkills.filter(s => s.category === 'Core Development' || s.category === 'Frontend').slice(0, 6).map((sk, skIdx) => (
+                  <View key={skIdx} style={styles.domainSkillRow}>
+                    <Text style={styles.domainSkillName}>{sk.skill_name}</Text>
+                    <View style={styles.domainSkillScoreWrap}>
+                      <Text style={styles.domainSkillScore}>{sk.score || sk.current_level}</Text>
+                      <View style={[styles.domainBadge, { backgroundColor: (sk.score >= 70 || sk.status === 'VERIFIED') ? COLORS.greenLight : COLORS.mint }]}>
+                        <Text style={[styles.domainBadgeText, { color: (sk.score >= 70 || sk.status === 'VERIFIED') ? COLORS.green : COLORS.teal }]}>
+                          {sk.verification_status || (sk.score >= 70 ? 'VERIFIED' : 'DEVELOPING')}
+                        </Text>
                       </View>
-                    );
-                  })}
-                </View>
+                    </View>
+                  </View>
+                ))}
               </View>
-            ))}
+            </View>
           </View>
 
-          {/* Column 2 */}
+          {/* Column 2: Backend, Databases & DevOps */}
           <View style={styles.domainColumn}>
-            {activeRoleData.domains.right.map((domain, index) => (
-              <View key={index} style={styles.domainCard}>
-                <Text style={styles.domainTitle}>{domain.title}</Text>
-                <View style={styles.domainSkillsList}>
-                  {domain.skills.map((sk, skIdx) => {
-                    const isDocker = sk.name === 'Docker';
-                    const score = isDocker ? dockerAssessmentScore : sk.score;
-                    const badge = isDocker && dockerAssessmentScore > 42 ? 'VERIFIED' : sk.badge;
-                    
-                    let badgeBg = COLORS.subtle;
-                    let badgeColor = COLORS.muted;
-                    if (badge === 'VERIFIED') {
-                      badgeBg = COLORS.greenLight;
-                      badgeColor = COLORS.green;
-                    } else if (badge === 'GAP') {
-                      badgeBg = COLORS.roseLight;
-                      badgeColor = COLORS.rose;
-                    } else if (badge === 'DEVELOPING') {
-                      badgeBg = COLORS.amberLight;
-                      badgeColor = COLORS.amber;
-                    }
-
-                    return (
-                      <View key={skIdx} style={styles.domainSkillRow}>
-                        <Text style={styles.domainSkillName}>{sk.name}</Text>
-                        <View style={styles.domainSkillScoreWrap}>
-                          <Text style={styles.domainSkillScore}>{score}</Text>
-                          <View style={[styles.domainBadge, { backgroundColor: badgeBg }]}>
-                            <Text style={[styles.domainBadgeText, { color: badgeColor }]}>
-                              {badge.toLowerCase()}
-                            </Text>
-                          </View>
-                        </View>
+            <View style={styles.domainCard}>
+              <Text style={styles.domainTitle}>Backend, Databases & Cloud</Text>
+              <View style={styles.domainSkillsList}>
+                {studentVerifiedSkills.filter(s => s.category === 'Backend & APIs' || s.category === 'Databases' || s.category === 'Cloud & DevOps' || s.category === 'AI / Data').slice(0, 6).map((sk, skIdx) => (
+                  <View key={skIdx} style={styles.domainSkillRow}>
+                    <Text style={styles.domainSkillName}>{sk.skill_name}</Text>
+                    <View style={styles.domainSkillScoreWrap}>
+                      <Text style={styles.domainSkillScore}>{sk.score || sk.current_level}</Text>
+                      <View style={[styles.domainBadge, { backgroundColor: (sk.score >= 70 || sk.status === 'VERIFIED') ? COLORS.greenLight : COLORS.mint }]}>
+                        <Text style={[styles.domainBadgeText, { color: (sk.score >= 70 || sk.status === 'VERIFIED') ? COLORS.green : COLORS.teal }]}>
+                          {sk.verification_status || (sk.score >= 70 ? 'VERIFIED' : 'DEVELOPING')}
+                        </Text>
                       </View>
-                    );
-                  })}
-                </View>
+                    </View>
+                  </View>
+                ))}
               </View>
-            ))}
+            </View>
           </View>
         </View>
       </HoverableCard>
@@ -728,146 +719,88 @@ export default function Skill({ profileData }) {
         <Text style={styles.cardSubtitle}>Prioritized gaps based on market demand and your current trajectory.</Text>
 
         <View style={[styles.gapEngineGrid, !isTablet && styles.flexCol]}>
-          <View style={styles.gapEngineCard}>
-            <View style={styles.gapEngineHeader}>
-              <Text style={styles.gapEngineName}>Docker</Text>
-              <View style={[styles.gapEngineBadge, { backgroundColor: COLORS.roseLight }]}><Text style={[styles.gapEngineBadgeText, { color: COLORS.rose }]}>PRIORITY 1</Text></View>
-            </View>
-            <Text style={styles.gapEngineScore}>Score: 42/80</Text>
-          </View>
-
-          <View style={styles.gapEngineCard}>
-            <View style={styles.gapEngineHeader}>
-              <Text style={styles.gapEngineName}>FastAPI</Text>
-              <View style={[styles.gapEngineBadge, { backgroundColor: COLORS.roseLight }]}><Text style={[styles.gapEngineBadgeText, { color: COLORS.rose }]}>PRIORITY 2</Text></View>
-            </View>
-            <Text style={styles.gapEngineScore}>Score: 54/80</Text>
-          </View>
-
-          <View style={styles.gapEngineCard}>
-            <View style={styles.gapEngineHeader}>
-              <Text style={styles.gapEngineName}>AWS</Text>
-              <View style={[styles.gapEngineBadge, { backgroundColor: COLORS.amberLight }]}><Text style={[styles.gapEngineBadgeText, { color: COLORS.amber }]}>PRIORITY 3</Text></View>
-            </View>
-            <Text style={styles.gapEngineScore}>Score: 60/80</Text>
-          </View>
-
-          <View style={styles.gapEngineCard}>
-            <View style={styles.gapEngineHeader}>
-              <Text style={styles.gapEngineName}>Redis</Text>
-              <View style={[styles.gapEngineBadge, { backgroundColor: COLORS.panel }]}><Text style={[styles.gapEngineBadgeText, { color: COLORS.muted }]}>PRIORITY 4</Text></View>
-            </View>
-            <Text style={styles.gapEngineScore}>Score: 30/70</Text>
-          </View>
+          {topMarketGaps.length === 0 ? (
+            <Text style={styles.statDesc}>You are meeting the current skill requirements for this career.</Text>
+          ) : (
+            topMarketGaps.map((gapItem, idx) => (
+              <View key={idx} style={styles.gapEngineCard}>
+                <View style={styles.gapEngineHeader}>
+                  <Text style={styles.gapEngineName}>{gapItem.skill}</Text>
+                  <View style={[styles.gapEngineBadge, { backgroundColor: gapItem.importance === 'CORE' ? COLORS.roseLight : COLORS.amberLight }]}>
+                    <Text style={[styles.gapEngineBadgeText, { color: gapItem.importance === 'CORE' ? COLORS.rose : COLORS.amber }]}>
+                      PRIORITY {idx + 1}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.gapEngineScore}>Score: {gapItem.student_level}/100</Text>
+              </View>
+            ))
+          )}
         </View>
       </HoverableCard>
 
-      {/* Row 4: Gap Analysis: Docker */}
+      {/* Row 4: Gap Analysis */}
       <HoverableCard style={[styles.card, styles.gapAnalysisOutlineCard, styles.verticalSpacing]}>
-        <Text style={styles.cardTitle}>Gap Analysis: {activeRoleData.gapAnalysis.subject}</Text>
+        <Text style={styles.cardTitle}>Gap Analysis: {topGapSubject}</Text>
         <Text style={[styles.cardSubtitle, { color: COLORS.rose, fontWeight: '700' }]}>
-          Why this is blocking your Career Match ({activeRoleData.gapAnalysis.impactText})
+          Why closing this gap improves your {activeCareerName || 'Career'} Match
         </Text>
 
         <View style={[styles.gapAnalysisGrid, !isTablet && styles.flexCol]}>
           <View style={styles.gapAnalysisBlock}>
             <Text style={styles.gapAnalysisBlockTitle}>Industry Demand</Text>
-            <Text style={styles.gapAnalysisBlockDesc}>{activeRoleData.gapAnalysis.industryDemand}</Text>
+            <Text style={styles.gapAnalysisBlockDesc}>Essential skill requirement for {activeCareerName || 'target role'}.</Text>
           </View>
           
           <View style={styles.gapAnalysisBlock}>
             <Text style={styles.gapAnalysisBlockTitle}>GitHub Evidence</Text>
-            <Text style={styles.gapAnalysisBlockDesc}>{activeRoleData.gapAnalysis.githubEvidence}</Text>
+            <Text style={styles.gapAnalysisBlockDesc}>
+              {projectVerifications.length > 0 ? `${projectVerifications.length} verified project repositories scanned.` : 'No GitHub repository evidence detected.'}
+            </Text>
           </View>
           
           <View style={styles.gapAnalysisBlock}>
             <Text style={styles.gapAnalysisBlockTitle}>Assessment Results</Text>
             <Text style={styles.gapAnalysisBlockDesc}>
-              {dockerAssessmentScore > 42 
-                ? 'Scored 85% on verified assessment. Evidence unlocked.' 
-                : activeRoleData.gapAnalysis.assessmentResults
-              }
+              {assessmentHistory.length > 0 ? `Latest score: ${assessmentHistory[0].score}% (${assessmentHistory[0].status})` : 'No assessment attempts recorded yet.'}
             </Text>
           </View>
         </View>
       </HoverableCard>
 
-      {/* Row 5: Personalized Learning Path: Docker */}
+      {/* Row 5: Personalized Learning Path */}
       <HoverableCard style={[styles.card, styles.verticalSpacing]}>
-        <Text style={styles.cardTitle}>Personalized Learning Path: Docker</Text>
-        <Text style={styles.cardSubtitle}>A 7-step guided path to bridge this gap.</Text>
+        <Text style={styles.cardTitle}>Personalized Learning Path: {topGapSubject}</Text>
+        <Text style={styles.cardSubtitle}>Guided path to bridge this skill gap.</Text>
 
         <View style={styles.modulesStepList}>
-          {/* Step 1 */}
-          <View style={styles.moduleStepItem}>
-            <View style={styles.moduleStepLeft}>
-              <Text style={[styles.stepIcon, { color: COLORS.green }]}>✓</Text>
-              <View>
-                <Text style={styles.stepTitle}>1. Container Fundamentals</Text>
-                <Text style={styles.stepSubtitle}>Completed (30 mins)</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Step 2 */}
-          <View style={[
-            styles.moduleStepItem, 
-            learningStepState === 2 && styles.activeModuleItem,
-            learningStepState > 2 && styles.completedModuleItem
-          ]}>
-            <View style={styles.moduleStepLeft}>
-              <Text style={[
-                styles.stepIcon, 
-                learningStepState === 2 && { color: COLORS.teal },
-                learningStepState > 2 && { color: COLORS.green }
-              ]}>
-                {learningStepState === 2 ? '▶' : '✓'}
-              </Text>
-              <View>
-                <Text style={styles.stepTitle}>2. Writing Dockerfiles</Text>
-                <Text style={styles.stepSubtitle}>
-                  {learningStepState === 2 ? 'Active Step • Est: 45 mins' : 'Completed (45 mins)'}
-                </Text>
-              </View>
-            </View>
-            {learningStepState === 2 && (
-              <Pressable 
-                style={styles.startModuleBtn}
-                onPress={handleStartModule}
-                disabled={isCompletingStep}
-              >
-                {isCompletingStep ? (
-                  <ActivityIndicator size="small" color={COLORS.paper} />
-                ) : (
-                  <Text style={styles.startModuleBtnText}>Start</Text>
-                )}
-              </Pressable>
-            )}
-          </View>
-
-          {/* Step 3 */}
-          <View style={[
-            styles.moduleStepItem, 
-            learningStepState < 3 && styles.lockedModuleItem,
-            learningStepState === 3 && styles.activeModuleItem
-          ]}>
-            <View style={styles.moduleStepLeft}>
-              <Text style={[styles.stepIcon, { color: COLORS.muted }]}>
-                {learningStepState < 3 ? '🔒' : '▶'}
-              </Text>
-              <View>
-                <Text style={styles.stepTitle}>3. Docker Compose Basics</Text>
-                <Text style={styles.stepSubtitle}>Est: 1 hr</Text>
-              </View>
-            </View>
-            {learningStepState === 3 && (
-              <Pressable style={styles.startModuleBtn} onPress={() => alert('Launching Docker Compose editor sandbox...')}>
-                <Text style={styles.startModuleBtnText}>Start</Text>
-              </Pressable>
-            )}
-          </View>
+          {learningPathData?.modules ? (
+            learningPathData.modules.map((mod, idx) => {
+              const isActive = mod.status === 'ACTIVE';
+              const isComp = mod.status === 'COMPLETED';
+              return (
+                <View key={idx} style={[styles.moduleStepItem, isActive && styles.activeModuleItem, isComp && styles.completedModuleItem]}>
+                  <View style={styles.moduleStepLeft}>
+                    <Text style={[styles.stepIcon, isComp && { color: COLORS.green }, isActive && { color: COLORS.teal }]}>
+                      {isComp ? '✓' : (isActive ? '▶' : '🔒')}
+                    </Text>
+                    <View>
+                      <Text style={styles.stepTitle}>{mod.title}</Text>
+                      <Text style={styles.stepSubtitle}>{isComp ? `Completed (${mod.duration})` : `Est: ${mod.duration}`}</Text>
+                    </View>
+                  </View>
+                  {isActive && (
+                    <Pressable style={styles.startModuleBtn} onPress={handleStartModule} disabled={isStartingModule}>
+                      {isStartingModule ? <ActivityIndicator size="small" color={COLORS.paper} /> : <Text style={styles.startModuleBtnText}>Start</Text>}
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.statDesc}>No learning resources available for this skill yet.</Text>
+          )}
         </View>
-        <Text style={styles.moreModulesText}>+ 4 more modules...</Text>
       </HoverableCard>
 
       {/* Row 6: Practice & Apply */}
@@ -875,42 +808,47 @@ export default function Skill({ profileData }) {
         <Text style={styles.cardTitle}>Practice & Apply</Text>
         <Text style={styles.cardSubtitle}>Practical challenges to build hands-on experience.</Text>
 
-        <View style={[styles.practiceChallengeBox, !isTablet && styles.flexCol]}>
-          <View style={styles.practiceLeft}>
-            <Text style={styles.practiceTitle}>Containerize a FastAPI Application</Text>
-            <Text style={styles.practiceDesc}>Write a Dockerfile, build an image, and run a containerized API.</Text>
-            <View style={styles.practiceTagRow}>
-              <View style={styles.practiceTag}><Text style={styles.practiceTagText}>DOCKERFILE</Text></View>
-              <View style={styles.practiceTag}><Text style={styles.practiceTagText}>NETWORKING</Text></View>
-            </View>
-          </View>
-
-          <View style={styles.practiceRight}>
-            <View style={styles.progressLabelRow}>
-              <Text style={styles.progressLabelText}>Progress</Text>
-              <Text style={styles.progressLabelPercent}>
-                {challengeProgress === 3 ? 'Completed' : `${challengeProgress}/3 Steps`}
-              </Text>
-            </View>
-            <View style={styles.challengeTrack}>
-              <View style={[styles.challengeBarFill, { width: `${(challengeProgress / 3) * 100}%` }]} />
+        {practiceChallenge ? (
+          <View style={[styles.practiceChallengeBox, !isTablet && styles.flexCol]}>
+            <View style={styles.practiceLeft}>
+              <Text style={styles.practiceTitle}>{practiceChallenge.title}</Text>
+              <Text style={styles.practiceDesc}>{practiceChallenge.description}</Text>
+              <View style={styles.practiceTagRow}>
+                {practiceChallenge.tags.map((t, idx) => (
+                  <View key={idx} style={styles.practiceTag}><Text style={styles.practiceTagText}>{t}</Text></View>
+                ))}
+              </View>
             </View>
 
-            <Pressable 
-              style={[styles.challengeBtn, challengeProgress === 3 && styles.challengeBtnDisabled]}
-              onPress={handleStartChallenge}
-              disabled={isStartingChallenge || challengeProgress === 3}
-            >
-              {isStartingChallenge ? (
-                <ActivityIndicator size="small" color={COLORS.green} />
-              ) : (
-                <Text style={styles.challengeBtnText}>
-                  {challengeProgress === 3 ? 'Completed ✓' : 'Start Challenge'}
+            <View style={styles.practiceRight}>
+              <View style={styles.progressLabelRow}>
+                <Text style={styles.progressLabelText}>Progress</Text>
+                <Text style={styles.progressLabelPercent}>
+                  {practiceChallenge.is_completed ? 'Completed' : `${practiceChallenge.progress_step}/${practiceChallenge.total_steps} Steps`}
                 </Text>
-              )}
-            </Pressable>
+              </View>
+              <View style={styles.challengeTrack}>
+                <View style={[styles.challengeBarFill, { width: `${(practiceChallenge.progress_step / practiceChallenge.total_steps) * 100}%` }]} />
+              </View>
+
+              <Pressable 
+                style={[styles.challengeBtn, practiceChallenge.is_completed && styles.challengeBtnDisabled]}
+                onPress={handleStartChallenge}
+                disabled={isUpdatingChallenge || practiceChallenge.is_completed}
+              >
+                {isUpdatingChallenge ? (
+                  <ActivityIndicator size="small" color={COLORS.green} />
+                ) : (
+                  <Text style={styles.challengeBtnText}>
+                    {practiceChallenge.is_completed ? 'Completed ✓' : 'Start Challenge'}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-        </View>
+        ) : (
+          <Text style={styles.statDesc}>No practice attempts yet.</Text>
+        )}
       </HoverableCard>
 
       {/* Row 7: Assessment History */}
@@ -920,46 +858,41 @@ export default function Skill({ profileData }) {
             <Text style={styles.cardTitle}>Assessment History</Text>
             <Text style={styles.cardSubtitle}>Your latest verification attempts.</Text>
           </View>
-          {dockerAssessmentScore === 42 && (
-            <Pressable 
-              style={styles.retakeAssessmentBtn}
-              onPress={handleRetakeAssessment}
-              disabled={isVerifyingAssessment}
-            >
-              {isVerifyingAssessment ? (
-                <ActivityIndicator size="small" color={COLORS.green} />
-              ) : (
-                <Text style={styles.retakeAssessmentBtnText}>Retake Assessment</Text>
-              )}
-            </Pressable>
-          )}
+          <Pressable 
+            style={styles.retakeAssessmentBtn}
+            onPress={handleRetakeAssessment}
+            disabled={isVerifyingAssessment}
+          >
+            {isVerifyingAssessment ? (
+              <ActivityIndicator size="small" color={COLORS.green} />
+            ) : (
+              <Text style={styles.retakeAssessmentBtnText}>Retake Assessment</Text>
+            )}
+          </Pressable>
         </View>
 
-        <View style={styles.assessmentHistoryRow}>
-          <View>
-            <Text style={styles.assessmentTitle}>Docker Comprehensive Test</Text>
-            <Text style={styles.assessmentDate}>Taken: Oct 12, 2023</Text>
-          </View>
-          <View style={styles.assessmentScoreBlock}>
-            <Text style={[
-              styles.assessmentScorePct, 
-              dockerAssessmentScore > 42 ? { color: COLORS.green } : { color: COLORS.rose }
-            ]}>
-              {dockerAssessmentScore}%
-            </Text>
-            <View style={[
-              styles.assessmentScoreBadge, 
-              dockerAssessmentScore > 42 ? { backgroundColor: COLORS.greenLight } : { backgroundColor: COLORS.roseLight }
-            ]}>
-              <Text style={[
-                styles.assessmentScoreBadgeText,
-                dockerAssessmentScore > 42 ? { color: COLORS.green } : { color: COLORS.rose }
-              ]}>
-                {dockerAssessmentScore > 42 ? 'VERIFIED' : 'NEEDS WORK'}
-              </Text>
+        {assessmentHistory.length === 0 ? (
+          <Text style={styles.statDesc}>No assessment attempts recorded yet.</Text>
+        ) : (
+          assessmentHistory.map((item) => (
+            <View key={item.id} style={styles.assessmentHistoryRow}>
+              <View>
+                <Text style={styles.assessmentTitle}>{item.test_title}</Text>
+                <Text style={styles.assessmentDate}>Taken: {item.completed_at}</Text>
+              </View>
+              <View style={styles.assessmentScoreBlock}>
+                <Text style={[styles.assessmentScorePct, item.score >= 70 ? { color: COLORS.green } : { color: COLORS.rose }]}>
+                  {item.score}%
+                </Text>
+                <View style={[styles.assessmentScoreBadge, item.score >= 70 ? { backgroundColor: COLORS.greenLight } : { backgroundColor: COLORS.roseLight }]}>
+                  <Text style={[styles.assessmentScoreBadgeText, item.score >= 70 ? { color: COLORS.green } : { color: COLORS.rose }]}>
+                    {item.status}
+                  </Text>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
+          ))
+        )}
       </HoverableCard>
 
       {/* Row 8: Project Verification */}
@@ -967,36 +900,37 @@ export default function Skill({ profileData }) {
         <Text style={styles.cardTitle}>Project Verification</Text>
         <Text style={styles.cardSubtitle}>Evidence extracted from your connected repositories.</Text>
 
-        <View style={styles.scanProjectBox}>
-          <View style={styles.scanProjectHeader}>
-            <View style={styles.scanHeaderLeft}>
-              <Text style={styles.scanFolderIcon}>📁</Text>
-              <View>
-                <Text style={styles.scanProjectTitle}>FastAPI E-Commerce API</Text>
-                <Text style={styles.scanLinkText}>github.com/aryan/fastapi-ecommerce</Text>
+        {projectVerifications.length === 0 ? (
+          <Text style={styles.statDesc}>No GitHub projects connected.</Text>
+        ) : (
+          projectVerifications.map((proj, idx) => (
+            <View key={idx} style={styles.scanProjectBox}>
+              <View style={styles.scanProjectHeader}>
+                <View style={styles.scanHeaderLeft}>
+                  <Text style={styles.scanFolderIcon}>📁</Text>
+                  <View>
+                    <Text style={styles.scanProjectTitle}>{proj.repository_name}</Text>
+                    <Text style={styles.scanLinkText}>{proj.repository_url}</Text>
+                  </View>
+                </View>
+                <View style={styles.scanBadge}>
+                  <Text style={styles.scanBadgeText}>{proj.last_scanned}</Text>
+                </View>
+              </View>
+
+              <View style={styles.scanMetaGrid}>
+                <View style={styles.scanMetaItem}>
+                  <Text style={styles.scanMetaLabel}>DETECTED FRAMEWORKS:</Text>
+                  <Text style={styles.scanMetaVal}>{proj.detected_frameworks.join(', ')}</Text>
+                </View>
+                <View style={styles.scanMetaItem}>
+                  <Text style={styles.scanMetaLabel}>EVIDENCE STATUS:</Text>
+                  <Text style={[styles.scanMetaVal, { color: COLORS.green }]}>{proj.evidence_status}</Text>
+                </View>
               </View>
             </View>
-            <View style={styles.scanBadge}>
-              <Text style={styles.scanBadgeText}>Scanned 2 days ago</Text>
-            </View>
-          </View>
-
-          <View style={styles.scanMetaGrid}>
-            <View style={styles.scanMetaItem}>
-              <Text style={styles.scanMetaLabel}>DETECTED FRAMEWORKS:</Text>
-              <Text style={styles.scanMetaVal}>FastAPI, SQLAlchemy</Text>
-            </View>
-            <View style={styles.scanMetaItem}>
-              <Text style={styles.scanMetaLabel}>DOCKER EVIDENCE:</Text>
-              <Text style={[
-                styles.scanMetaVal, 
-                dockerAssessmentScore > 42 ? { color: COLORS.green } : { color: COLORS.rose }
-              ]}>
-                {dockerAssessmentScore > 42 ? 'Dockerfile detected ✓' : 'None Detected'}
-              </Text>
-            </View>
-          </View>
-        </View>
+          ))
+        )}
       </HoverableCard>
 
       {/* Row 9: Target Transformation */}
@@ -1004,7 +938,7 @@ export default function Skill({ profileData }) {
         <Text style={styles.awardIcon}>🏆</Text>
         <Text style={[styles.transformTitle, { color: COLORS.green }]}>Target Transformation</Text>
         <Text style={styles.transformDesc}>
-          By completing this path, your Docker skill will jump from <Text style={{ fontWeight: '800' }}>42</Text> to <Text style={{ fontWeight: '800' }}>86</Text>, achieving <Text style={{ color: COLORS.green, fontWeight: '800' }}>Verified</Text> status backed by project evidence.
+          Strengthen <Text style={{ fontWeight: '800' }}>{topGapSubject}</Text> to improve your employer skill fit and unlock verified career credentials.
         </Text>
       </HoverableCard>
 
@@ -1015,72 +949,139 @@ export default function Skill({ profileData }) {
 
         <View style={styles.impactMatchDisplayBox}>
           <View style={styles.impactValBox}>
-            <Text style={styles.impactPercentText}>58%</Text>
+            <Text style={styles.impactPercentText}>{internshipImpact?.current_match || careerMatchPct}%</Text>
             <Text style={styles.impactSubText}>CURRENT MATCH</Text>
           </View>
           <Text style={styles.impactArrow}>➔</Text>
           <View style={styles.impactValBox}>
             <Text style={[styles.impactPercentText, { color: COLORS.green }]}>
-              {activeRoleData.gapAnalysis.projectedMatch}%
+              {internshipImpact?.projected_match || (careerMatchPct + 15)}%
             </Text>
             <Text style={[styles.impactSubText, { color: COLORS.green, fontWeight: '800' }]}>PROJECTED MATCH</Text>
           </View>
         </View>
         <Text style={styles.impactFooterText}>
-          Unlocks {activeRoleData.gapAnalysis.unlocksCount} new Backend Engineering roles requiring Docker.
+          Unlocks {internshipImpact?.unlocked_positions || 0} matching opportunities requiring {topGapSubject}.
         </Text>
       </HoverableCard>
 
       {/* Row 11: Your Skill Growth */}
       <HoverableCard style={[styles.card, styles.verticalSpacing]}>
         <Text style={styles.cardTitle}>Your Skill Growth</Text>
-        <Text style={styles.cardSubtitle}>Progress over the last 6 months.</Text>
+        <Text style={styles.cardSubtitle}>Progress over time.</Text>
 
-        <View style={styles.chartCanvas}>
-          {/* 6 pseudo bars for growth */}
-          <View style={styles.chartBarsContainer}>
-            <View style={[styles.chartBar, { height: '35%' }]} />
-            <View style={[styles.chartBar, { height: '42%' }]} />
-            <View style={[styles.chartBar, { height: '50%' }]} />
-            <View style={[styles.chartBar, { height: '58%' }]} />
-            <View style={[styles.chartBar, { height: '70%' }]} />
-            <View style={[styles.chartBar, { height: '85%' }]} />
-          </View>
-          {/* Threshold line */}
-          <View style={styles.chartLineIndicator}>
-            <Text style={styles.chartIndicatorLabel}>Verified Threshold</Text>
-          </View>
-        </View>
-        <View style={styles.chartMonthsRow}>
-          <Text style={styles.monthText}>May</Text>
-          <Text style={styles.monthText}>Jun</Text>
-          <Text style={styles.monthText}>Jul</Text>
-          <Text style={styles.monthText}>Aug</Text>
-          <Text style={styles.monthText}>Sep</Text>
-          <Text style={styles.monthText}>Oct</Text>
-        </View>
-      </HoverableCard>
-
-      {/* Row 12: Career Readiness Footer Banner */}
-      <HoverableCard style={[styles.card, styles.readinessCard, styles.verticalSpacing]}>
-        <View style={styles.readinessContainer}>
-          <View>
-            <Text style={styles.readinessScoreText}>86% Ready</Text>
-            <Text style={styles.readinessSubText}>For {activeCareer} Roles</Text>
-            <View style={styles.readinessLegendsRow}>
-              <Text style={styles.readinessLegendText}>• Technical: 90%</Text>
-              <Text style={styles.readinessLegendText}>• Practical: 82%</Text>
-              <Text style={styles.readinessLegendText}>• Evidence: 85%</Text>
+        {growthHistory.length === 0 ? (
+          <Text style={styles.statDesc}>Skill growth history will appear as you build more evidence.</Text>
+        ) : (
+          <View style={styles.chartCanvas}>
+            <View style={styles.chartBarsContainer}>
+              {growthHistory.map((gh, idx) => (
+                <View key={idx} style={[styles.chartBar, { height: `${gh.score}%` }]} />
+              ))}
+            </View>
+            <View style={styles.chartLineIndicator}>
+              <Text style={styles.chartIndicatorLabel}>Verified Threshold</Text>
             </View>
           </View>
+        )}
+      </HoverableCard>
 
-          <Pressable 
-            style={styles.nextActionBtn}
-            onPress={() => alert(`Redirecting to personalized ${activeRoleData.nextAction} sandbox editor...`)}
-          >
-            <Text style={styles.nextActionBtnText}>{activeRoleData.nextAction}</Text>
-          </Pressable>
+      {/* Row 12: YOUR CAREER ROLE MATCH Section */}
+      <HoverableCard style={[styles.card, styles.verticalSpacing]}>
+        <View style={{ marginBottom: 16 }}>
+          <Text style={styles.cardTitle}>YOUR CAREER ROLE MATCH</Text>
+          <Text style={styles.cardSubtitle}>
+            See how your verified skills align with the career roles available on SkillSetu.
+          </Text>
         </View>
+
+        {/* Highest Profile Match Box */}
+        {highestMatch ? (
+          <View style={{
+            backgroundColor: COLORS.greenLight,
+            borderWidth: 1.5,
+            borderColor: COLORS.green,
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 20
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <View style={{ backgroundColor: COLORS.green, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 }}>
+                <Text style={{ fontSize: 9, fontWeight: '900', color: COLORS.paper, letterSpacing: 0.5 }}>BEST PROFILE MATCH</Text>
+              </View>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: COLORS.green }}>
+                {highestMatch.match_score !== null ? `${highestMatch.match_score}% Match` : 'N/A'}
+              </Text>
+            </View>
+
+            <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.ink, marginBottom: 4 }}>
+              {highestMatch.career_name}
+            </Text>
+
+            <Text style={{ fontSize: 12, color: COLORS.muted, lineHeight: 18, marginBottom: 10 }}>
+              Your current verified skill profile has the strongest alignment with <Text style={{ fontWeight: '800', color: COLORS.ink }}>{highestMatch.career_name}</Text> roles.
+            </Text>
+
+            {highestMatch.matched_skills && highestMatch.matched_skills.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: COLORS.muted, width: '100%', marginBottom: 2 }}>KEY MATCHED SKILLS:</Text>
+                {highestMatch.matched_skills.map((sk, idx) => (
+                  <View key={idx} style={{ backgroundColor: COLORS.paper, borderWidth: 1, borderColor: COLORS.green, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.green }}>✓ {sk}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {highestMatch.priority_skills && highestMatch.priority_skills.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: COLORS.muted, width: '100%', marginBottom: 2 }}>SKILLS TO BUILD NEXT:</Text>
+                {highestMatch.priority_skills.slice(0, 4).map((sk, idx) => (
+                  <View key={idx} style={{ backgroundColor: COLORS.paper, borderWidth: 1, borderColor: COLORS.subtle, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: COLORS.muted }}>+ {sk}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : (
+          <Text style={styles.statDesc}>Calculating role matches across available career profiles...</Text>
+        )}
+
+        {/* Other Strong Matches List */}
+        {otherRoleMatches.length > 0 && (
+          <View style={{ marginTop: 4 }}>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: COLORS.muted, letterSpacing: 0.5, marginBottom: 12 }}>
+              OTHER ROLES YOUR PROFILE ALIGNS WITH
+            </Text>
+            
+            <View style={{ gap: 10 }}>
+              {otherRoleMatches.slice(0, 5).map((role, idx) => (
+                <View key={role.career_id || idx} style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  backgroundColor: COLORS.panel,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: COLORS.subtle
+                }}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.ink }}>{role.career_name}</Text>
+                    <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 2 }}>{role.level}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: role.match_score >= 70 ? COLORS.green : COLORS.ink }}>
+                      {role.match_score !== null ? `${role.match_score}%` : 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </HoverableCard>
 
     </ScrollView>
@@ -1104,6 +1105,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 16,
     marginBottom: 24,
+    zIndex: 1000,
+    elevation: 1000,
   },
   headerLeft: {
     flex: 1,
@@ -1131,7 +1134,8 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
     position: 'relative',
-    zIndex: 110,
+    zIndex: 1100,
+    elevation: 1100,
   },
   targetCareerMeta: {
     marginBottom: 8,
@@ -1173,10 +1177,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
     overflow: 'hidden',
     shadowColor: COLORS.ink,
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    zIndex: 150,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    zIndex: 9999,
+    elevation: 9999,
   },
   dropdownItem: {
     padding: 12,
@@ -1200,6 +1205,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
     marginBottom: 24,
+    zIndex: 1,
+    elevation: 1,
   },
   flexCol: {
     flexDirection: 'column',
@@ -1302,7 +1309,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   skillBarLabel: {
-    width: 80,
+    width: 90,
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.ink,
@@ -1349,6 +1356,69 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
   },
+  // Priority Insights
+  mintCardAccent: {
+    backgroundColor: COLORS.mint,
+    borderColor: '#a7f3d0',
+  },
+  insightsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  insightsSparkIcon: {
+    fontSize: 16,
+  },
+  insightsHeadingText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.green,
+    letterSpacing: 0.5,
+  },
+  insightsSecTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.ink,
+  },
+  insightsCardsList: {
+    gap: 10,
+  },
+  insightMiniCard: {
+    backgroundColor: COLORS.paper,
+    borderRadius: 10,
+    padding: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.subtle,
+  },
+  insightHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  insightName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.ink,
+  },
+  insightPriorityTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  insightPriorityTagText: {
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  insightScoreLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.muted,
+  },
+  insightDesc: {
+    fontSize: 10,
+    color: COLORS.muted,
+  },
   // Domains Grid (2 columns)
   domainsGrid: {
     flexDirection: 'row',
@@ -1385,8 +1455,8 @@ const styles = StyleSheet.create({
   },
   domainSkillName: {
     fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.muted,
+    fontWeight: '700',
+    color: COLORS.ink,
   },
   domainSkillScoreWrap: {
     flexDirection: 'row',
@@ -1396,25 +1466,27 @@ const styles = StyleSheet.create({
   domainSkillScore: {
     fontSize: 11,
     fontWeight: '800',
-    color: COLORS.ink,
+    color: COLORS.muted,
   },
   domainBadge: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   domainBadgeText: {
-    fontSize: 7,
-    fontWeight: '900',
+    fontSize: 8,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
-  // Gap Engine 4-row layout
+  // Skill Gap Engine
   gapEngineGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
-    marginTop: 8,
   },
   gapEngineCard: {
     flex: 1,
+    minWidth: 140,
     backgroundColor: COLORS.canvas,
     borderWidth: 1,
     borderColor: COLORS.subtle,
@@ -1429,76 +1501,76 @@ const styles = StyleSheet.create({
   },
   gapEngineName: {
     fontSize: 12,
-    fontWeight: '850',
+    fontWeight: '800',
     color: COLORS.ink,
   },
   gapEngineBadge: {
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 3,
+    borderRadius: 4,
   },
   gapEngineBadgeText: {
-    fontSize: 7,
+    fontSize: 8,
     fontWeight: '900',
   },
   gapEngineScore: {
     fontSize: 11,
+    fontWeight: '700',
     color: COLORS.muted,
   },
-  // Gap analysis outline
+  // Gap Analysis
   gapAnalysisOutlineCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.green,
+    borderWidth: 1.5,
+    borderColor: COLORS.roseLight,
+    backgroundColor: '#fff5f5',
   },
   gapAnalysisGrid: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 6,
+    gap: 12,
+    marginTop: 8,
   },
   gapAnalysisBlock: {
     flex: 1,
-    backgroundColor: COLORS.canvas,
+    backgroundColor: COLORS.paper,
     borderRadius: 10,
     padding: 12,
+    gap: 4,
     borderWidth: 1,
     borderColor: COLORS.subtle,
-    gap: 4,
   },
   gapAnalysisBlockTitle: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '900',
     color: COLORS.ink,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   gapAnalysisBlockDesc: {
     fontSize: 11,
     color: COLORS.muted,
-    lineHeight: 15,
+    lineHeight: 16,
   },
-  // Learning path stepper
+  // Learning Path
   modulesStepList: {
-    gap: 12,
+    gap: 10,
     marginTop: 8,
   },
   moduleStepItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: COLORS.canvas,
     borderWidth: 1,
     borderColor: COLORS.subtle,
-    backgroundColor: COLORS.canvas,
     borderRadius: 10,
     padding: 12,
   },
   activeModuleItem: {
-    borderColor: '#bbf7d0',
-    backgroundColor: COLORS.greenLight,
+    borderColor: COLORS.teal,
+    backgroundColor: COLORS.mint,
   },
   completedModuleItem: {
-    borderColor: COLORS.subtle,
-    backgroundColor: COLORS.canvas,
-  },
-  lockedModuleItem: {
-    opacity: 0.6,
+    borderColor: COLORS.green,
   },
   moduleStepLeft: {
     flexDirection: 'row',
@@ -1506,43 +1578,34 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   stepIcon: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
-    width: 20,
-    textAlign: 'center',
   },
   stepTitle: {
     fontSize: 12,
-    fontWeight: '850',
+    fontWeight: '800',
     color: COLORS.ink,
   },
   stepSubtitle: {
     fontSize: 10,
     color: COLORS.muted,
-    marginTop: 2,
   },
   startModuleBtn: {
     backgroundColor: COLORS.green,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 12,
   },
   startModuleBtnText: {
+    color: COLORS.paper,
     fontSize: 11,
     fontWeight: '800',
-    color: COLORS.paper,
   },
-  moreModulesText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  // Practice Box
+  // Practice
   practiceChallengeBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    backgroundColor: COLORS.canvas,
     borderWidth: 1,
     borderColor: COLORS.subtle,
     borderRadius: 12,
@@ -1561,7 +1624,7 @@ const styles = StyleSheet.create({
   practiceDesc: {
     fontSize: 11,
     color: COLORS.muted,
-    lineHeight: 15,
+    lineHeight: 16,
   },
   practiceTagRow: {
     flexDirection: 'row',
@@ -1569,20 +1632,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   practiceTag: {
-    backgroundColor: COLORS.greenLight,
-    paddingHorizontal: 8,
+    backgroundColor: COLORS.panel,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   practiceTagText: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: COLORS.green,
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.muted,
   },
   practiceRight: {
-    width: 140,
+    width: 160,
     gap: 8,
-    alignSelf: 'center',
+    justifyContent: 'center',
   },
   progressLabelRow: {
     flexDirection: 'row',
@@ -1590,282 +1653,37 @@ const styles = StyleSheet.create({
   },
   progressLabelText: {
     fontSize: 10,
-    color: COLORS.muted,
     fontWeight: '700',
+    color: COLORS.muted,
   },
   progressLabelPercent: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '900',
     color: COLORS.green,
   },
   challengeTrack: {
     height: 6,
-    backgroundColor: COLORS.panel,
+    backgroundColor: COLORS.subtle,
     borderRadius: 3,
     overflow: 'hidden',
   },
   challengeBarFill: {
     height: '100%',
     backgroundColor: COLORS.green,
-    borderRadius: 3,
   },
   challengeBtn: {
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    borderRadius: 6,
-    paddingVertical: 6,
+    backgroundColor: COLORS.green,
+    paddingVertical: 8,
+    borderRadius: 8,
     alignItems: 'center',
   },
   challengeBtnDisabled: {
-    borderColor: COLORS.subtle,
-    backgroundColor: COLORS.panel,
+    backgroundColor: COLORS.subtle,
   },
   challengeBtnText: {
+    color: COLORS.paper,
     fontSize: 11,
     fontWeight: '800',
-    color: COLORS.green,
-  },
-  // Scan project details
-  scanProjectBox: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 10,
-    padding: 12,
-    gap: 12,
-  },
-  scanProjectHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  scanHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  scanFolderIcon: {
-    fontSize: 20,
-  },
-  scanProjectTitle: {
-    fontSize: 12,
-    fontWeight: '850',
-    color: COLORS.ink,
-  },
-  scanLinkText: {
-    fontSize: 10,
-    color: COLORS.blue,
-    textDecorationLine: 'underline',
-    marginTop: 1,
-  },
-  scanBadge: {
-    backgroundColor: COLORS.subtle,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  scanBadgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: COLORS.muted,
-  },
-  scanProjectBoxContainer: {
-    marginTop: 10,
-  },
-  scanMetaGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.subtle,
-    paddingTop: 10,
-  },
-  scanMetaItem: {
-    gap: 2,
-    flex: 1,
-  },
-  scanMetaLabel: {
-    fontSize: 9,
-    color: COLORS.muted,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  scanMetaVal: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.ink,
-    marginTop: 2,
-  },
-  // Skill chart
-  chartCanvas: {
-    height: 140,
-    borderLeftWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.subtle,
-    position: 'relative',
-    marginTop: 16,
-  },
-  chartBarsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    height: '100%',
-    paddingHorizontal: 10,
-  },
-  chartBar: {
-    width: 16,
-    backgroundColor: COLORS.green,
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
-  },
-  chartLineIndicator: {
-    position: 'absolute',
-    bottom: '75%',
-    left: 0,
-    right: 0,
-    height: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.subtle,
-    borderStyle: 'dashed',
-  },
-  chartIndicatorLabel: {
-    fontSize: 8,
-    color: COLORS.muted,
-    fontWeight: '800',
-    position: 'absolute',
-    left: 6,
-    top: -12,
-  },
-  chartMonthsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 8,
-  },
-  monthText: {
-    fontSize: 10,
-    color: COLORS.muted,
-    fontWeight: '700',
-  },
-  // Right Column AI Priority Insights
-  mintCardAccent: {
-    backgroundColor: '#f0fdfa',
-    borderColor: '#ccfbf1',
-  },
-  insightsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  insightsSparkIcon: {
-    fontSize: 16,
-  },
-  insightsHeadingText: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: COLORS.green,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  insightsSecTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: COLORS.ink,
-    marginTop: 4,
-  },
-  insightsCardsList: {
-    gap: 12,
-    marginTop: 6,
-  },
-  insightMiniCard: {
-    backgroundColor: COLORS.paper,
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    gap: 6,
-  },
-  insightHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  insightName: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  insightPriorityTag: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  insightPriorityTagText: {
-    fontSize: 8,
-    fontWeight: '900',
-  },
-  insightScoreLabel: {
-    fontSize: 10,
-    color: COLORS.muted,
-    fontWeight: '750',
-  },
-  insightDesc: {
-    fontSize: 11,
-    color: COLORS.muted,
-    lineHeight: 15,
-  },
-  // Target Transformation
-  awardIcon: {
-    fontSize: 32,
-  },
-  transformTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: COLORS.ink,
-    marginTop: 4,
-  },
-  transformDesc: {
-    fontSize: 11,
-    color: COLORS.muted,
-    lineHeight: 16,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  // Internship impact
-  impactMatchDisplayBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 8,
-    padding: 12,
-    gap: 16,
-    marginTop: 6,
-  },
-  impactValBox: {
-    alignItems: 'center',
-  },
-  impactPercentText: {
-    fontSize: 24,
-    fontWeight: '950',
-    color: COLORS.muted,
-  },
-  impactSubText: {
-    fontSize: 8,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  impactArrow: {
-    fontSize: 18,
-    color: COLORS.green,
-  },
-  impactFooterText: {
-    fontSize: 11,
-    color: COLORS.ink,
-    textAlign: 'center',
-    marginTop: 4,
   },
   // Assessment History
   assessmentHistoryHeader: {
@@ -1876,57 +1694,196 @@ const styles = StyleSheet.create({
   retakeAssessmentBtn: {
     borderWidth: 1,
     borderColor: COLORS.green,
-    borderRadius: 16,
-    paddingVertical: 4,
     paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
   retakeAssessmentBtnText: {
-    fontSize: 10,
-    fontWeight: '800',
     color: COLORS.green,
+    fontSize: 11,
+    fontWeight: '800',
   },
   assessmentHistoryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: COLORS.canvas,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.subtle,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 4,
   },
   assessmentTitle: {
     fontSize: 12,
-    fontWeight: '850',
+    fontWeight: '800',
     color: COLORS.ink,
   },
   assessmentDate: {
     fontSize: 10,
     color: COLORS.muted,
-    marginTop: 2,
   },
   assessmentScoreBlock: {
     alignItems: 'flex-end',
     gap: 2,
   },
   assessmentScorePct: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
   },
   assessmentScoreBadge: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   assessmentScoreBadgeText: {
-    fontSize: 7,
+    fontSize: 8,
     fontWeight: '900',
   },
-  // Readiness Block
-  readinessCard: {
-    backgroundColor: COLORS.panel,
+  // Project Verification
+  scanProjectBox: {
+    backgroundColor: COLORS.canvas,
+    borderWidth: 1,
     borderColor: COLORS.subtle,
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+  },
+  scanProjectHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  scanHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  scanFolderIcon: {
+    fontSize: 18,
+  },
+  scanProjectTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.ink,
+  },
+  scanLinkText: {
+    fontSize: 10,
+    color: COLORS.green,
+  },
+  scanBadge: {
+    backgroundColor: COLORS.panel,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  scanBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: COLORS.muted,
+  },
+  scanMetaGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.subtle,
+    paddingTop: 8,
+  },
+  scanMetaItem: {
+    gap: 2,
+  },
+  scanMetaLabel: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: COLORS.muted,
+  },
+  scanMetaVal: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.ink,
+  },
+  // Transformation Banner
+  awardIcon: {
+    fontSize: 28,
+  },
+  transformTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  transformDesc: {
+    fontSize: 12,
+    color: COLORS.muted,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 600,
+  },
+  // Impact
+  impactMatchDisplayBox: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 24,
+    marginVertical: 8,
+  },
+  impactValBox: {
+    alignItems: 'center',
+  },
+  impactPercentText: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: COLORS.ink,
+  },
+  impactSubText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.muted,
+  },
+  impactArrow: {
+    fontSize: 20,
+    color: COLORS.muted,
+  },
+  impactFooterText: {
+    fontSize: 11,
+    color: COLORS.muted,
+    textAlign: 'center',
+  },
+  // Growth Chart
+  chartCanvas: {
+    height: 120,
+    position: 'relative',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+  },
+  chartBarsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    height: '100%',
+    paddingHorizontal: 20,
+  },
+  chartBar: {
+    width: 24,
+    backgroundColor: COLORS.green,
+    borderRadius: 4,
+  },
+  chartLineIndicator: {
+    position: 'absolute',
+    top: '30%',
+    left: 0,
+    right: 0,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+    borderTopColor: COLORS.subtle,
+    alignItems: 'flex-end',
+  },
+  chartIndicatorLabel: {
+    fontSize: 8,
+    color: COLORS.muted,
+    backgroundColor: COLORS.paper,
+    paddingHorizontal: 4,
+  },
+  // Readiness Banner
+  readinessCard: {
+    backgroundColor: COLORS.green,
   },
   readinessContainer: {
     flexDirection: 'row',
@@ -1936,36 +1893,34 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   readinessScoreText: {
-    fontSize: 28,
-    fontWeight: '950',
-    color: COLORS.ink,
+    fontSize: 22,
+    fontWeight: '900',
+    color: COLORS.paper,
   },
   readinessSubText: {
-    fontSize: 13,
-    color: COLORS.muted,
-    fontWeight: '700',
+    fontSize: 11,
+    color: COLORS.greenLight,
     marginTop: 2,
   },
   readinessLegendsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 12,
-    marginTop: 6,
+    marginTop: 8,
   },
   readinessLegendText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.muted,
+    color: COLORS.greenLight,
+    fontWeight: '600',
   },
   nextActionBtn: {
-    backgroundColor: COLORS.green,
-    borderRadius: 8,
+    backgroundColor: COLORS.paper,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    borderRadius: 8,
   },
   nextActionBtnText: {
+    color: COLORS.green,
     fontSize: 12,
     fontWeight: '900',
-    color: COLORS.paper,
   },
 });

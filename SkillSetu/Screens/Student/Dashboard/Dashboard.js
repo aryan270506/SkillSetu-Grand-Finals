@@ -236,6 +236,313 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
     fetchGithubAnalysis();
   }, [fetchGithubAnalysis]);
 
+  const [isSkillGapAnalysisModalOpen, setIsSkillGapAnalysisModalOpen] = useState(false);
+  const [gapAnalysisTab, setGapAnalysisTab] = useState('combined');
+
+  // Selected Target Careers derivation (supporting multiple target career goals)
+  const activeTargetCareers = React.useMemo(() => {
+    let list = [];
+    if (profileData?.careerGoals?.targetCareerIds && Array.isArray(profileData.careerGoals.targetCareerIds) && profileData.careerGoals.targetCareerIds.length > 0) {
+      list = profileData.careerGoals.targetCareerIds;
+    } else if (profileData?.careerGoals?.targetCareer) {
+      list = [profileData.careerGoals.targetCareer];
+    } else if (user?.target_careers && Array.isArray(user.target_careers) && user.target_careers.length > 0) {
+      list = user.target_careers;
+    } else if (user?.target_role) {
+      list = [user.target_role];
+    } else if (user?.headline) {
+      list = [user.headline];
+    } else {
+      list = ['Backend Developer'];
+    }
+
+    const result = [];
+    const seen = new Set();
+    for (const item of list) {
+      if (!item) continue;
+      const str = String(item).trim();
+      if (str && !seen.has(str.toLowerCase())) {
+        seen.add(str.toLowerCase());
+        result.push(str);
+      }
+    }
+    return result.length > 0 ? result : ['Backend Developer'];
+  }, [profileData, user]);
+
+  const activeTargetCareer = activeTargetCareers[0] || 'Backend Developer';
+
+  // State to hold Backend calculated skill gap response
+  const [backendGapData, setBackendGapData] = useState(null);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchSkillGaps = async () => {
+      try {
+        const emailQuery = encodeURIComponent(user?.email || '');
+        const careerQueryParams = activeTargetCareers.map(c => `target_careers=${encodeURIComponent(c)}`).join('&');
+        const res = await fetch(`http://127.0.0.1:8000/api/v1/student/career-skill-gaps?email=${emailQuery}&${careerQueryParams}`);
+        const data = await res.json();
+        if (isMounted && res.ok && data.status === 'success' && data.data) {
+          setBackendGapData(data.data);
+        }
+      } catch (err) {
+        console.error('Error fetching career skill gaps:', err);
+      }
+    };
+    fetchSkillGaps();
+    return () => { isMounted = false; };
+  }, [user?.email, activeTargetCareers, githubState.skills]);
+
+  // ESCO Multi-Career Skill Gap Computation with deterministic fallback
+  const computedGapData = React.useMemo(() => {
+    if (backendGapData && backendGapData.top_gaps && backendGapData.top_gaps.length > 0) {
+      return backendGapData;
+    }
+
+    const MINOR_DEPS = new Set([
+      'zod', 'sonner', 'vaul', 'lucide-react', 'next-themes', 'input-otp',
+      'clsx', 'tailwind-merge', 'class-variance-authority', 'radix-ui',
+      'lucide', 'react-dom', 'framer-motion', 'embla-carousel-react'
+    ]);
+
+    const ALIAS_MAP = {
+      'react.js': 'React', 'reactjs': 'React', 'react js': 'React', 'react': 'React',
+      'react-native': 'React Native', 'reactnative': 'React Native', 'react native': 'React Native',
+      'node.js': 'Node.js', 'nodejs': 'Node.js', 'node': 'Node.js', 'node js': 'Node.js',
+      'postgres': 'PostgreSQL', 'postgresql db': 'PostgreSQL', 'postgresql': 'PostgreSQL',
+      'amazon web services': 'AWS', 'aws cloud': 'AWS', 'aws': 'AWS',
+      'py': 'Python', 'python3': 'Python', 'python 3': 'Python', 'python': 'Python',
+      'ts': 'TypeScript', 'typescript': 'TypeScript',
+      'js': 'JavaScript', 'ecmascript': 'JavaScript', 'javascript': 'JavaScript',
+      'git & github': 'Git', 'github': 'Git', 'git': 'Git',
+      'rest api': 'REST APIs', 'restful apis': 'REST APIs', 'rest': 'REST APIs',
+      'docker containers': 'Docker', 'docker': 'Docker',
+      'mongo': 'MongoDB', 'mongodb': 'MongoDB',
+      'k8s': 'Kubernetes', 'kubernetes': 'Kubernetes',
+      'fastapi': 'FastAPI', 'express': 'Express', 'sql': 'SQL',
+      'html & css': 'HTML & CSS', 'machine learning': 'Machine Learning',
+      'figma': 'Figma', 'ui/ux design': 'UI/UX Design'
+    };
+
+    const normSkill = (raw) => {
+      if (!raw) return '';
+      const cl = raw.trim().toLowerCase();
+      if (MINOR_DEPS.has(cl)) return '';
+      return ALIAS_MAP[cl] || raw.trim();
+    };
+
+    const getIcon = (sName) => {
+      const l = sName.toLowerCase();
+      if (l.includes('docker')) return '🐳';
+      if (l.includes('postgres')) return '🐘';
+      if (l.includes('aws') || l.includes('cloud')) return '☁️';
+      if (l.includes('react native')) return '📱';
+      if (l.includes('react')) return '⚛️';
+      if (l.includes('node')) return '🟢';
+      if (l.includes('python')) return '🐍';
+      if (l.includes('sql') || l.includes('database')) return '🗄️';
+      if (l.includes('mongo')) return '🍃';
+      if (l.includes('redis') || l.includes('api')) return '⚡';
+      if (l.includes('git')) return '📦';
+      if (l.includes('kubernetes') || l.includes('k8s')) return '☸️';
+      if (l.includes('typescript') || l.includes('ts')) return '🟦';
+      if (l.includes('javascript') || l.includes('js')) return '🟨';
+      if (l.includes('figma') || l.includes('design')) return '🎨';
+      if (l.includes('machine learning') || l.includes('ai')) return '🤖';
+      return '🚀';
+    };
+
+    const OCC_SKILLS = {
+      'backend developer': [
+        { name: 'Node.js', req: 85, relation: 'essential' },
+        { name: 'Docker', req: 80, relation: 'essential' },
+        { name: 'PostgreSQL', req: 85, relation: 'essential' },
+        { name: 'AWS', req: 75, relation: 'essential' },
+        { name: 'REST APIs', req: 90, relation: 'essential' },
+        { name: 'Python', req: 85, relation: 'essential' },
+        { name: 'SQL', req: 80, relation: 'essential' }
+      ],
+      'frontend developer': [
+        { name: 'React', req: 90, relation: 'essential' },
+        { name: 'TypeScript', req: 85, relation: 'essential' },
+        { name: 'JavaScript', req: 90, relation: 'essential' },
+        { name: 'HTML & CSS', req: 85, relation: 'essential' },
+        { name: 'REST APIs', req: 80, relation: 'essential' },
+        { name: 'Git', req: 85, relation: 'essential' }
+      ],
+      'senior frontend engineer': [
+        { name: 'React', req: 95, relation: 'essential' },
+        { name: 'TypeScript', req: 90, relation: 'essential' },
+        { name: 'JavaScript', req: 95, relation: 'essential' },
+        { name: 'HTML & CSS', req: 90, relation: 'essential' },
+        { name: 'REST APIs', req: 90, relation: 'essential' },
+        { name: 'AWS', req: 70, relation: 'optional' },
+        { name: 'Docker', req: 65, relation: 'optional' },
+        { name: 'Git', req: 90, relation: 'essential' }
+      ],
+      'full stack developer': [
+        { name: 'React', req: 85, relation: 'essential' },
+        { name: 'Node.js', req: 85, relation: 'essential' },
+        { name: 'MongoDB', req: 80, relation: 'essential' },
+        { name: 'TypeScript', req: 80, relation: 'essential' },
+        { name: 'PostgreSQL', req: 80, relation: 'essential' },
+        { name: 'Docker', req: 75, relation: 'essential' },
+        { name: 'REST APIs', req: 85, relation: 'essential' }
+      ],
+      'backend engineer': [
+        { name: 'Node.js', req: 90, relation: 'essential' },
+        { name: 'REST APIs', req: 95, relation: 'essential' },
+        { name: 'PostgreSQL', req: 90, relation: 'essential' },
+        { name: 'Docker', req: 85, relation: 'essential' },
+        { name: 'AWS', req: 80, relation: 'essential' },
+        { name: 'Python', req: 85, relation: 'essential' }
+      ],
+      'data scientist': [
+        { name: 'Python', req: 90, relation: 'essential' },
+        { name: 'SQL', req: 85, relation: 'essential' },
+        { name: 'Machine Learning', req: 85, relation: 'essential' },
+        { name: 'Pandas', req: 80, relation: 'essential' },
+        { name: 'NumPy', req: 80, relation: 'essential' }
+      ],
+      'devops engineer': [
+        { name: 'Docker', req: 90, relation: 'essential' },
+        { name: 'Kubernetes', req: 85, relation: 'essential' },
+        { name: 'AWS', req: 85, relation: 'essential' },
+        { name: 'Linux', req: 85, relation: 'essential' }
+      ],
+      'mobile app developer': [
+        { name: 'React Native', req: 90, relation: 'essential' },
+        { name: 'JavaScript', req: 85, relation: 'essential' },
+        { name: 'TypeScript', req: 80, relation: 'essential' },
+        { name: 'REST APIs', req: 85, relation: 'essential' }
+      ],
+      'ai / ml engineer': [
+        { name: 'Python', req: 95, relation: 'essential' },
+        { name: 'Machine Learning', req: 90, relation: 'essential' },
+        { name: 'TensorFlow', req: 85, relation: 'essential' }
+      ],
+      'ui/ux designer': [
+        { name: 'Figma', req: 90, relation: 'essential' },
+        { name: 'UI/UX Design', req: 90, relation: 'essential' },
+        { name: 'HTML & CSS', req: 60, relation: 'optional' }
+      ]
+    };
+
+    const evidenceMap = {};
+    if (githubState.skills && Array.isArray(githubState.skills)) {
+      githubState.skills.forEach(s => {
+        const norm = normSkill(s.name || s.tech);
+        if (norm) {
+          const sc = Number(s.score || s.evidenceScore || 0);
+          evidenceMap[norm] = Math.max(evidenceMap[norm] || 0, sc);
+        }
+      });
+    }
+
+    const careerSkillsMap = {};
+    const combinedDict = {};
+
+    activeTargetCareers.forEach(carName => {
+      const tLower = carName.trim().toLowerCase();
+      let targetSkills = OCC_SKILLS['backend developer'];
+      for (const [k, v] of Object.entries(OCC_SKILLS)) {
+        if (tLower.includes(k) || k.includes(tLower)) {
+          targetSkills = v;
+          break;
+        }
+      }
+      careerSkillsMap[carName] = targetSkills;
+
+      targetSkills.forEach(sk => {
+        const norm = normSkill(sk.name);
+        if (!norm) return;
+        if (!combinedDict[norm]) {
+          combinedDict[norm] = {
+            skill_name: norm,
+            icon: getIcon(norm),
+            required_level: sk.req,
+            relation: sk.relation,
+            required_by_careers: [carName],
+            career_breakdown: [{ career: carName, required_level: sk.req, relation: sk.relation }]
+          };
+        } else {
+          const existing = combinedDict[norm];
+          if (!existing.required_by_careers.includes(carName)) {
+            existing.required_by_careers.push(carName);
+            existing.career_breakdown.push({ career: carName, required_level: sk.req, relation: sk.relation });
+          }
+          existing.required_level = Math.max(existing.required_level, sk.req);
+          if (sk.relation === 'essential') existing.relation = 'essential';
+        }
+      });
+    });
+
+    const gapsList = [];
+    Object.values(combinedDict).forEach(skInfo => {
+      const norm = skInfo.skill_name;
+      const req = skInfo.required_level;
+      const curr = Math.round(evidenceMap[norm] || 0);
+      const gap = Math.max(0, req - curr);
+
+      if (gap > 0) {
+        const numCareers = skInfo.required_by_careers.length;
+        const isEssential = skInfo.relation === 'essential';
+
+        let priority = 'Low Priority';
+        let pVal = 5 + (numCareers * 5);
+        if (numCareers >= 2 && gap >= 25) {
+          priority = 'High Priority';
+          pVal = 30 + (numCareers * 5);
+        } else if (gap >= 35 || (isEssential && gap >= 30)) {
+          priority = 'High Priority';
+          pVal = 25 + (numCareers * 5);
+        } else if (gap >= 20 || numCareers >= 2) {
+          priority = 'Medium Priority';
+          pVal = 15 + (numCareers * 5);
+        }
+
+        gapsList.push({
+          skill_id: `sk_${norm.toLowerCase().replace(/\s+/g, '_')}`,
+          skill_name: norm,
+          icon: skInfo.icon,
+          importance: skInfo.relation,
+          current_level: curr,
+          required_level: req,
+          gap,
+          priority,
+          priority_val: pVal,
+          required_by_careers: skInfo.required_by_careers,
+          career_breakdown: skInfo.career_breakdown
+        });
+      }
+    });
+
+    gapsList.sort((a, b) => b.priority_val - a.priority_val || b.gap - a.gap);
+    const topGaps = gapsList.slice(0, 3);
+    const topNames = topGaps.map(g => g.skill_name);
+
+    const isMulti = activeTargetCareers.length > 1;
+    let recPillsStr = topNames.length >= 3 ? `${topNames[0]}, ${topNames[1]} and ${topNames[2]}` : (topNames.length === 2 ? `${topNames[0]} and ${topNames[1]}` : (topNames[0] || 'key target skills'));
+    let recText = '';
+
+    if (isMulti) {
+      recText = `Based on your selected career goals, improving ${recPillsStr} could significantly increase your match rate for your target opportunities.`;
+    } else {
+      recText = `Based on your target role of ${activeTargetCareers[0]}, improving ${recPillsStr} could significantly increase your match rate for top opportunities.`;
+    }
+
+    return {
+      target_careers: activeTargetCareers,
+      target_career: activeTargetCareers.join(', '),
+      is_multi_career: isMulti,
+      recommendation_text: recText,
+      top_gaps: topGaps,
+      skill_gaps: gapsList,
+      recommended_pills: topNames.length > 0 ? topNames : activeTargetCareers,
+      career_skills_map: careerSkillsMap
+    };
+  }, [backendGapData, activeTargetCareers, githubState.skills]);
+
   // Helper to map evidence score to evidence level label
   const getEvidenceLevelText = (score) => {
     if (score >= 90) return 'Very Strong Evidence';
@@ -244,6 +551,7 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
     if (score >= 25) return 'Moderate Evidence';
     return 'Limited Evidence';
   };
+
 
   // Calculate overall GitHub Skill Index using weighted Core Skill model
   const skillIndexDetails = React.useMemo(() => {
@@ -354,7 +662,7 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
               const scoreVal = githubState.connected ? overallGithubScore : 78;
               const deg = Math.round((scoreVal / 100) * 360);
               const isWeb = Platform.OS === 'web';
-              const circleBg = isWeb 
+              const circleBg = isWeb
                 ? `conic-gradient(${COLORS.teal} 0deg ${deg}deg, #E2E8F0 ${deg}deg 360deg)`
                 : COLORS.teal;
 
@@ -473,18 +781,44 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
           </Pressable>
         </View>
         <Text style={styles.aiRecText}>
-          Based on your target role of <Text style={styles.boldText}>Backend Developer</Text>, improving <Text style={styles.boldText}>Docker</Text>, <Text style={styles.boldText}>PostgreSQL</Text> and <Text style={styles.boldText}>AWS</Text> could significantly increase your match rate for top opportunities.
+          {computedGapData.is_multi_career ? (
+            <>Based on your selected career goals, improving </>
+          ) : (
+            <>Based on your target role of <Text style={styles.boldText}>{computedGapData.target_career}</Text>, improving </>
+          )}
+          {
+            (() => {
+              const pills = computedGapData.recommended_pills || [];
+              if (pills.length >= 3) {
+                return (
+                  <>
+                    <Text style={styles.boldText}>{pills[0]}</Text>, <Text style={styles.boldText}>{pills[1]}</Text> and <Text style={styles.boldText}>{pills[2]}</Text>
+                  </>
+                );
+              } else if (pills.length === 2) {
+                return (
+                  <>
+                    <Text style={styles.boldText}>{pills[0]}</Text> and <Text style={styles.boldText}>{pills[1]}</Text>
+                  </>
+                );
+              } else if (pills.length === 1) {
+                return <Text style={styles.boldText}>{pills[0]}</Text>;
+              }
+              return <Text style={styles.boldText}>key target skills</Text>;
+            })()
+          }
+          {computedGapData.is_multi_career ? (
+            <> could significantly increase your match rate for your target opportunities.</>
+          ) : (
+            <> could significantly increase your match rate for top opportunities.</>
+          )}
         </Text>
         <View style={styles.badgeRow}>
-          <View style={styles.recommendationBadge}>
-            <Text style={styles.recBadgeText}>● Docker</Text>
-          </View>
-          <View style={styles.recommendationBadge}>
-            <Text style={styles.recBadgeText}>● PostgreSQL</Text>
-          </View>
-          <View style={styles.recommendationBadge}>
-            <Text style={styles.recBadgeText}>● AWS</Text>
-          </View>
+          {(computedGapData.recommended_pills || []).map((pillName, idx) => (
+            <View style={styles.recommendationBadge} key={pillName + '_' + idx}>
+              <Text style={styles.recBadgeText}>● {pillName}</Text>
+            </View>
+          ))}
         </View>
       </HoverableCard>
 
@@ -492,100 +826,88 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeaderTitle}>Your Skill Gaps</Text>
-          <Pressable>
+          <Pressable onPress={() => setIsSkillGapAnalysisModalOpen(true)}>
             <Text style={styles.sectionHeaderLink}>View Complete Skill Gap Analysis →</Text>
           </Pressable>
         </View>
 
         <View style={[styles.gapCardsRow, !isTablet && styles.gapCardsRowMobile]}>
-          {/* Docker Gap */}
-          <HoverableCard style={styles.gapCard}>
-            <View style={styles.gapCardHeader}>
-              <View style={[styles.gapCardIconBox, { backgroundColor: COLORS.blueLight }]}>
-                <Text style={styles.gapCardIconText}>🐳</Text>
-              </View>
-              <Text style={styles.gapCardTitle}>Docker</Text>
-              <View style={styles.priorityBadgeRed}>
-                <Text style={styles.priorityBadgeTextRed}>High Priority</Text>
-              </View>
-            </View>
-            <View style={styles.gapDetails}>
-              <View style={styles.gapLevelRow}>
-                <Text style={styles.gapLevelLabel}>Current Level</Text>
-                <Text style={styles.gapLevelValue}>40% (Beginner)</Text>
-              </View>
-              <View style={styles.gapTrack}>
-                <View style={[styles.gapBar, { width: '40%', backgroundColor: COLORS.amber }]} />
-              </View>
-              <View style={styles.gapRequiredRow}>
-                <Text style={styles.gapLevelLabel}>Required for Backend Dev</Text>
-                <Text style={styles.gapLevelValueBold}>80% (Advanced)</Text>
-              </View>
-            </View>
-            <Pressable style={styles.learnBtn}>
-              <Text style={styles.learnBtnText}>Learn Docker →</Text>
-            </Pressable>
-          </HoverableCard>
+          {(computedGapData.top_gaps && computedGapData.top_gaps.length > 0) ? (
+            computedGapData.top_gaps.map((gap, idx) => {
+              const isRedPriority = gap.priority === 'High Priority';
+              const badgeStyle = isRedPriority ? styles.priorityBadgeRed : styles.priorityBadgeYellow;
+              const badgeTextStyle = isRedPriority ? styles.priorityBadgeTextRed : styles.priorityBadgeTextYellow;
 
-          {/* PostgreSQL Gap */}
-          <HoverableCard style={styles.gapCard}>
-            <View style={styles.gapCardHeader}>
-              <View style={[styles.gapCardIconBox, { backgroundColor: COLORS.mint }]}>
-                <Text style={styles.gapCardIconText}>🐘</Text>
-              </View>
-              <Text style={styles.gapCardTitle}>PostgreSQL</Text>
-              <View style={styles.priorityBadgeYellow}>
-                <Text style={styles.priorityBadgeTextYellow}>Medium Priority</Text>
-              </View>
-            </View>
-            <View style={styles.gapDetails}>
-              <View style={styles.gapLevelRow}>
-                <Text style={styles.gapLevelLabel}>Current Level</Text>
-                <Text style={styles.gapLevelValue}>55% (Intermediate)</Text>
-              </View>
-              <View style={styles.gapTrack}>
-                <View style={[styles.gapBar, { width: '55%', backgroundColor: COLORS.teal }]} />
-              </View>
-              <View style={styles.gapRequiredRow}>
-                <Text style={styles.gapLevelLabel}>Required for Backend Dev</Text>
-                <Text style={styles.gapLevelValueBold}>85% (Advanced)</Text>
-              </View>
-            </View>
-            <Pressable style={styles.learnBtn}>
-              <Text style={styles.learnBtnText}>Learn PostgreSQL →</Text>
-            </Pressable>
-          </HoverableCard>
+              const getLevelCategory = (level) => {
+                if (level >= 85) return 'Advanced';
+                if (level >= 70) return 'Proficient';
+                if (level >= 50) return 'Intermediate';
+                if (level >= 25) return 'Beginner';
+                return 'Novice';
+              };
 
-          {/* AWS Gap */}
-          <HoverableCard style={styles.gapCard}>
-            <View style={styles.gapCardHeader}>
-              <View style={[styles.gapCardIconBox, { backgroundColor: COLORS.amberLight }]}>
-                <Text style={styles.gapCardIconText}>☁️</Text>
+              const getBarBgColor = (level) => {
+                if (level >= 75) return COLORS.green;
+                if (level >= 50) return COLORS.teal;
+                if (level >= 35) return COLORS.amber;
+                return COLORS.rose;
+              };
+
+              const getIconBgColor = (sName, i) => {
+                const l = (sName || '').toLowerCase();
+                if (l.includes('docker') || l.includes('react native') || i === 0) return COLORS.blueLight;
+                if (l.includes('postgres') || l.includes('react') || i === 1) return COLORS.mint;
+                if (l.includes('aws') || l.includes('python') || i === 2) return COLORS.amberLight;
+                return COLORS.panel;
+              };
+
+              const requiredLabel = gap.required_by_careers && gap.required_by_careers.length > 0
+                ? (gap.required_by_careers.length > 1 ? `${gap.required_by_careers.length} Selected Roles` : gap.required_by_careers[0])
+                : computedGapData.target_career;
+
+              return (
+                <HoverableCard style={styles.gapCard} key={gap.skill_name + '_' + idx}>
+                  <View style={styles.gapCardHeader}>
+                    <View style={[styles.gapCardIconBox, { backgroundColor: getIconBgColor(gap.skill_name, idx) }]}>
+                      <Text style={styles.gapCardIconText}>{gap.icon || '🚀'}</Text>
+                    </View>
+                    <Text style={styles.gapCardTitle}>{gap.skill_name}</Text>
+                    <View style={badgeStyle}>
+                      <Text style={badgeTextStyle}>{gap.priority || 'Medium Priority'}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.gapDetails}>
+                    <View style={styles.gapLevelRow}>
+                      <Text style={styles.gapLevelLabel}>Current Level</Text>
+                      <Text style={styles.gapLevelValue}>{gap.current_level}% ({getLevelCategory(gap.current_level)})</Text>
+                    </View>
+                    <View style={styles.gapTrack}>
+                      <View style={[styles.gapBar, { width: `${Math.min(100, Math.max(5, gap.current_level))}%`, backgroundColor: getBarBgColor(gap.current_level) }]} />
+                    </View>
+                    <View style={styles.gapRequiredRow}>
+                      <Text style={styles.gapLevelLabel}>Required for {requiredLabel}</Text>
+                      <Text style={styles.gapLevelValueBold}>{gap.required_level}% ({getLevelCategory(gap.required_level)})</Text>
+                    </View>
+                  </View>
+                  <Pressable style={styles.learnBtn}>
+                    <Text style={styles.learnBtnText}>Learn {gap.skill_name} →</Text>
+                  </Pressable>
+                </HoverableCard>
+              );
+            })
+          ) : (
+            <HoverableCard style={[styles.gapCard, { width: '100%' }]}>
+              <View style={styles.gapCardHeader}>
+                <Text style={styles.gapCardTitle}>Target Role Competency</Text>
               </View>
-              <Text style={styles.gapCardTitle}>AWS</Text>
-              <View style={styles.priorityBadgeRed}>
-                <Text style={styles.priorityBadgeTextRed}>High Priority</Text>
-              </View>
-            </View>
-            <View style={styles.gapDetails}>
-              <View style={styles.gapLevelRow}>
-                <Text style={styles.gapLevelLabel}>Current Level</Text>
-                <Text style={styles.gapLevelValue}>30% (Novice)</Text>
-              </View>
-              <View style={styles.gapTrack}>
-                <View style={[styles.gapBar, { width: '30%', backgroundColor: COLORS.rose }]} />
-              </View>
-              <View style={styles.gapRequiredRow}>
-                <Text style={styles.gapLevelLabel}>Required for Backend Dev</Text>
-                <Text style={styles.gapLevelValueBold}>75% (Intermediate)</Text>
-              </View>
-            </View>
-            <Pressable style={styles.learnBtn}>
-              <Text style={styles.learnBtnText}>Learn AWS →</Text>
-            </Pressable>
-          </HoverableCard>
+              <Text style={{ color: COLORS.muted, marginVertical: 12 }}>
+                Your current evidence covers the key skills required for {computedGapData.target_career}.
+              </Text>
+            </HoverableCard>
+          )}
         </View>
       </View>
+
 
       {/* 5. Your Skills */}
       <View style={styles.sectionContainer}>
@@ -616,18 +938,20 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
           </Pressable>
         </View>
         <HoverableCard style={styles.goalCardContainer}>
-          <Text style={styles.goalHintText}>Tracking your progress towards your dream role.</Text>
+          <Text style={styles.goalHintText}>Tracking your progress towards your target roles.</Text>
           <View style={[styles.goalBoxesRow, !isTablet && styles.goalBoxesColumn]}>
             {/* Target Role */}
             <View style={styles.goalBox}>
               <View style={styles.goalBoxLeftContent}>
                 <Text style={styles.goalBoxLabel}>TARGET ROLE</Text>
-                <Text style={styles.goalBoxTitle}>Backend Developer</Text>
-                <Text style={styles.goalBoxSub}>Focusing on Python, APIs, and Cloud Infrastructure</Text>
+                <Text style={styles.goalBoxTitle}>{activeTargetCareers[0] || 'Backend Developer'}</Text>
+                <Text style={styles.goalBoxSub}>
+                  {activeTargetCareers.length > 1 ? `Primary target role (+${activeTargetCareers.length - 1} secondary goals)` : 'Focusing on your primary career target'}
+                </Text>
               </View>
               <View style={styles.goalCircleContainer}>
                 <View style={[styles.progressRing, styles.ring74]}>
-                  <Text style={styles.ringValueText}>74%</Text>
+                  <Text style={styles.ringValueText}>76%</Text>
                   <Text style={styles.ringTotalText}>MATCH</Text>
                 </View>
               </View>
@@ -637,9 +961,9 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
             <View style={styles.goalBox}>
               <Text style={styles.goalBoxLabel}>KEY TARGET SKILLS</Text>
               <View style={styles.goalSkillsList}>
-                <Text style={styles.goalSkillItem}>● Python / Django</Text>
-                <Text style={styles.goalSkillItem}>● RESTful APIs</Text>
-                <Text style={styles.goalSkillItem}>● Docker / K8s</Text>
+                {(computedGapData.recommended_pills || ['Python', 'REST APIs', 'Docker']).slice(0, 3).map((skName, i) => (
+                  <Text key={i} style={styles.goalSkillItem}>● {skName}</Text>
+                ))}
               </View>
             </View>
 
@@ -647,14 +971,25 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
             <View style={styles.goalBox}>
               <Text style={styles.goalBoxLabel}>ALSO WATCHES</Text>
               <View style={styles.watchesList}>
-                <View style={styles.watchRow}>
-                  <Text style={styles.watchLabel}>Data Engineer</Text>
-                  <Text style={styles.watchValue}>(68%)</Text>
-                </View>
-                <View style={styles.watchRow}>
-                  <Text style={styles.watchLabel}>Full Stack Dev</Text>
-                  <Text style={styles.watchValue}>(65%)</Text>
-                </View>
+                {activeTargetCareers.length > 1 ? (
+                  activeTargetCareers.slice(1, 3).map((secRole, i) => (
+                    <View key={i} style={styles.watchRow}>
+                      <Text style={styles.watchLabel}>{secRole}</Text>
+                      <Text style={styles.watchValue}>({70 - (i * 4)}%)</Text>
+                    </View>
+                  ))
+                ) : (
+                  <>
+                    <View style={styles.watchRow}>
+                      <Text style={styles.watchLabel}>Data Engineer</Text>
+                      <Text style={styles.watchValue}>(68%)</Text>
+                    </View>
+                    <View style={styles.watchRow}>
+                      <Text style={styles.watchLabel}>Full Stack Dev</Text>
+                      <Text style={styles.watchValue}>(65%)</Text>
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           </View>
@@ -1154,7 +1489,7 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
                                   {domainName === 'DevOps' && '🛠️ DevOps & Build Tools'}
                                   {domainName === 'Testing' && '🧪 Testing & QA'}
                                   {domainName === 'AI/ML' && '🤖 AI & Data Science'}
-                                  {!['Frontend','Mobile','Backend','Cloud','Database','Languages','DevOps','Testing','AI/ML'].includes(domainName) && `🔹 ${domainName}`}
+                                  {!['Frontend', 'Mobile', 'Backend', 'Cloud', 'Database', 'Languages', 'DevOps', 'Testing', 'AI/ML'].includes(domainName) && `🔹 ${domainName}`}
                                 </Text>
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
                                   {techList.map((t, tIdx) => (
@@ -1270,6 +1605,171 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
         </View>
       )}
 
+      {/* Complete Skill Gap Analysis Modal */}
+      {isSkillGapAnalysisModalOpen && (
+        <View style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          padding: 20,
+        }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 20,
+            maxWidth: 720,
+            width: '100%',
+            maxHeight: '90vh',
+            padding: 24,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            overflow: 'hidden',
+          }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 10 }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.ink }}>🎯 Complete Skill Gap Analysis</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.muted, marginTop: 2 }}>
+                    Comprehensive ESCO skill gap breakdown across your target career goals
+                  </Text>
+                </View>
+                <Pressable
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
+                  onPress={() => setIsSkillGapAnalysisModalOpen(false)}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.navy }}>✕</Text>
+                </Pressable>
+              </View>
+
+              {/* Selected Target Careers Chips */}
+              <View style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, marginBottom: 18, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.muted, marginBottom: 8, letterSpacing: 0.5 }}>SELECTED CAREER GOALS ({activeTargetCareers.length})</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {activeTargetCareers.map((car, idx) => (
+                    <View key={idx} style={{ backgroundColor: COLORS.greenLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#C6F6D5' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.green }}>🎯 {car}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Tab Selector */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', padding: 4, borderRadius: 10, marginBottom: 18 }}>
+                <Pressable
+                  style={{ flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', backgroundColor: gapAnalysisTab === 'combined' ? '#FFFFFF' : 'transparent' }}
+                  onPress={() => setGapAnalysisTab('combined')}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: gapAnalysisTab === 'combined' ? COLORS.green : COLORS.muted }}>Combined Skill Gaps ({computedGapData.skill_gaps ? computedGapData.skill_gaps.length : 0})</Text>
+                </Pressable>
+                <Pressable
+                  style={{ flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', backgroundColor: gapAnalysisTab === 'breakdown' ? '#FFFFFF' : 'transparent' }}
+                  onPress={() => setGapAnalysisTab('breakdown')}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: gapAnalysisTab === 'breakdown' ? COLORS.green : COLORS.muted }}>Breakdown by Career</Text>
+                </Pressable>
+              </View>
+
+              {gapAnalysisTab === 'combined' ? (
+                /* Tab 1: Combined Skill Gaps List */
+                <View style={{ gap: 12, marginBottom: 20 }}>
+                  {computedGapData.skill_gaps && computedGapData.skill_gaps.length > 0 ? (
+                    computedGapData.skill_gaps.map((gap, idx) => {
+                      const isHigh = gap.priority === 'High Priority';
+                      return (
+                        <View key={idx} style={{ backgroundColor: '#FFFFFF', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={{ fontSize: 20 }}>{gap.icon || '🚀'}</Text>
+                              <Text style={{ fontSize: 15, fontWeight: '800', color: COLORS.ink }}>{gap.skill_name}</Text>
+                            </View>
+                            <View style={{ backgroundColor: isHigh ? COLORS.roseLight : COLORS.amberLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: isHigh ? COLORS.rose : COLORS.amber }}>{gap.priority}</Text>
+                            </View>
+                          </View>
+
+                          <View style={{ gap: 4, marginBottom: 10 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <Text style={{ fontSize: 12, color: COLORS.muted }}>Current Level: <Text style={{ fontWeight: '700', color: COLORS.ink }}>{gap.current_level}%</Text></Text>
+                              <Text style={{ fontSize: 12, color: COLORS.muted }}>Required Level: <Text style={{ fontWeight: '700', color: COLORS.green }}>{gap.required_level}%</Text></Text>
+                            </View>
+                            <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                              <View style={{ height: '100%', width: `${Math.min(100, Math.max(5, gap.current_level))}%`, backgroundColor: gap.current_level >= 50 ? COLORS.green : COLORS.rose }} />
+                            </View>
+                          </View>
+
+                          {/* Required by Careers list */}
+                          {gap.required_by_careers && gap.required_by_careers.length > 0 && (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.muted }}>Required by:</Text>
+                              {gap.required_by_careers.map((reqCar, cIdx) => (
+                                <View key={cIdx} style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                  <Text style={{ fontSize: 11, color: COLORS.navy, fontWeight: '600' }}>• {reqCar}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <Text style={{ fontSize: 13, color: COLORS.muted, textAlign: 'center', marginVertical: 20 }}>No skill gaps detected across your selected career goals.</Text>
+                  )}
+                </View>
+              ) : (
+                /* Tab 2: Breakdown by Career */
+                <View style={{ gap: 14, marginBottom: 20 }}>
+                  {activeTargetCareers.map((carName, cIdx) => {
+                    const carSkills = computedGapData.career_skills_map?.[carName] || [];
+                    return (
+                      <View key={cIdx} style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <Text style={{ fontSize: 15, fontWeight: '800', color: COLORS.navy, marginBottom: 10 }}>🎯 {carName}</Text>
+                        <View style={{ gap: 8 }}>
+                          {carSkills.length > 0 ? (
+                            carSkills.map((sk, sIdx) => {
+                              const sName = sk.skill_name || sk.name;
+                              return (
+                                <View key={sIdx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={{ fontSize: 14 }}>{sk.icon || '⚡'}</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.ink }}>{sName}</Text>
+                                  </View>
+                                  <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.green }}>{sk.required_level || sk.req || 80}% Required</Text>
+                                    <Text style={{ fontSize: 10.5, color: COLORS.muted }}>{sk.relation || 'essential'}</Text>
+                                  </View>
+                                </View>
+                              );
+                            })
+                          ) : (
+                            <Text style={{ fontSize: 12, color: COLORS.muted }}>General competency requirements applied.</Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Close Button */}
+              <Pressable
+                style={{ backgroundColor: COLORS.navy, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => setIsSkillGapAnalysisModalOpen(false)}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Close Analysis</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
       {/* Single Skill Analysis Modal */}
       {selectedSkillModal && (
         <View style={{
@@ -1326,7 +1826,7 @@ export default function Dashboard({ user, profileCompletion, onNavigateToProfile
                 <View style={{ width: '85%', height: 8, backgroundColor: '#E2E8F0', borderRadius: 4, marginTop: 12, overflow: 'hidden' }}>
                   <View style={{ height: '100%', width: `${selectedSkillModal.score || selectedSkillModal.percentage || 0}%`, backgroundColor: COLORS.teal, borderRadius: 4 }} />
                 </View>
-                
+
                 <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 8 }}>
                   Detected across {selectedSkillModal.repository_count || 1} repository{(selectedSkillModal.repository_count || 1) > 1 ? 'ies' : ''}
                 </Text>

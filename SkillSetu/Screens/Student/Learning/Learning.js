@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Linking,
   Modal,
@@ -348,6 +348,103 @@ export default function Learning() {
   const verifiedCount = skills.filter((s) => s.status === 'Verified').length;
   const readinessPercent = Math.round((verifiedCount / skills.length) * 100);
 
+  // Phase 8 Learning Path State
+  const [learningPath, setLearningPath] = useState(null);
+  const [isLoadingPath, setIsLoadingPath] = useState(false);
+  const [pathActionMessage, setPathActionMessage] = useState('');
+  const [selectedStageTab, setSelectedStageTab] = useState('All');
+  const studentEmail = 'abhoge27@gmail.com';
+
+  const fetchLearningPath = async () => {
+    setIsLoadingPath(true);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/learning-paths?email=${encodeURIComponent(studentEmail)}`);
+      const data = await res.json();
+      if (data.status === 'success' && data.data && data.data.length > 0) {
+        setLearningPath(data.data[0]);
+      }
+    } catch (err) {
+      console.log('Error fetching learning path:', err);
+    } finally {
+      setIsLoadingPath(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLearningPath();
+  }, []);
+
+  const handleGeneratePath = async () => {
+    setIsLoadingPath(true);
+    setPathActionMessage('Generating your personalized skill-gap learning path...');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/v1/learning-paths', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: studentEmail,
+          target_careers: ['Full Stack Developer', 'Mobile App Developer']
+        })
+      });
+      const data = await res.json();
+      if (data.id) {
+        setLearningPath(data);
+        setPathActionMessage('✓ Personalized Learning Path successfully generated!');
+        setTimeout(() => setPathActionMessage(''), 4000);
+      }
+    } catch (err) {
+      setPathActionMessage('Failed to generate learning path. Please try again.');
+    } finally {
+      setIsLoadingPath(false);
+    }
+  };
+
+  const handleRefreshPath = async () => {
+    if (!learningPath) return;
+    setIsLoadingPath(true);
+    setPathActionMessage('Refreshing path against updated skill gaps...');
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/learning-paths/${learningPath.id}/refresh?email=${encodeURIComponent(studentEmail)}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.id) {
+        setLearningPath(data);
+        setPathActionMessage('✓ Learning path updated! Completed history preserved.');
+        setTimeout(() => setPathActionMessage(''), 4000);
+      }
+    } catch (err) {
+      setPathActionMessage('Failed to refresh learning path.');
+    } finally {
+      setIsLoadingPath(false);
+    }
+  };
+
+  const handleUpdateItemProgress = async (itemId, newProgressPercent, explicitStatus = null) => {
+    if (!learningPath) return;
+    try {
+      const payload = {
+        email: studentEmail,
+        progress_percent: newProgressPercent
+      };
+      if (explicitStatus) payload.status = explicitStatus;
+
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/learning-paths/${learningPath.id}/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const updatedItem = await res.json();
+
+      if (updatedItem.id) {
+        // Refresh full path to update metrics and stages
+        fetchLearningPath();
+      }
+    } catch (err) {
+      console.log('Error updating item progress:', err);
+    }
+  };
+
   // Helper to open external course link externally
   const handleOpenCourse = (resource) => {
     setResourceInteractions((prev) => ({
@@ -566,6 +663,212 @@ export default function Learning() {
           <Text style={styles.readinessHeroBig}>{readinessPercent}% Ready</Text>
           <Text style={styles.readinessHeroSub}>Empirically Verified</Text>
         </View>
+      </View>
+
+      {/* 2.5 PERSONALIZED SKILL-GAP LEARNING PATH (PHASE 8 LIVE ENGINE) */}
+      <View style={[styles.cardSection, { backgroundColor: '#ffffff', borderColor: COLORS.primaryTeal, borderWidth: 1.5, borderRadius: 12, padding: 18, gap: 14 }]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+          <View style={{ gap: 4, flex: 1, minWidth: 260 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.darkNavy }}>
+                🗺️ Personalized Skill-Gap Learning Path
+              </Text>
+              <View style={{ backgroundColor: COLORS.tealLightBg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.primaryTeal }}>PHASE 8 ENGINE</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
+              Automated progression sequence bridging your missing ESCO skill gaps for {learningPath?.target_careers ? learningPath.target_careers.join(' & ') : 'Full Stack & Mobile Development'}.
+            </Text>
+          </View>
+
+          {/* Action buttons */}
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            {learningPath ? (
+              <Pressable
+                style={[styles.tableBtn, { backgroundColor: COLORS.tealLightBg, borderColor: COLORS.primaryTeal, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 }]}
+                onPress={handleRefreshPath}
+                disabled={isLoadingPath}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.primaryTealDark }}>
+                  {isLoadingPath ? 'Refreshing...' : '🔄 Refresh Path'}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              style={[styles.tableBtn, { backgroundColor: COLORS.primaryTeal, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 6 }]}
+              onPress={handleGeneratePath}
+              disabled={isLoadingPath}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#ffffff' }}>
+                {isLoadingPath ? 'Generating...' : '⚡ Generate Path'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {pathActionMessage ? (
+          <View style={{ backgroundColor: COLORS.greenSuccessBg, padding: 8, borderRadius: 6 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.greenSuccess }}>{pathActionMessage}</Text>
+          </View>
+        ) : null}
+
+        {/* Path Progress & Metrics */}
+        {learningPath ? (
+          <View style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.textMain }}>
+                  Overall Progress: <Text style={{ color: COLORS.primaryTeal }}>{learningPath.progress_percent || 0}%</Text>
+                </Text>
+                <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
+                  Skills Addressed: <Text style={{ fontWeight: '700', color: COLORS.darkNavy }}>{learningPath.skills_summary?.addressed || 0} / {learningPath.skills_summary?.total || 0}</Text>
+                </Text>
+              </View>
+
+              {/* Stage Filter Pills */}
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {['All', 'Foundation', 'Intermediate', 'Advanced'].map((st) => (
+                  <Pressable
+                    key={st}
+                    style={[
+                      styles.filterPill,
+                      selectedStageTab === st && styles.filterPillActive
+                    ]}
+                    onPress={() => setSelectedStageTab(st)}
+                  >
+                    <Text style={[styles.filterPillText, selectedStageTab === st && styles.filterPillTextActive]}>{st}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Path Progress Bar */}
+            <View style={[styles.barTrack, { height: 8 }]}>
+              <View style={[styles.barFill, { width: `${learningPath.progress_percent || 0}%`, backgroundColor: COLORS.primaryTeal }]} />
+            </View>
+
+            {/* Stages & Courses List */}
+            {['Foundation', 'Intermediate', 'Advanced'].map((stageName) => {
+              if (selectedStageTab !== 'All' && selectedStageTab !== stageName) return null;
+              const stageItems = (learningPath.stages && learningPath.stages[stageName]) || [];
+              if (stageItems.length === 0) return null;
+
+              const stageColor = stageName === 'Foundation' ? COLORS.greenSuccess : stageName === 'Intermediate' ? COLORS.blueInfo : COLORS.roseError;
+              const stageBg = stageName === 'Foundation' ? COLORS.greenSuccessBg : stageName === 'Intermediate' ? COLORS.blueInfoBg : COLORS.roseErrorBg;
+
+              return (
+                <View key={stageName} style={{ gap: 8, marginTop: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ backgroundColor: stageBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: stageColor }}>STAGE: {stageName.toUpperCase()}</Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: COLORS.textMuted }}>
+                      {stageName === 'Foundation' ? 'Essential prerequisites & foundational competencies' : stageName === 'Intermediate' ? 'Core curriculum & framework architecture' : 'Advanced systems & specialized mastery'} ({stageItems.length} courses)
+                    </Text>
+                  </View>
+
+                  <View style={{ gap: 8 }}>
+                    {stageItems.map((item) => (
+                      <View
+                        key={item.id}
+                        style={{
+                          backgroundColor: COLORS.bgSurface,
+                          borderRadius: 8,
+                          padding: 12,
+                          borderLeftWidth: 4,
+                          borderLeftColor: item.status === 'completed' ? COLORS.greenSuccess : item.status === 'in_progress' ? COLORS.primaryTeal : COLORS.borderGray,
+                          gap: 8
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                          <View style={{ flex: 1, minWidth: 240, gap: 2 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.textMain }}>
+                                {item.course?.title || item.skill_name}
+                              </Text>
+                              <View style={{ backgroundColor: COLORS.chipBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.chipText }}>{item.course?.provider_name || 'freeCodeCamp'}</Text>
+                              </View>
+                              {item.course?.duration ? (
+                                <Text style={{ fontSize: 11, color: COLORS.textMuted }}>⏱ {item.course.duration}</Text>
+                              ) : null}
+                            </View>
+                            <Text style={{ fontSize: 12, color: COLORS.primaryTealDark, fontWeight: '600' }}>
+                              🎯 Closes Gap: {item.skill_name}
+                            </Text>
+                            {item.reason ? (
+                              <Text style={{ fontSize: 11, color: COLORS.textMuted }}>💡 {item.reason}</Text>
+                            ) : null}
+                          </View>
+
+                          {/* Action & Progress Buttons */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderRadius: 4,
+                              backgroundColor: item.status === 'completed' ? COLORS.greenSuccessBg : item.status === 'in_progress' ? COLORS.tealLightBg : COLORS.surfaceCard
+                            }}>
+                              <Text style={{
+                                fontSize: 11,
+                                fontWeight: '700',
+                                color: item.status === 'completed' ? COLORS.greenSuccess : item.status === 'in_progress' ? COLORS.primaryTealDark : COLORS.textMuted
+                              }}>
+                                {item.status === 'completed' ? '✓ Completed (100%)' : item.status === 'in_progress' ? `▶ In Progress (${item.progress_percent}%)` : '○ Not Started'}
+                              </Text>
+                            </View>
+
+                            {item.status !== 'completed' ? (
+                              <Pressable
+                                style={[styles.tableBtn, { backgroundColor: COLORS.primaryTeal, paddingHorizontal: 8, paddingVertical: 4 }]}
+                                onPress={() => handleUpdateItemProgress(item.id, item.progress_percent >= 50 ? 100 : 50)}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>
+                                  {item.progress_percent === 0 ? '▶ Start' : '✓ Complete'}
+                                </Text>
+                              </Pressable>
+                            ) : (
+                              <Pressable
+                                style={[styles.tableBtn, { backgroundColor: COLORS.bgSurface, paddingHorizontal: 8, paddingVertical: 4 }]}
+                                onPress={() => handleUpdateItemProgress(item.id, 0)}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textMuted }}>Reset</Text>
+                              </Pressable>
+                            )}
+
+                            {item.course?.url ? (
+                              <Pressable
+                                style={[styles.tableBtn, { backgroundColor: COLORS.surfaceCard, borderColor: COLORS.borderGray, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 }]}
+                                onPress={() => handleOpenCourse(item.course)}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textMain }}>🔗 Open Course</Text>
+                              </Pressable>
+                            ) : null}
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={{ backgroundColor: COLORS.bgSurface, padding: 14, borderRadius: 8, alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 13, color: COLORS.textMuted }}>No active learning path loaded yet.</Text>
+            <Pressable
+              style={[styles.tableBtn, { backgroundColor: COLORS.primaryTeal, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 }]}
+              onPress={handleGeneratePath}
+              disabled={isLoadingPath}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#ffffff' }}>
+                {isLoadingPath ? 'Generating...' : '⚡ Generate Your Personalized Learning Path'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {/* 3. CLEAN REQUIRED SKILL MATRIX (NO INLINE COURSES / NO INLINE PROJECTS) */}

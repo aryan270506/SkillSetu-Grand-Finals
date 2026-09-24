@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Dashboard from '../Dashboard/Dashboard';
 import Profile, { DEFAULT_MOCK_PROFILE } from '../Profile/Profile';
+import { createInitialProfile, fetchCompleteStudentProfile } from '../services/profileService';
 import Resume from '../Resume/Resume';
 import Skill from '../Skill/Skill';
 import Internship from '../Internship/Internship';
@@ -44,28 +45,15 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
   const isDesktop = width >= 1024;
-  const [profileData, setProfileData] = useState(() => ({
-    ...DEFAULT_MOCK_PROFILE,
-    resumeAnalysis: {
-      resumeFile: '',
-      parseTime: '',
-      score: 0,
-      scoreText: '',
-      scoreBreakdown: {},
-      extractedData: {
-        projects: [],
-        rawProjects: [],
-        experience: [],
-        coreTechnologies: [],
-        normalizedSkills: [],
-        identifiedSkillDomains: [],
-        education: [],
-        certifications: [],
-        achievements: [],
-        links: {},
-      },
-    },
-  }));
+  const [profileData, setProfileData] = useState(() => createInitialProfile(user));
+
+  // Auto-fetch complete student profile (career goals, github connection, resume parsed data) on user session start
+  useEffect(() => {
+    if (user && user.email) {
+      setProfileData(prev => createInitialProfile(user, prev));
+      fetchCompleteStudentProfile(user, setProfileData);
+    }
+  }, [user]);
 
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -107,7 +95,7 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
     const totalSteps = 5;
     if (profileData.personalInfo && profileData.personalInfo.fullName && profileData.personalInfo.email) score += 1;
     if (profileData.education && profileData.education.list && profileData.education.list.length > 0) score += 1;
-    if (profileData.careerGoals && profileData.careerGoals.targetCareer && profileData.careerGoals.careerGoal) score += 1;
+    if (profileData.careerGoals && (profileData.careerGoals.targetCareer || (profileData.careerGoals.targetCareerIds && profileData.careerGoals.targetCareerIds.length > 0))) score += 1;
     if (profileData.resumeAnalysis && profileData.resumeAnalysis.resumeFile) score += 1;
     if (profileData.githubLinks && (profileData.githubLinks.githubUsername || profileData.githubLinks.linkedinUrl)) score += 1;
 
@@ -215,7 +203,9 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
       case 'Skills':
         return (
           <Skill
+            user={user}
             profileData={profileData}
+            setProfileData={setProfileData}
           />
         );
       case 'Learning':

@@ -22,3 +22,15 @@ node_modules/
 .expo/
 dist/
 web-build/
+
+# Testing & Local Database Storage
+.pytest_cache/
+qdrant_storage/
+Backend/qdrant_storage/
+scratch/
+Backend/scratch/
+uploads/
+Backend/uploads/
+*.sqlite
+*.db
+
