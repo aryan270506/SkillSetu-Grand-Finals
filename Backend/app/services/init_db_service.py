@@ -449,13 +449,27 @@ def init_system_on_startup(force_reseed: bool = False):
             seed_default_providers(db)
             logger.info("✅ Default course providers verified/seeded.")
 
+        # 5. Seed default admin account if empty
+        if db.query(models.AdminUser).first() is None:
+            from app.security import hash_password
+            admin = models.AdminUser(
+                name="SkillSetu Admin",
+                email="admin@skillsetu.com",
+                password_hash=hash_password("admin123"),
+                role="admin",
+                status="ACTIVE"
+            )
+            db.add(admin)
+            db.commit()
+            logger.info("✅ Default admin user (admin@skillsetu.com) seeded.")
+
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Error during data seeding: {e}")
     finally:
         db.close()
 
-    # 5. Pre-download / warm up AI embedding model
+    # 6. Pre-download / warm up AI embedding model
     warmup_ai_embedding_model()
     
     logger.info("🎉 SkillSetu Backend initialization completed successfully!")

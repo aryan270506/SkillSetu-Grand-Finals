@@ -1904,7 +1904,7 @@ def get_assessment_history_endpoint(
 
 
 @router.post("/retake-assessment")
-def retake_assessment_endpoint(payload: RetakeAssessmentRequest, db: Session = Depends(get_db)):
+def retake_assessment_endpoint(payload: SubmitAssessmentRequest, db: Session = Depends(get_db)):
     student = db.query(StudentUser).filter(StudentUser.email == payload.email.lower().strip()).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")

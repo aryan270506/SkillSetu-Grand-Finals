@@ -40,6 +40,41 @@ class StudentUser(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, default="admin", nullable=False)
+    status = Column(String, default="ACTIVE", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class RecruiterUser(Base):
+    __tablename__ = "recruiters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    phone = Column(String, nullable=True)
+    company_name = Column(String, nullable=False)
+    company_website = Column(String, nullable=True)
+    designation = Column(String, nullable=True)
+    company_size = Column(String, nullable=True)
+    industry = Column(String, nullable=True)
+    is_verified = Column(Boolean, default=True)
+    status = Column(String, default="PENDING", nullable=False)  # PENDING, APPROVED, REJECTED
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    approved_by = Column(Integer, ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    rejected_at = Column(DateTime(timezone=True), nullable=True)
+    rejected_by = Column(Integer, ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class StudentGithubConnection(Base):
     __tablename__ = "student_github_connections"
 

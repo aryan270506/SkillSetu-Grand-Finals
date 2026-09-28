@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
-from app.routers import student, recruiter, taxonomy, github, courses, learning_paths, skill_evidence
+from app.routers import student, recruiter, admin, taxonomy, github, courses, learning_paths, skill_evidence
 from app import models
 from app.services.init_db_service import init_system_on_startup
 
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(student.router, prefix=f"{settings.API_V1_STR}/student", tags=["Student"])
 app.include_router(skill_evidence.router, prefix=f"{settings.API_V1_STR}/student/skill-evidence", tags=["Skill Evidence"])
 app.include_router(recruiter.router, prefix=f"{settings.API_V1_STR}/recruiter", tags=["Recruiter"])
+app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])
 app.include_router(taxonomy.router, prefix=f"{settings.API_V1_STR}/taxonomy", tags=["Taxonomy"])
 app.include_router(github.router, prefix=f"{settings.API_V1_STR}/github", tags=["GitHub"])
 app.include_router(courses.router, prefix=f"{settings.API_V1_STR}/courses", tags=["Courses"])

@@ -28,6 +28,11 @@ class AnalyzeReposRequest(BaseModel):
     email: str
 
 
+class SelectReposRequest(BaseModel):
+    email: str
+    selected_repo_ids: List[str]
+
+
 @router.get("/connect")
 def initiate_github_oauth(email: str = Query(...)):
     """
@@ -315,10 +320,6 @@ def disconnect_github(email: str = Query(...), db: Session = Depends(get_db)):
         "message": "GitHub connection disconnected."
     }
 
-
-class SelectReposRequest(BaseModel):
-    email: str
-    selected_repo_ids: List[str]
 
 
 @router.post("/analyze-selected")

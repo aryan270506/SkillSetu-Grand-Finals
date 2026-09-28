@@ -136,6 +136,13 @@ export default function Login({ onLoginSuccess }) {
     setPassword('recruiter123');
   }
 
+  function useAdminDemo() {
+    setAuthMode('login');
+    updateRole('admin');
+    setEmail('admin@skillsetu.com');
+    setPassword('admin123');
+  }
+
   function formatErrorMessage(detail, fallback) {
     if (!detail) return fallback;
     if (typeof detail === 'string') return detail;
@@ -365,7 +372,7 @@ export default function Login({ onLoginSuccess }) {
     setRecruiterStep((current) => Math.max(1, current - 1));
   }
 
-  function handleRecruiterSubmit() {
+  async function handleRecruiterSubmit() {
     const nextErrors = validateRecruiterStep(3);
     setRecruiterErrors(nextErrors);
 
@@ -378,54 +385,157 @@ export default function Login({ onLoginSuccess }) {
       message: '',
     }));
 
-    setTimeout(() => {
-      setAuthState((current) => ({
-        ...current,
-        status: 'success',
-        error: '',
-        message: `Recruiter account created for ${companyName.trim()}.`,
-      }));
-      if (onLoginSuccess) {
-        setTimeout(() => {
-          onLoginSuccess({
-            role: 'recruiter',
-            email: officialEmail.trim() || email.trim(),
-            name: name.trim(),
-            companyName: companyName.trim(),
-          });
-        }, 800);
-      }
-    }, 900);
-  }
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/recruiter/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: (officialEmail.trim() || email.trim()).toLowerCase(),
+          password: password.trim(),
+          phone: phone.trim(),
+          company_name: companyName.trim(),
+          company_website: companyWebsite.trim() || companyDomain.trim(),
+          industry: industry || orgType || '',
+          company_size: companySize || '',
+          designation: 'Recruiter',
+        }),
+      });
+      const data = await response.json();
 
-  async function handleSignIn() {
-    if (authState.role === 'recruiter') {
-      // Keep recruiter demo / simulation login
-      setAuthState((current) => ({
-        ...current,
-        status: 'loading',
-        error: '',
-        message: '',
-      }));
-
-      setTimeout(() => {
+      if (response.ok && (data.status === 'pending_approval' || data.status === 'success')) {
         setAuthState((current) => ({
           ...current,
           status: 'success',
           error: '',
-          message: 'Welcome back to SkillSetu.',
+          message: 'Registration submitted successfully. Your account is waiting for admin verification. You will be able to log in once an administrator approves your account.',
         }));
-        if (onLoginSuccess) {
-          setTimeout(() => {
-            onLoginSuccess({
-              role: 'recruiter',
-              email: email.trim() || 'recruiter@techcorp.com',
-              name: name.trim() || 'TechCorp HR Manager',
-              companyName: companyName.trim() || 'TechCorp Global',
-            });
-          }, 800);
+        // DO NOT store token
+        // DO NOT call onLoginSuccess
+        // Switch to signin view after showing message so recruiter can log in after approval
+        setTimeout(() => {
+          setAuthMode('signin');
+        }, 3500);
+      } else {
+        setAuthState((current) => ({
+          ...current,
+          status: 'error',
+          error: formatErrorMessage(data.detail, 'Recruiter registration failed.'),
+          message: '',
+        }));
+      }
+    } catch (err) {
+      setAuthState((current) => ({
+        ...current,
+        status: 'error',
+        error: 'Could not connect to backend server.',
+        message: '',
+      }));
+    }
+  }
+
+  async function handleSignIn() {
+    setAuthState((current) => ({
+      ...current,
+      status: 'loading',
+      error: '',
+      message: '',
+    }));
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Admin Authentication via PostgreSQL
+    if (authState.role === 'admin' || cleanEmail.startsWith('admin@')) {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/v1/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password: password.trim(),
+          }),
+        });
+        const data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+          setAuthState((current) => ({
+            ...current,
+            status: 'success',
+            error: '',
+            message: `Admin login successful! Welcome ${data.admin.name}.`,
+          }));
+          if (onLoginSuccess) {
+            setTimeout(() => {
+              onLoginSuccess({
+                role: 'admin',
+                token: data.access_token,
+                ...data.admin,
+              });
+            }, 800);
+          }
+        } else {
+          setAuthState((current) => ({
+            ...current,
+            status: 'error',
+            error: formatErrorMessage(data.detail, 'Admin login failed. Invalid credentials.'),
+            message: '',
+          }));
         }
-      }, 900);
+      } catch (err) {
+        setAuthState((current) => ({
+          ...current,
+          status: 'error',
+          error: 'Could not connect to backend server.',
+          message: '',
+        }));
+      }
+      return;
+    }
+
+    if (authState.role === 'recruiter') {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/v1/recruiter/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim().toLowerCase(),
+            password: password.trim(),
+          }),
+        });
+        const data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+          setAuthState((current) => ({
+            ...current,
+            status: 'success',
+            error: '',
+            message: 'Login successful! Welcome back.',
+          }));
+          if (onLoginSuccess) {
+            setTimeout(() => {
+              onLoginSuccess({
+                role: 'recruiter',
+                token: data.access_token,
+                ...data.user,
+              });
+            }, 800);
+          }
+        } else {
+          setAuthState((current) => ({
+            ...current,
+            status: 'error',
+            error: formatErrorMessage(data.detail, 'Recruiter login failed.'),
+            message: '',
+          }));
+        }
+      } catch (err) {
+        setAuthState((current) => ({
+          ...current,
+          status: 'error',
+          error: 'Could not connect to backend server.',
+          message: '',
+        }));
+      }
       return;
     }
 
@@ -618,14 +728,19 @@ export default function Login({ onLoginSuccess }) {
 
                 <View style={styles.roleRow}>
                   <RoleOption
-                    label="As a Student / Job Seeker"
+                    label="As a Student"
                     selected={authState.role === 'student'}
                     onPress={() => updateRole('student')}
                   />
                   <RoleOption
-                    label="As a Recruiter / Employer"
+                    label="As a Recruiter"
                     selected={authState.role === 'recruiter'}
                     onPress={() => updateRole('recruiter')}
+                  />
+                  <RoleOption
+                    label="As Admin"
+                    selected={authState.role === 'admin'}
+                    onPress={() => updateRole('admin')}
                   />
                 </View>
 
@@ -642,7 +757,7 @@ export default function Login({ onLoginSuccess }) {
                           pressed && styles.pressed,
                         ]}
                       >
-                        <Text style={styles.demoBtnRole}>🎓 Student Demo</Text>
+                        <Text style={styles.demoBtnRole}>🎓 Student</Text>
                         <Text style={styles.demoBtnEmail}>student@skillsetu.com</Text>
                       </Pressable>
 
@@ -654,8 +769,20 @@ export default function Login({ onLoginSuccess }) {
                           pressed && styles.pressed,
                         ]}
                       >
-                        <Text style={styles.demoBtnRole}>🏢 Recruiter Demo</Text>
+                        <Text style={styles.demoBtnRole}>🏢 Recruiter</Text>
                         <Text style={styles.demoBtnEmail}>recruiter@techcorp.com</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={useAdminDemo}
+                        style={({ pressed }) => [
+                          styles.demoBtn,
+                          authState.role === 'admin' && styles.demoBtnActiveRecruiter,
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <Text style={styles.demoBtnRole}>🔑 Admin</Text>
+                        <Text style={styles.demoBtnEmail}>admin@skillsetu.com</Text>
                       </Pressable>
                     </View>
                   </View>
