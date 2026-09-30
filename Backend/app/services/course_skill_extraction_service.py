@@ -241,7 +241,7 @@ def normalize_extracted_skill(skill_name: str) -> str:
 
 
 # ===========================================================================
-# Phase 3F: Multi-Tier ESCO Skill Matching
+# Phase 3F: Multi-Tier ESCO Skill Matching with Confidence Provenance
 # ===========================================================================
 def match_skill_to_esco(
     skill_name: str,
@@ -249,11 +249,12 @@ def match_skill_to_esco(
     min_confidence: float = MIN_ACCEPTANCE_THRESHOLD
 ) -> Optional[Dict[str, Any]]:
     """
-    Matches candidate skill to PostgreSQL ESCO taxonomy using a 4-tier strategy:
-      1. Exact match on ESCO preferred_label (confidence: 0.98)
-      2. Alias match via SkillSetuSkillAlias (85k aliases) (confidence: 0.95)
-      3. ESCO alt_labels phrase match (confidence: 0.90)
-      4. Substring / Token-overlap match (confidence: 0.80)
+    Matches candidate skill to PostgreSQL ESCO and SkillSetu canonical taxonomy using a 5-tier strategy:
+      1. SkillSetu Canonical Skill match (e.g. React, React Native, Docker, Node.js) (confidence: 0.98)
+      2. SkillSetu 85k Alias match (confidence: 0.95)
+      3. Exact match on ESCO preferred_label (confidence: 0.98)
+      4. ESCO alt_labels phrase match (confidence: 0.88)
+      5. Strict word-boundary / whole-token match on ESCO preferred_label (confidence: 0.78)
     """
     canonical_name = normalize_extracted_skill(skill_name)
     search_term = canonical_name.lower().strip()
@@ -261,7 +262,7 @@ def match_skill_to_esco(
         return None
 
     # -------------------------------------------------------------
-    # Tier 1: Exact preferred_label match
+    # Tier 1: Exact ESCO preferred_label match
     # -------------------------------------------------------------
     exact = db.query(models.EscoSkill).filter(
         func.lower(models.EscoSkill.preferred_label) == search_term
@@ -278,6 +279,31 @@ def match_skill_to_esco(
         }
 
     # -------------------------------------------------------------
+    # Tier 2: SkillSetu Canonical Skill Table (Direct Match)
+    # -------------------------------------------------------------
+    canonical_skill = db.query(models.SkillSetuSkill).filter(
+        func.lower(models.SkillSetuSkill.name) == search_term
+    ).first()
+
+    if canonical_skill:
+        esco_match = None
+        if canonical_skill.esco_uri:
+            esco_match = db.query(models.EscoSkill).filter(models.EscoSkill.concept_uri == canonical_skill.esco_uri).first()
+        if not esco_match:
+            esco_match = db.query(models.EscoSkill).filter(
+                func.lower(models.EscoSkill.preferred_label) == canonical_skill.name.lower()
+            ).first()
+
+        return {
+            "esco_id": esco_match.id if esco_match else None,
+            "esco_uri": esco_match.concept_uri if esco_match else (canonical_skill.esco_uri or f"skillsetu:{canonical_skill.id}"),
+            "esco_label": esco_match.preferred_label if esco_match else canonical_skill.name,
+            "skill_name": canonical_skill.name,
+            "mapping_method": "canonical_skill_exact",
+            "mapping_confidence": 0.98,
+        }
+
+    # -------------------------------------------------------------
     # Tier 2: SkillSetu 85k Alias match
     # -------------------------------------------------------------
     alias = db.query(models.SkillSetuSkillAlias).filter(
@@ -285,7 +311,6 @@ def match_skill_to_esco(
     ).first()
 
     if alias and ALIAS_MATCH_THRESHOLD >= min_confidence:
-        # Find canonical skill
         sk = db.query(models.SkillSetuSkill).filter(models.SkillSetuSkill.id == alias.canonical_skill_id).first()
         if sk:
             esco_match = None
@@ -296,51 +321,86 @@ def match_skill_to_esco(
                     func.lower(models.EscoSkill.preferred_label) == sk.name.lower()
                 ).first()
 
-            if esco_match:
-                return {
-                    "esco_id": esco_match.id,
-                    "esco_uri": esco_match.concept_uri,
-                    "esco_label": esco_match.preferred_label,
-                    "skill_name": sk.name,
-                    "mapping_method": "taxonomy_alias",
-                    "mapping_confidence": ALIAS_MATCH_THRESHOLD,
-                }
+            return {
+                "esco_id": esco_match.id if esco_match else None,
+                "esco_uri": esco_match.concept_uri if esco_match else (sk.esco_uri or f"skillsetu:{sk.id}"),
+                "esco_label": esco_match.preferred_label if esco_match else sk.name,
+                "skill_name": sk.name,
+                "mapping_method": "taxonomy_alias",
+                "mapping_confidence": ALIAS_MATCH_THRESHOLD,
+            }
 
     # -------------------------------------------------------------
-    # Tier 3: ESCO alt_labels phrase match
+    # Tier 3: Exact ESCO preferred_label match
     # -------------------------------------------------------------
-    alt = db.query(models.EscoSkill).filter(
-        models.EscoSkill.alt_labels.isnot(None),
-        models.EscoSkill.alt_labels.ilike(f"%{search_term}%")
+    exact = db.query(models.EscoSkill).filter(
+        func.lower(models.EscoSkill.preferred_label) == search_term
     ).first()
 
-    if alt and ALT_LABEL_THRESHOLD >= min_confidence:
+    if exact and EXACT_MATCH_THRESHOLD >= min_confidence:
         return {
-            "esco_id": alt.id,
-            "esco_uri": alt.concept_uri,
-            "esco_label": alt.preferred_label,
-            "skill_name": alt.preferred_label,
-            "mapping_method": "esco_alt_label",
-            "mapping_confidence": ALT_LABEL_THRESHOLD,
+            "esco_id": exact.id,
+            "esco_uri": exact.concept_uri,
+            "esco_label": exact.preferred_label,
+            "skill_name": exact.preferred_label,
+            "mapping_method": "esco_exact",
+            "mapping_confidence": EXACT_MATCH_THRESHOLD,
         }
 
     # -------------------------------------------------------------
-    # Tier 4: Substring / Prefix match in ESCO preferred_label
+    # Tier 4: ESCO alt_labels phrase match (whole term)
     # -------------------------------------------------------------
     if len(search_term) >= 4:
-        substring_match = db.query(models.EscoSkill).filter(
-            models.EscoSkill.preferred_label.ilike(f"%{search_term}%")
-        ).order_by(func.length(models.EscoSkill.preferred_label).asc()).first()
+        alt = db.query(models.EscoSkill).filter(
+            models.EscoSkill.alt_labels.isnot(None),
+            models.EscoSkill.alt_labels.ilike(f"%{search_term}%")
+        ).first()
 
-        if substring_match and SUBSTRING_THRESHOLD >= min_confidence:
-            return {
-                "esco_id": substring_match.id,
-                "esco_uri": substring_match.concept_uri,
-                "esco_label": substring_match.preferred_label,
-                "skill_name": substring_match.preferred_label,
-                "mapping_method": "esco_substring",
-                "mapping_confidence": SUBSTRING_THRESHOLD,
-            }
+        if alt and ALT_LABEL_THRESHOLD >= min_confidence:
+            # Verify that search_term is an actual alias entry
+            alt_list = [a.strip().lower() for a in re.split(r"[\n,;|]", alt.alt_labels or "") if a.strip()]
+            if search_term in alt_list or any(search_term == a for a in alt_list):
+                return {
+                    "esco_id": alt.id,
+                    "esco_uri": alt.concept_uri,
+                    "esco_label": alt.preferred_label,
+                    "skill_name": alt.preferred_label,
+                    "mapping_method": "esco_alt_label",
+                    "mapping_confidence": ALT_LABEL_THRESHOLD,
+                }
+
+    # -------------------------------------------------------------
+    # Tier 5: Strict Word-Boundary Match in ESCO preferred_label
+    # -------------------------------------------------------------
+    # Disallow short words or generic stopwords from substring matching
+    forbidden_short_terms = {
+        "react", "express", "sql", "git", "java", "css", "c", "r", "go", "data", "qa",
+        "test", "tests", "testing", "management", "systems", "system", "research",
+        "engineering", "design", "development", "programming", "code", "app", "apps"
+    }
+
+    if len(search_term) >= 5 and search_term not in forbidden_short_terms:
+        # Search for exact whole word in preferred_label
+        candidates = db.query(models.EscoSkill).filter(
+            models.EscoSkill.preferred_label.ilike(f"%{search_term}%")
+        ).order_by(func.length(models.EscoSkill.preferred_label).asc()).limit(5).all()
+
+        for cand in candidates:
+            cand_label_lower = cand.preferred_label.lower()
+            # Check for word boundary
+            pattern = rf"\b{re.escape(search_term)}\b"
+            if re.search(pattern, cand_label_lower):
+                # Ensure length ratio is reasonable (avoid matching a 5-letter word in a 60-letter unrelated sentence)
+                len_ratio = len(search_term) / max(1, len(cand_label_lower))
+                if len_ratio >= 0.35:
+                    return {
+                        "esco_id": cand.id,
+                        "esco_uri": cand.concept_uri,
+                        "esco_label": cand.preferred_label,
+                        "skill_name": cand.preferred_label,
+                        "mapping_method": "esco_word_match",
+                        "mapping_confidence": SUBSTRING_THRESHOLD,
+                    }
 
     return None
 

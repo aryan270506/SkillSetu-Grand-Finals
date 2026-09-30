@@ -2,14 +2,21 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import {
+  fetchCareerIntelligence,
+  updateCourseProgress
+} from '../services/careerIntelligenceService';
 
 const COLORS = {
   canvas: '#f9f9f8',       // Warm off-white canvas
@@ -115,7 +122,7 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
   );
 }
 
-export default function Skill({ profileData, user, setProfileData }) {
+export default function Skill({ profileData, user, setProfileData, navigationParams, onNavigate }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const isWide = width >= 1024;
@@ -196,8 +203,34 @@ export default function Skill({ profileData, user, setProfileData }) {
   const latestCareerRequestIdRef = useRef(0);
 
   // Dynamic Backend State
+  const [careerIntel, setCareerIntel] = useState(null);
+  const [highlightedSkillId, setHighlightedSkillId] = useState(null);
+  const [highlightedCourseId, setHighlightedCourseId] = useState(null);
   const [careerSkillData, setCareerSkillData] = useState(null);
   const [isLoadingCareerData, setIsLoadingCareerData] = useState(false);
+
+  // Focused Skill Gap State
+  const [selectedGapSkillName, setSelectedGapSkillName] = useState('');
+
+  // Assessment Modal State
+  const [assessmentModalVisible, setAssessmentModalVisible] = useState(false);
+  const [assessmentData, setAssessmentData] = useState(null);
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [isSubmittingAssessment, setIsSubmittingAssessment] = useState(false);
+  const [assessmentResult, setAssessmentResult] = useState(null);
+
+  // Sync navigation params from Learning screen
+  useEffect(() => {
+    if (navigationParams?.selectedSkillId) {
+      setHighlightedSkillId(navigationParams.selectedSkillId);
+    }
+    if (navigationParams?.selectedCourseId) {
+      setHighlightedCourseId(navigationParams.selectedCourseId);
+    }
+    if (navigationParams?.selectedSkillName) {
+      setSelectedGapSkillName(navigationParams.selectedSkillName);
+    }
+  }, [navigationParams]);
 
   const [learningPathData, setLearningPathData] = useState(null);
   const [isStartingModule, setIsStartingModule] = useState(false);
@@ -231,7 +264,7 @@ export default function Skill({ profileData, user, setProfileData }) {
   // Master Data Fetcher driven by activeCareerName & user email
   const studentEmail = user?.email || profileData?.personalInfo?.email || '';
 
-  const fetchAllSkillGapData = async (cName) => {
+  const fetchAllSkillGapData = async (cName, overrideSkill = null) => {
     if (!cName) return;
     const reqId = ++latestCareerRequestIdRef.current;
     setIsLoadingCareerData(true);
@@ -239,7 +272,13 @@ export default function Skill({ profileData, user, setProfileData }) {
     const targetQ = encodeURIComponent(cName);
 
     try {
-      // 1. Fetch Main Career Skill Gaps
+      // 1. Fetch Unified Career Intelligence
+      const intelRes = await fetchCareerIntelligence(studentEmail, cName);
+      if (reqId === latestCareerRequestIdRef.current && intelRes) {
+        setCareerIntel(intelRes);
+      }
+
+      // 2. Fetch Main Career Skill Gaps
       const resGaps = await fetch(`http://127.0.0.1:8000/api/v1/student/career-skill-gaps?email=${emailQ}&target_career=${targetQ}`);
       const jsonGaps = await resGaps.json();
       
@@ -252,40 +291,43 @@ export default function Skill({ profileData, user, setProfileData }) {
         setCareerSkillData(null);
       }
 
-      // Top Gap Skill name for dependent APIs
-      const topGapSkill = jsonGaps.data?.top_gaps?.[0]?.skill_name || 'Docker';
+      // Determine top / active gap skill
+      const topGapSkill = overrideSkill || selectedGapSkillName || intelRes?.skill_gaps?.[0]?.skill_name || jsonGaps.data?.top_gaps?.[0]?.skill_name || 'JavaScript';
+      if (!selectedGapSkillName || overrideSkill) {
+        setSelectedGapSkillName(topGapSkill);
+      }
 
-      // 2. Fetch Personalized Learning Path
+      // 3. Fetch Personalized Learning Path
       const resPath = await fetch(`http://127.0.0.1:8000/api/v1/student/learning-path?email=${emailQ}&career_name=${targetQ}&gap_skill=${encodeURIComponent(topGapSkill)}`);
       const jsonPath = await resPath.json();
       if (reqId === latestCareerRequestIdRef.current && resPath.ok && jsonPath.data) setLearningPathData(jsonPath.data);
 
-      // 3. Fetch Practice Challenge
+      // 4. Fetch Practice Challenge
       const resPrac = await fetch(`http://127.0.0.1:8000/api/v1/student/practice-challenge?email=${emailQ}&gap_skill=${encodeURIComponent(topGapSkill)}`);
       const jsonPrac = await resPrac.json();
       if (reqId === latestCareerRequestIdRef.current && resPrac.ok && jsonPrac.data) setPracticeChallenge(jsonPrac.data);
 
-      // 4. Fetch Assessment History
+      // 5. Fetch Assessment History
       const resAssess = await fetch(`http://127.0.0.1:8000/api/v1/student/assessment-history?email=${emailQ}`);
       const jsonAssess = await resAssess.json();
       if (reqId === latestCareerRequestIdRef.current && resAssess.ok && jsonAssess.data) setAssessmentHistory(jsonAssess.data);
 
-      // 5. Fetch Project Verifications
+      // 6. Fetch Project Verifications
       const resProj = await fetch(`http://127.0.0.1:8000/api/v1/student/project-verifications?email=${emailQ}`);
       const jsonProj = await resProj.json();
       if (reqId === latestCareerRequestIdRef.current && resProj.ok && jsonProj.data) setProjectVerifications(jsonProj.data);
 
-      // 6. Fetch Internship Impact
+      // 7. Fetch Internship Impact
       const resImpact = await fetch(`http://127.0.0.1:8000/api/v1/student/internship-impact?email=${emailQ}&career_name=${targetQ}&gap_skill=${encodeURIComponent(topGapSkill)}`);
       const jsonImpact = await resImpact.json();
       if (reqId === latestCareerRequestIdRef.current && resImpact.ok && jsonImpact.data) setInternshipImpact(jsonImpact.data);
 
-      // 7. Fetch Skill Growth History
+      // 8. Fetch Skill Growth History
       const resGrowth = await fetch(`http://127.0.0.1:8000/api/v1/student/skill-growth-history?email=${emailQ}&career_name=${targetQ}`);
       const jsonGrowth = await resGrowth.json();
       if (reqId === latestCareerRequestIdRef.current && resGrowth.ok && jsonGrowth.data) setGrowthHistory(jsonGrowth.data);
 
-      // 8. Fetch Career Readiness
+      // 9. Fetch Career Readiness
       const resRead = await fetch(`http://127.0.0.1:8000/api/v1/student/career-readiness?email=${emailQ}&career_name=${targetQ}`);
       const jsonRead = await resRead.json();
       if (reqId === latestCareerRequestIdRef.current && resRead.ok && jsonRead.data) setCareerReadinessData(jsonRead.data);
@@ -316,70 +358,118 @@ export default function Skill({ profileData, user, setProfileData }) {
     setPracticeChallenge(null);
     setInternshipImpact(null);
     setCareerReadinessData(null);
+    setSelectedGapSkillName('');
 
     setActiveCareerId(selectedItem.id);
     setActiveCareerName(selectedItem.name);
     setShowCareerDropdown(false);
   };
 
-  // Interactive Handler: Launch & Submit Real Assessment
-  const handleRetakeAssessment = async () => {
+  // Handle Focus On Specific Skill Gap
+  const handleSelectSkillGap = (skillName) => {
+    setSelectedGapSkillName(skillName);
+    if (activeCareerName) {
+      fetchAllSkillGapData(activeCareerName, skillName);
+    }
+  };
+
+  // Interactive Handler: Launch & Submit Real Assessment via Modal
+  const handleOpenAssessmentModal = async (skillToTest = null) => {
+    const targetSkill = skillToTest || selectedGapSkillName || 'JavaScript';
     setIsVerifyingAssessment(true);
-    const topGapSkill = careerSkillData?.top_gaps?.[0]?.skill_name || 'Docker';
+    setAssessmentResult(null);
+    setSelectedAnswers({});
     try {
-      // 1. Fetch real questions from backend
-      const qRes = await fetch(`http://127.0.0.1:8000/api/v1/student/assessment-questions?skill_name=${encodeURIComponent(topGapSkill)}`);
+      const qRes = await fetch(`http://127.0.0.1:8000/api/v1/student/assessment-questions?skill_name=${encodeURIComponent(targetSkill)}`);
       const qJson = await qRes.json();
       
-      if (!qRes.ok || !qJson.data || !qJson.data.questions || qJson.data.questions.length === 0) {
-        alert(`No assessment available for ${topGapSkill} yet.`);
-        setIsVerifyingAssessment(false);
-        return;
-      }
-
-      const assessmentId = qJson.data.assessment_id;
-      const questions = qJson.data.questions;
-      
-      // Build sample answers submission map for assessment evaluation
-      const answersMap = {};
-      questions.forEach(q => {
-        const optionKeys = Object.keys(q.options || {});
-        // Select answer option
-        answersMap[String(q.id)] = optionKeys.includes('B') ? 'B' : (optionKeys[0] || 'A');
-      });
-
-      // 2. Submit answers to backend evaluation engine
-      const evalRes = await fetch('http://127.0.0.1:8000/api/v1/student/submit-assessment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: studentEmail,
-          assessment_id: assessmentId,
-          answers: answersMap
-        })
-      });
-
-      const evalJson = await evalRes.json();
-      if (evalRes.ok && evalJson.status === 'success' && evalJson.data) {
-        const d = evalJson.data;
-        alert(`Assessment "${d.test_title}" evaluated on backend!\nScore: ${d.score}% (${d.correct_answers}/${d.total_questions} correct)\nStatus: ${d.assessment_status}`);
-        await fetchAllSkillGapData(activeCareerName);
+      if (qRes.ok && qJson.data && qJson.data.questions && qJson.data.questions.length > 0) {
+        setAssessmentData(qJson.data);
+        setAssessmentModalVisible(true);
       } else {
-        alert('Could not submit assessment.');
+        alert(`No assessment questions available for ${targetSkill} at this time.`);
       }
     } catch (err) {
-      console.error('Error submitting assessment:', err);
+      console.error('Error fetching assessment questions:', err);
+      alert('Could not load assessment questions.');
     } finally {
       setIsVerifyingAssessment(false);
     }
   };
 
+  const handleSubmitAssessmentModal = async () => {
+    if (!assessmentData) return;
+    const questions = assessmentData.questions || [];
+    const answeredCount = Object.keys(selectedAnswers).length;
+    
+    if (answeredCount < questions.length) {
+      alert(`Please select an answer for each question (${answeredCount}/${questions.length} answered).`);
+      return;
+    }
+
+    setIsSubmittingAssessment(true);
+    try {
+      const evalRes = await fetch('http://127.0.0.1:8000/api/v1/student/submit-assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: studentEmail,
+          assessment_id: assessmentData.assessment_id,
+          answers: selectedAnswers
+        })
+      });
+
+      const evalJson = await evalRes.json();
+      if (evalRes.ok && evalJson.status === 'success' && evalJson.data) {
+        setAssessmentResult(evalJson.data);
+        await fetchAllSkillGapData(activeCareerName);
+      } else {
+        alert(evalJson.message || 'Could not submit assessment.');
+      }
+    } catch (err) {
+      console.error('Error submitting assessment:', err);
+      alert('Failed to evaluate assessment submission.');
+    } finally {
+      setIsSubmittingAssessment(false);
+    }
+  };
+
+  const handleSubmitProjectRepo = async () => {
+    if (!practiceChallenge) return;
+    const topGapSkill = selectedGapSkillName || careerSkillData?.top_gaps?.[0]?.skill_name || 'JavaScript';
+    
+    let repoUrl = null;
+    if (Platform.OS === 'web') {
+      repoUrl = window.prompt(`Submit GitHub Repository URL for project "${practiceChallenge.title}" (Skill: ${topGapSkill}):`);
+    }
+    
+    if (!repoUrl) return;
+    
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/v1/student/submit-project-repo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: studentEmail,
+          challenge_id: practiceChallenge.challenge_id,
+          skill_name: topGapSkill,
+          repository_url: repoUrl
+        })
+      });
+      const data = await res.json();
+      alert(data.message || 'Project repository submitted.');
+      await fetchAllSkillGapData(activeCareerName);
+    } catch (e) {
+      console.error('Error submitting repo:', e);
+      alert('Error submitting repo');
+    }
+  };
 
   // Interactive Handler: Start / Advance Module Step
   const handleStartModule = async () => {
     if (!learningPathData) return;
     setIsStartingModule(true);
-    const topGapSkill = careerSkillData?.top_gaps?.[0]?.skill_name || 'Docker';
+    const topGapSkill = selectedGapSkillName || careerSkillData?.top_gaps?.[0]?.skill_name || 'JavaScript';
     try {
       await fetch('http://127.0.0.1:8000/api/v1/student/learning-progress', {
         method: 'POST',
@@ -405,7 +495,7 @@ export default function Skill({ profileData, user, setProfileData }) {
   const handleStartChallenge = async () => {
     if (!practiceChallenge) return;
     setIsUpdatingChallenge(true);
-    const topGapSkill = careerSkillData?.top_gaps?.[0]?.skill_name || 'Docker';
+    const topGapSkill = selectedGapSkillName || careerSkillData?.top_gaps?.[0]?.skill_name || 'JavaScript';
     const nextStep = Math.min(3, (practiceChallenge.progress_step || 0) + 1);
     try {
       await fetch('http://127.0.0.1:8000/api/v1/student/practice-attempt', {
@@ -457,10 +547,26 @@ export default function Skill({ profileData, user, setProfileData }) {
   const marketMissingSkills = careerMarketSkills.filter(m => m.status === 'MISSING');
   const marketPrioritySkills = careerMarketSkills.filter(m => m.status === 'MISSING' || m.status === 'DEVELOPING');
 
-  const gapSkillsCount = marketPrioritySkills.length;
+  // Single Source of Truth: Canonical ESCO Skill Gaps (ONLY skills with current < target and not verified)
+  const skillGapsList = useMemo(() => {
+    if (careerIntel?.skill_gaps && Array.isArray(careerIntel.skill_gaps)) {
+      return careerIntel.skill_gaps;
+    }
+    if (careerIntel?.skills && Array.isArray(careerIntel.skills)) {
+      return careerIntel.skills.filter(sk => {
+        const curr = Number(sk.current_score ?? 0);
+        const tgt = Number(sk.target_score ?? 85);
+        const isVer = sk.status === 'Verified' || sk.canonical_status === 'verified';
+        return curr < tgt && !isVer;
+      });
+    }
+    return [];
+  }, [careerIntel]);
+
+  const gapSkillsCount = skillGapsList.length || marketPrioritySkills.length;
   const topMarketGaps = marketPrioritySkills.slice(0, 3);
 
-  const topGapSubject = topMarketGaps[0]?.skill || 'Core Skill';
+  const topGapSubject = selectedGapSkillName || skillGapsList[0]?.skill_name || topMarketGaps[0]?.skill || careerSkillData?.top_gaps?.[0]?.skill_name || 'JavaScript';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
@@ -768,13 +874,208 @@ export default function Skill({ profileData, user, setProfileData }) {
         </View>
       </HoverableCard>
 
+      {/* Row 4.5: REQUIRED SKILL MATRIX (SKILL-CENTRIC VIEW) */}
+      <HoverableCard style={[styles.card, styles.verticalSpacing]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.cardTitle}>Required Skill Matrix</Text>
+              <View style={{ backgroundColor: COLORS.mint, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: COLORS.green }}>SKILL-CENTRIC VIEW</Text>
+              </View>
+            </View>
+            <Text style={styles.cardSubtitle}>
+              Canonical ESCO skills for {activeCareerName || 'target career'} and the exact recommended courses mapped to close each skill gap.
+            </Text>
+          </View>
+        </View>
+
+        {highlightedSkillId || highlightedCourseId ? (
+          <View style={{ backgroundColor: COLORS.mint, borderColor: COLORS.green, borderWidth: 1, padding: 10, borderRadius: 8, marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.green }}>
+              🎯 Filter active: Highlighting skills {highlightedCourseId ? `addressed by Course ID: ${highlightedCourseId}` : `for selected skill`}
+            </Text>
+            <Pressable onPress={() => { setHighlightedSkillId(null); setHighlightedCourseId(null); }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.ink }}>✕ Clear Filter</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        <View style={{ gap: 14 }}>
+          {skillGapsList && skillGapsList.length > 0 ? (
+            skillGapsList.map((sk) => {
+              const isHighlighted = (highlightedSkillId && (String(sk.skill_id) === String(highlightedSkillId) || String(sk.esco_id) === String(highlightedSkillId))) ||
+                (highlightedCourseId && sk.recommended_courses?.some(c => String(c.course_id) === String(highlightedCourseId))) ||
+                (selectedGapSkillName && sk.skill_name.toLowerCase() === selectedGapSkillName.toLowerCase());
+              const isVerified = sk.status === 'Verified' || sk.canonical_status === 'verified';
+              const isLearning = sk.status === 'Learning Active' || sk.canonical_status === 'learning_active' || sk.canonical_status === 'developing';
+
+              return (
+                <View
+                  key={sk.skill_id || sk.skill_name}
+                  style={{
+                    backgroundColor: isHighlighted ? '#f0fdf4' : COLORS.panel,
+                    borderColor: isHighlighted ? COLORS.green : COLORS.subtle,
+                    borderWidth: isHighlighted ? 2 : 1,
+                    borderRadius: 10,
+                    padding: 16,
+                    gap: 12
+                  }}
+                >
+                  {/* Skill Card Header */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                    <View style={{ flex: 1, minWidth: 220 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.ink }}>{sk.skill_name}</Text>
+                        <View style={{
+                          backgroundColor: isVerified ? COLORS.greenLight : (isLearning ? COLORS.mint : COLORS.roseLight),
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          borderRadius: 4
+                        }}>
+                          <Text style={{
+                            fontSize: 10,
+                            fontWeight: '800',
+                            color: isVerified ? COLORS.green : (isLearning ? COLORS.teal : COLORS.rose)
+                          }}>
+                            {sk.status.toUpperCase()}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: COLORS.muted }}>ID: {sk.skill_id}</Text>
+                      </View>
+
+                      <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 4 }}>
+                        Current: <Text style={{ fontWeight: '700', color: COLORS.ink }}>{sk.current_score}%</Text> • Target: <Text style={{ fontWeight: '700', color: COLORS.ink }}>{sk.target_score}%</Text> (Gap: {sk.gap}%)
+                      </Text>
+                    </View>
+
+                    {/* Gap Action Buttons */}
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      <Pressable
+                        style={{
+                          backgroundColor: selectedGapSkillName === sk.skill_name ? COLORS.green : COLORS.paper,
+                          borderColor: COLORS.green,
+                          borderWidth: 1,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 6
+                        }}
+                        onPress={() => handleSelectSkillGap(sk.skill_name)}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: selectedGapSkillName === sk.skill_name ? COLORS.paper : COLORS.green }}>
+                          {selectedGapSkillName === sk.skill_name ? 'Active Focus ✓' : 'Focus Gap 🎯'}
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={{
+                          backgroundColor: COLORS.paper,
+                          borderColor: COLORS.green,
+                          borderWidth: 1,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 6
+                        }}
+                        onPress={() => {
+                          if (onNavigate) {
+                            onNavigate('Learning', { selectedSkillId: sk.skill_id, selectedSkillName: sk.skill_name });
+                          }
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: COLORS.green }}>Explore Courses ➔</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Skill Score Progress Bar */}
+                  <View style={{ height: 6, backgroundColor: COLORS.subtle, borderRadius: 3, overflow: 'hidden' }}>
+                    <View style={{
+                      height: '100%',
+                      width: `${Math.min(100, Math.max(0, sk.current_score))}%`,
+                      backgroundColor: isVerified ? COLORS.green : (isLearning ? COLORS.teal : COLORS.rose)
+                    }} />
+                  </View>
+
+                  {/* Connected Recommended Courses List */}
+                  {sk.recommended_courses && sk.recommended_courses.length > 0 ? (
+                    <View style={{ gap: 8, marginTop: 4 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: COLORS.muted, letterSpacing: 0.5 }}>
+                        RECOMMENDED LEARNING RESOURCES FOR THIS GAP:
+                      </Text>
+                      {sk.recommended_courses.map((course, cIdx) => {
+                        const provSlug = (course.provider || '').toLowerCase();
+                        const badgeBg = provSlug.includes('nptel') ? '#e0e7ff' : provSlug.includes('youtube') ? '#fee2e2' : '#fef3c7';
+                        const badgeColor = provSlug.includes('nptel') ? '#3730a3' : provSlug.includes('youtube') ? '#dc2626' : '#92400e';
+                        const badgeBorder = provSlug.includes('nptel') ? '#c7d2fe' : provSlug.includes('youtube') ? '#fca5a5' : '#fde68a';
+
+                        return (
+                          <View
+                            key={course.course_id || cIdx}
+                            style={{
+                              backgroundColor: COLORS.paper,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: COLORS.subtle,
+                              padding: 12,
+                              gap: 6
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 6 }}>
+                              <View style={{ flex: 1, minWidth: 200 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.ink }}>{course.title}</Text>
+                                  <View style={{ backgroundColor: badgeBg, borderColor: badgeBorder, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 9, fontWeight: '800', color: badgeColor }}>{course.provider_name || course.provider}</Text>
+                                  </View>
+                                </View>
+                                <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 2 }}>
+                                  {course.institution || course.instructor ? `${course.institution || course.instructor} • ` : ''}⏱ {course.duration || 'Self-paced'}
+                                </Text>
+                              </View>
+
+                              {/* Action Buttons */}
+                              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                                {course.canonical_url && (
+                                  <Pressable
+                                    style={{ backgroundColor: COLORS.panel, borderWidth: 1, borderColor: COLORS.subtle, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}
+                                    onPress={() => Linking.openURL(course.canonical_url)}
+                                  >
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.ink }}>🔗 Open Resource</Text>
+                                  </Pressable>
+                                )}
+                              </View>
+                            </View>
+
+                            {/* Course Progress in Path */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                              <View style={{ flex: 1, height: 4, backgroundColor: COLORS.subtle, borderRadius: 2, overflow: 'hidden' }}>
+                                <View style={{ height: '100%', width: `${course.progress_percent || 0}%`, backgroundColor: COLORS.green }} />
+                              </View>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.muted }}>
+                                {course.progress_percent || 0}% ({course.status ? course.status.replace('_', ' ') : 'not started'})
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.statDesc}>🎉 Outstanding! You have met or exceeded all required skill thresholds for this career goal.</Text>
+          )}
+        </View>
+      </HoverableCard>
+
       {/* Row 5: Personalized Learning Path */}
       <HoverableCard style={[styles.card, styles.verticalSpacing]}>
         <Text style={styles.cardTitle}>Personalized Learning Path: {topGapSubject}</Text>
         <Text style={styles.cardSubtitle}>Guided path to bridge this skill gap.</Text>
 
         <View style={styles.modulesStepList}>
-          {learningPathData?.modules ? (
+          {learningPathData?.modules && learningPathData.modules.length > 0 ? (
             learningPathData.modules.map((mod, idx) => {
               const isActive = mod.status === 'ACTIVE';
               const isComp = mod.status === 'COMPLETED';
@@ -786,7 +1087,7 @@ export default function Skill({ profileData, user, setProfileData }) {
                     </Text>
                     <View>
                       <Text style={styles.stepTitle}>{mod.title}</Text>
-                      <Text style={styles.stepSubtitle}>{isComp ? `Completed (${mod.duration})` : `Est: ${mod.duration}`}</Text>
+                      <Text style={styles.stepSubtitle}>{isComp ? `Completed (${mod.duration})` : `Est: ${mod.duration} • ${mod.provider || 'ESCO Course'}`}</Text>
                     </View>
                   </View>
                   {isActive && (
@@ -798,15 +1099,15 @@ export default function Skill({ profileData, user, setProfileData }) {
               );
             })
           ) : (
-            <Text style={styles.statDesc}>No learning resources available for this skill yet.</Text>
+            <Text style={styles.statDesc}>No learning path is currently available for this skill.</Text>
           )}
         </View>
       </HoverableCard>
 
       {/* Row 6: Practice & Apply */}
       <HoverableCard style={[styles.card, styles.verticalSpacing]}>
-        <Text style={styles.cardTitle}>Practice & Apply</Text>
-        <Text style={styles.cardSubtitle}>Practical challenges to build hands-on experience.</Text>
+        <Text style={styles.cardTitle}>Practice & Apply: {topGapSubject}</Text>
+        <Text style={styles.cardSubtitle}>Practical challenges to build hands-on experience for {topGapSubject}.</Text>
 
         {practiceChallenge ? (
           <View style={[styles.practiceChallengeBox, !isTablet && styles.flexCol]}>
@@ -814,7 +1115,7 @@ export default function Skill({ profileData, user, setProfileData }) {
               <Text style={styles.practiceTitle}>{practiceChallenge.title}</Text>
               <Text style={styles.practiceDesc}>{practiceChallenge.description}</Text>
               <View style={styles.practiceTagRow}>
-                {practiceChallenge.tags.map((t, idx) => (
+                {practiceChallenge.tags && practiceChallenge.tags.map((t, idx) => (
                   <View key={idx} style={styles.practiceTag}><Text style={styles.practiceTagText}>{t}</Text></View>
                 ))}
               </View>
@@ -824,11 +1125,11 @@ export default function Skill({ profileData, user, setProfileData }) {
               <View style={styles.progressLabelRow}>
                 <Text style={styles.progressLabelText}>Progress</Text>
                 <Text style={styles.progressLabelPercent}>
-                  {practiceChallenge.is_completed ? 'Completed' : `${practiceChallenge.progress_step}/${practiceChallenge.total_steps} Steps`}
+                  {practiceChallenge.is_completed ? 'Completed' : `${practiceChallenge.progress_step || 0}/${practiceChallenge.total_steps || 3} Steps`}
                 </Text>
               </View>
               <View style={styles.challengeTrack}>
-                <View style={[styles.challengeBarFill, { width: `${(practiceChallenge.progress_step / practiceChallenge.total_steps) * 100}%` }]} />
+                <View style={[styles.challengeBarFill, { width: `${((practiceChallenge.progress_step || 0) / (practiceChallenge.total_steps || 3)) * 100}%` }]} />
               </View>
 
               <Pressable 
@@ -840,9 +1141,18 @@ export default function Skill({ profileData, user, setProfileData }) {
                   <ActivityIndicator size="small" color={COLORS.green} />
                 ) : (
                   <Text style={styles.challengeBtnText}>
-                    {practiceChallenge.is_completed ? 'Completed ✓' : 'Start Challenge'}
+                    {practiceChallenge.is_completed ? 'Completed ✓' : (practiceChallenge.progress_step > 0 ? 'Continue Challenge' : 'Start Challenge')}
                   </Text>
                 )}
+              </Pressable>
+              
+              <Pressable 
+                style={[styles.challengeBtn, { marginTop: 12, backgroundColor: COLORS.blue }]}
+                onPress={handleSubmitProjectRepo}
+              >
+                <Text style={styles.challengeBtnText}>
+                  Submit GitHub Repo (Optional)
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -860,13 +1170,19 @@ export default function Skill({ profileData, user, setProfileData }) {
           </View>
           <Pressable 
             style={styles.retakeAssessmentBtn}
-            onPress={handleRetakeAssessment}
+            onPress={() => handleOpenAssessmentModal(topGapSubject)}
             disabled={isVerifyingAssessment}
           >
             {isVerifyingAssessment ? (
               <ActivityIndicator size="small" color={COLORS.green} />
             ) : (
-              <Text style={styles.retakeAssessmentBtnText}>Retake Assessment</Text>
+              <Text style={styles.retakeAssessmentBtnText}>
+                {assessmentHistory.length === 0 
+                  ? `Take ${topGapSubject} Assessment` 
+                  : (assessmentHistory.some(a => a.skill_name?.toLowerCase() === topGapSubject?.toLowerCase() && a.status === 'VERIFIED')
+                      ? `${topGapSubject} Verified ✓` 
+                      : `Take ${topGapSubject} Assessment`)}
+              </Text>
             )}
           </Pressable>
         </View>
@@ -1083,6 +1399,221 @@ export default function Skill({ profileData, user, setProfileData }) {
           </View>
         )}
       </HoverableCard>
+
+      {/* Interactive Assessment Modal */}
+      <Modal
+        visible={assessmentModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setAssessmentModalVisible(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 16
+        }}>
+          <View style={{
+            backgroundColor: COLORS.paper,
+            borderRadius: 16,
+            maxWidth: 680,
+            width: '100%',
+            maxHeight: '90%',
+            padding: 24,
+            borderWidth: 1,
+            borderColor: COLORS.subtle,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            elevation: 10
+          }}>
+            {/* Modal Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: COLORS.subtle, paddingBottom: 16, marginBottom: 16 }}>
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.ink }}>
+                  {assessmentData?.title || `${assessmentData?.skill_name || 'Skill'} Assessment`}
+                </Text>
+                <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>
+                  Canonical Skill Verification • {assessmentData?.questions?.length || 0} Questions
+                </Text>
+              </View>
+              <Pressable 
+                onPress={() => setAssessmentModalVisible(false)}
+                style={{ padding: 6, borderRadius: 6, backgroundColor: COLORS.canvas }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.muted }}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
+              {assessmentResult ? (
+                /* Assessment Completed Result View */
+                <View style={{ alignItems: 'center', paddingVertical: 20, gap: 16 }}>
+                  <View style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 36,
+                    backgroundColor: assessmentResult.is_verified ? COLORS.greenLight : COLORS.roseLight,
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}>
+                    <Text style={{ fontSize: 32 }}>{assessmentResult.is_verified ? '🏆' : '⚠️'}</Text>
+                  </View>
+
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: COLORS.ink }}>
+                    {assessmentResult.is_verified ? 'Assessment Passed & Verified!' : 'Verification Threshold Not Met'}
+                  </Text>
+
+                  <View style={{
+                    backgroundColor: COLORS.panel,
+                    borderRadius: 12,
+                    padding: 20,
+                    width: '100%',
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: COLORS.subtle
+                  }}>
+                    <Text style={{ fontSize: 40, fontWeight: '900', color: assessmentResult.is_verified ? COLORS.green : COLORS.rose }}>
+                      {assessmentResult.score}%
+                    </Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.muted, marginTop: 4 }}>
+                      Correct: {assessmentResult.correct_count} of {assessmentResult.total_questions} Questions
+                    </Text>
+                    <Text style={{ fontSize: 12, color: COLORS.ink, textAlign: 'center', marginTop: 12, lineHeight: 18 }}>
+                      {assessmentResult.feedback}
+                    </Text>
+                  </View>
+
+                  {assessmentResult.is_verified && (
+                    <View style={{ backgroundColor: COLORS.mint, padding: 12, borderRadius: 8, width: '100%' }}>
+                      <Text style={{ fontSize: 12, color: COLORS.green, fontWeight: '700', textAlign: 'center' }}>
+                        ✓ Your verified evidence in PostgreSQL has been updated to {assessmentResult.score}%.
+                      </Text>
+                    </View>
+                  )}
+
+                  <Pressable
+                    style={{
+                      backgroundColor: COLORS.ink,
+                      paddingVertical: 12,
+                      paddingHorizontal: 32,
+                      borderRadius: 8,
+                      marginTop: 8
+                    }}
+                    onPress={() => setAssessmentModalVisible(false)}
+                  >
+                    <Text style={{ color: COLORS.paper, fontWeight: '800', fontSize: 14 }}>Close & View Updated Matrix</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                /* Assessment Questions Form */
+                <View style={{ gap: 20 }}>
+                  {assessmentData?.questions && assessmentData.questions.map((q, qIdx) => (
+                    <View key={q.id || qIdx} style={{
+                      backgroundColor: COLORS.panel,
+                      borderRadius: 10,
+                      padding: 16,
+                      borderWidth: 1,
+                      borderColor: COLORS.subtle
+                    }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.ink, marginBottom: 12 }}>
+                        Question {qIdx + 1}: {q.question_text}
+                      </Text>
+
+                      <View style={{ gap: 8 }}>
+                        {['A', 'B', 'C', 'D'].map((optKey) => {
+                          const optText = q[`option_${optKey.toLowerCase()}`];
+                          if (!optText) return null;
+                          const isSelected = selectedAnswers[q.id] === optKey;
+
+                          return (
+                            <Pressable
+                              key={optKey}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 10,
+                                paddingVertical: 10,
+                                paddingHorizontal: 14,
+                                borderRadius: 8,
+                                borderWidth: 1.5,
+                                borderColor: isSelected ? COLORS.green : COLORS.subtle,
+                                backgroundColor: isSelected ? '#f0fdf4' : COLORS.paper
+                              }}
+                              onPress={() => {
+                                setSelectedAnswers(prev => ({ ...prev, [q.id]: optKey }));
+                              }}
+                            >
+                              <View style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: 12,
+                                borderWidth: 1.5,
+                                borderColor: isSelected ? COLORS.green : COLORS.muted,
+                                backgroundColor: isSelected ? COLORS.green : 'transparent',
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                              }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: isSelected ? COLORS.paper : COLORS.muted }}>
+                                  {optKey}
+                                </Text>
+                              </View>
+                              <Text style={{ fontSize: 13, color: isSelected ? COLORS.ink : COLORS.ink, fontWeight: isSelected ? '700' : '400', flex: 1 }}>
+                                {optText}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Modal Footer (When Answering) */}
+            {!assessmentResult && (
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, borderTopWidth: 1, borderTopColor: COLORS.subtle, paddingTop: 16, marginTop: 16 }}>
+                <Pressable
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 18,
+                    borderRadius: 8,
+                    backgroundColor: COLORS.canvas,
+                    borderWidth: 1,
+                    borderColor: COLORS.subtle
+                  }}
+                  onPress={() => setAssessmentModalVisible(false)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.muted }}>Cancel</Text>
+                </Pressable>
+
+                <Pressable
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 22,
+                    borderRadius: 8,
+                    backgroundColor: COLORS.green,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8
+                  }}
+                  onPress={handleSubmitAssessmentModal}
+                  disabled={isSubmittingAssessment}
+                >
+                  {isSubmittingAssessment ? (
+                    <ActivityIndicator size="small" color={COLORS.paper} />
+                  ) : (
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: COLORS.paper }}>Submit Assessment</Text>
+                  )}
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
     </ScrollView>
   );

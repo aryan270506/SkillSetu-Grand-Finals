@@ -15,6 +15,7 @@ import {
 import Dashboard from '../Dashboard/Dashboard';
 import Profile, { DEFAULT_MOCK_PROFILE } from '../Profile/Profile';
 import { createInitialProfile, fetchCompleteStudentProfile } from '../services/profileService';
+import { sendMessageToMentor, fetchMentorHistory, resetMentorConversation, fetchSuggestedPrompts } from '../services/mentorService';
 import Resume from '../Resume/Resume';
 import Skill from '../Skill/Skill';
 import Internship from '../Internship/Internship';
@@ -56,16 +57,31 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
   }, [user]);
 
   const [activeTab, setActiveTab] = useState('Dashboard');
+  const [navigationParams, setNavigationParams] = useState({});
   const [showDropdown, setShowDropdown] = useState(false);
+
+  const handleNavigate = (tabName, params = {}) => {
+    setNavigationParams(params || {});
+    setActiveTab(tabName);
+  };
 
   // AI Mentor states
   const [showMentor, setShowMentor] = useState(false);
   const [mentorInput, setMentorInput] = useState('');
+  const [mentorConversationId, setMentorConversationId] = useState(null);
+  const [isMentorLoading, setIsMentorLoading] = useState(false);
+  const [suggestedPrompts, setSuggestedPrompts] = useState([
+    "What internships fit my profile?",
+    "What skills am I missing for my target career?",
+    "What should I learn next?",
+    "Am I ready for a backend/fullstack role?",
+    "How can I improve my resume ATS score?"
+  ]);
   const [mentorMessages, setMentorMessages] = useState([
     {
       id: 1,
       sender: 'ai',
-      text: "Hi! I'm your SkillSetu AI Mentor 👋\n\nI can help you understand your skills, improve your profile, find internships, optimize your resume, and prepare for interviews.",
+      text: "Hi! I'm your Personal AI Career Mentor 👋\n\nI know your SkillSetu profile, verified skills, and career goals. Ask me about matching internships, your skill gaps, course roadmaps, or resume ATS score!",
       timestamp: 'Now',
     }
   ]);
@@ -73,6 +89,21 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
 
   // Animation for side mentor drawer sliding in
   const mentorSlideAnim = useRef(new Animated.Value(width)).current;
+
+  // Load conversation history and dynamic prompts when mentor opens
+  useEffect(() => {
+    if (showMentor && user?.email) {
+      fetchSuggestedPrompts(user.email).then(prompts => {
+        if (prompts && prompts.length > 0) setSuggestedPrompts(prompts);
+      });
+      fetchMentorHistory(user.email, mentorConversationId).then(hist => {
+        if (hist && hist.messages && hist.messages.length > 0) {
+          setMentorMessages(hist.messages);
+          if (hist.conversationId) setMentorConversationId(hist.conversationId);
+        }
+      });
+    }
+  }, [showMentor, user?.email]);
 
   useEffect(() => {
     if (showMentor) {
@@ -178,7 +209,7 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
           <Dashboard
             user={user}
             profileCompletion={calculateProfileCompletion()}
-            onNavigateToProfile={() => setActiveTab('Profile')}
+            onNavigateToProfile={() => handleNavigate('Profile')}
             profileData={profileData}
             setProfileData={setProfileData}
           />
@@ -190,7 +221,7 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
             updateUser={onUpdateUser}
             profileData={profileData}
             setProfileData={setProfileData}
-            onFinish={() => setActiveTab('Dashboard')}
+            onFinish={() => handleNavigate('Dashboard')}
           />
         );
       case 'Resume':
@@ -206,10 +237,19 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
             user={user}
             profileData={profileData}
             setProfileData={setProfileData}
+            navigationParams={navigationParams}
+            onNavigate={handleNavigate}
           />
         );
       case 'Learning':
-        return <Learning user={user} profileData={profileData} />;
+        return (
+          <Learning
+            user={user}
+            profileData={profileData}
+            navigationParams={navigationParams}
+            onNavigate={handleNavigate}
+          />
+        );
       case 'Opportunities':
         return (
           <Internship
@@ -244,298 +284,253 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
     }
   }, [mentorMessages]);
 
-  const handleSendMessage = () => {
-    if (!mentorInput.trim()) return;
+  const handleSendMessage = async (customPrompt = null) => {
+    const textToSend = (typeof customPrompt === 'string' ? customPrompt : mentorInput).trim();
+    if (!textToSend || isMentorLoading) return;
 
-    const userMsgText = mentorInput;
     setMentorInput('');
-
     const userMsgId = Date.now();
     const newMessages = [
       ...mentorMessages,
-      { id: userMsgId, sender: 'user', text: userMsgText, timestamp: 'Now' }
+      { id: userMsgId, sender: 'user', text: textToSend, timestamp: 'Now' }
     ];
     setMentorMessages(newMessages);
+    setIsMentorLoading(true);
 
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(userMsgText.toLowerCase());
-      setMentorMessages(prev => [...prev, aiResponse]);
-    }, 600);
-  };
-
-  const handleQuickAction = (actionKey, label) => {
-    const userMsgId = Date.now();
-    setMentorMessages(prev => [
-      ...prev,
-      { id: userMsgId, sender: 'user', text: label, timestamp: 'Now' }
-    ]);
-
-    setTimeout(() => {
-      let aiResponse;
-      switch (actionKey) {
-        case 'next_action':
-        case 'context_applications':
-          aiResponse = {
-            id: Date.now(),
-            sender: 'ai',
-            text: "Your high-priority next actions:\n\n1. Complete **FinFlow Technical Assessment** (Data Analyst Intern) before the Sep 5 deadline.\n2. Review matching backend opportunities: 8 'Almost Eligible' roles can be unlocked if you verify Docker basics.\n3. Check feedback on your InnovateLabs application.",
-            richContent: {
-              type: 'text_link',
-              label: 'Go to Applications',
-              actionTab: 'Applications'
-            }
-          };
-          break;
-        case 'what_to_learn':
-        case 'context_learning':
-          aiResponse = {
-            id: Date.now(),
-            sender: 'ai',
-            text: "You have outstanding foundational Python and database knowledge. However, backend and DevOps roles require containerization.\n\nLearning **Docker** is your next best step to increase your Career Match Rate from 76% to 94%.",
-            richContent: {
-              type: 'skill_card',
-              title: 'Docker (Containerization Basics)',
-              percentage: 52,
-              current: 42,
-              target: 80,
-              buttonLabel: 'Start Docker Course',
-              actionTab: 'Learning'
-            }
-          };
-          break;
-        case 'find_internships':
-        case 'context_opportunities':
-          aiResponse = {
-            id: Date.now(),
-            sender: 'ai',
-            text: "Here are the top personalized matches matching your profile right now:",
-            richContent: {
-              type: 'internships_list',
-              jobs: [
-                { title: 'Backend Developer Intern', company: 'TechNova Solutions', match: 92 },
-                { title: 'Frontend Intern', company: 'Nexus E-commerce', match: 88 },
-                { title: 'Data Analyst Intern', company: 'FinFlow Analytics', match: 81 }
-              ]
-            }
-          };
-          break;
-        case 'improve_resume':
-        case 'context_resume':
-          aiResponse = {
-            id: Date.now(),
-            sender: 'ai',
-            text: "Your current resume has a general match score of 76%.\n\nTo hit a **91% ATS match** for TechNova and other backend roles, make these quick optimizations:",
-            richContent: {
-              type: 'resume_insights',
-              score: 76,
-              points: [
-                "Include 'RESTful APIs' and 'FastAPI' keywords in your project summary.",
-                "Detail your 'E-commerce API' database architecture using Postgres/SQL.",
-                "Highlight basic command-line tool usage."
-              ]
-            }
-          };
-          break;
-        case 'analyze_skills':
-        case 'context_skills':
-          aiResponse = {
-            id: Date.now(),
-            sender: 'ai',
-            text: "Here is your skill gap breakdown:\n\n• **Docker**: Missing required core competency (42/80). High impact.\n• **AWS**: Missing basic cloud deployment knowledge (0/50). Medium impact.\n• **Tableau**: Required for Data Analyst roles.\n\nI recommend starting with Docker to make yourself eligible for 8 new roles.",
-            richContent: {
-              type: 'text_link',
-              label: 'View Skill Intelligence',
-              actionTab: 'Skills'
-            }
-          };
-          break;
-        case 'prepare_interview':
-          aiResponse = {
-            id: Date.now(),
-            sender: 'ai',
-            text: "You have 1 active interview prep workspace available for **WebSolutions Inc. (Frontend Developer)**.\n\nOur AI mock interview simulator is ready to test you on React state hooks and flexbox layout designs.",
-            richContent: {
-              type: 'text_link',
-              label: 'Go to Interview Prep',
-              actionTab: 'InterviewPrep'
-            }
-          };
-          break;
-        case 'improve_career_match':
-          aiResponse = {
-            id: Date.now(),
-            sender: 'ai',
-            text: "To improve your overall Career Match Score (76%):\n\n1. Verify your pending SQL skill in Skill Intelligence.\n2. Complete the Resume Optimization worksheet to tailored 91% ATS score.\n3. Add your GitHub link to analyze your e-commerce repository.",
-            richContent: {
-              type: 'text_link',
-              label: 'Go to Skill Profile',
-              actionTab: 'Skills'
-            }
-          };
-          break;
-        default:
-          aiResponse = {
-            id: Date.now(),
-            sender: 'ai',
-            text: "I'm analyzing your profile context. How else can I assist you with your career goals?"
-          };
+    try {
+      const aiResponse = await sendMessageToMentor(user?.email, textToSend, mentorConversationId);
+      if (aiResponse) {
+        if (aiResponse.conversation_id) {
+          setMentorConversationId(aiResponse.conversation_id);
+        }
+        setMentorMessages(prev => [...prev, aiResponse]);
       }
-      setMentorMessages(prev => [...prev, aiResponse]);
-    }, 600);
+    } catch (err) {
+      console.error('Error in mentor chat:', err);
+      setMentorMessages(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          sender: 'ai',
+          text: "I couldn't retrieve the latest intelligence from the server right now. Your SkillSetu profile is safe. Please check your connection and try again in a moment.",
+          timestamp: 'Now'
+        }
+      ]);
+    } finally {
+      setIsMentorLoading(false);
+    }
   };
 
-  const generateAIResponse = (inputLower) => {
-    if (inputLower.includes('docker') || inputLower.includes('learn') || inputLower.includes('gap')) {
-      return {
-        id: Date.now(),
-        sender: 'ai',
-        text: "Docker is currently your biggest skill gap. Improving this skill unlocks 8 backend developer roles.",
-        richContent: {
-          type: 'skill_card',
-          title: 'Docker',
-          percentage: 52,
-          current: 42,
-          target: 80,
-          buttonLabel: 'Learn Docker',
-          actionTab: 'Learning'
+  const handleResetConversation = async () => {
+    setIsMentorLoading(true);
+    try {
+      await resetMentorConversation(user?.email);
+      setMentorConversationId(null);
+      setMentorMessages([
+        {
+          id: Date.now(),
+          sender: 'ai',
+          text: `Hi ${user?.name || 'there'}! Started a fresh career guidance session 👋\n\nHow can I help you plan your career, find internships, or close skill gaps today?`,
+          timestamp: 'Now'
         }
-      };
+      ]);
+      const prompts = await fetchSuggestedPrompts(user?.email);
+      if (prompts && prompts.length > 0) setSuggestedPrompts(prompts);
+    } catch (err) {
+      console.error('Error resetting mentor session:', err);
+    } finally {
+      setIsMentorLoading(false);
     }
-    if (inputLower.includes('resume') || inputLower.includes('ats')) {
-      return {
-        id: Date.now(),
-        sender: 'ai',
-        text: "You can optimize your resume ATS score from 76% to 91% by matching key technical competencies.",
-        richContent: {
-          type: 'resume_insights',
-          score: 76,
-          points: [
-            "Tailor summaries with Docker/AWS details.",
-            "Detail Postgres design patterns."
-          ]
-        }
-      };
-    }
-    if (inputLower.includes('internship') || inputLower.includes('job') || inputLower.includes('match')) {
-      return {
-        id: Date.now(),
-        sender: 'ai',
-        text: "You are currently eligible for 12 roles. Here are your top matches:",
-        richContent: {
-          type: 'internships_list',
-          jobs: [
-            { title: 'Backend Developer Intern', company: 'TechNova Solutions', match: 92 },
-            { title: 'Frontend Intern', company: 'Nexus E-commerce', match: 88 }
-          ]
-        }
-      };
-    }
-
-    return {
-      id: Date.now(),
-      sender: 'ai',
-      text: `Got your question! Based on your active screen (${activeTab}) and profile, you can check your skill recommendations or resume tailoring to maximize your success. Let me know if you'd like to analyze skills or inspect matches.`
-    };
   };
 
   const getContextualActionButton = () => {
     switch (activeTab) {
       case 'Skills':
-        return { label: 'Explain My Skill Gap', action: 'context_skills' };
+        return { label: 'Explain My Skill Gap', prompt: 'Explain my biggest skill gaps and how to close them.' };
       case 'Opportunities':
-        return { label: 'Why Do I Match This?', action: 'context_opportunities' };
+        return { label: 'Why Do I Match These Roles?', prompt: 'Why do I match these internships and how can I improve my match score?' };
       case 'Resume':
-        return { label: 'Improve My Resume', action: 'context_resume' };
+        return { label: 'Improve My Resume ATS', prompt: 'How can I optimize my resume ATS score for backend and fullstack roles?' };
       case 'Applications':
-        return { label: 'What Should I Do Next?', action: 'context_applications' };
+        return { label: 'What Should I Do Next?', prompt: 'What is my highest-priority career action this week?' };
       case 'Learning':
-        return { label: 'Create My Learning Plan', action: 'context_learning' };
+        return { label: 'Create 30-Day Learning Plan', prompt: 'Generate a prioritized 30-day learning roadmap for my target career.' };
+      case 'InterviewPrep':
+        return { label: 'Start Technical Mock', prompt: 'Give me technical mock interview questions for my verified skills.' };
       default:
         return null;
     }
   };
 
+  // Helper to render bold markdown formatting and structured line breaks
+  const renderFormattedText = (rawText, isUser) => {
+    if (!rawText) return null;
+    const lines = rawText.split('\n');
+
+    return (
+      <View style={{ gap: 4 }}>
+        {lines.map((line, lIdx) => {
+          if (!line.trim()) {
+            return <View key={lIdx} style={{ height: 4 }} />;
+          }
+
+          // Split line by bold tokens **bold**
+          const parts = line.split(/(\*\*.*?\*\*)/g);
+
+          return (
+            <Text
+              key={lIdx}
+              style={[
+                styles.messageText,
+                isUser ? styles.messageTextUser : styles.messageTextAI
+              ]}
+            >
+              {parts.map((part, pIdx) => {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                  const boldContent = part.slice(2, -2);
+                  return (
+                    <Text
+                      key={pIdx}
+                      style={[
+                        styles.messageTextBold,
+                        isUser ? styles.messageTextBoldUser : styles.messageTextBoldAI
+                      ]}
+                    >
+                      {boldContent}
+                    </Text>
+                  );
+                }
+                return part;
+              })}
+            </Text>
+          );
+        })}
+      </View>
+    );
+  };
+
   const renderRichContent = (rich) => {
+    if (!rich || !rich.type) return null;
+
     switch (rich.type) {
       case 'skill_card':
         return (
           <View style={styles.richSkillCard}>
-            <Text style={styles.richSkillTitle}>{rich.title}</Text>
-            <View style={styles.richProgressTrack}>
-              <View style={[styles.richProgressBar, { width: `${rich.percentage}%` }]} />
+            <View style={styles.richCardHeader}>
+              <Text style={styles.richSkillTitle}>{rich.title || rich.skillName}</Text>
+              {rich.provider && (
+                <View style={styles.richProviderBadge}>
+                  <Text style={styles.richProviderBadgeText}>{rich.provider}</Text>
+                </View>
+              )}
             </View>
-            <View style={styles.richMetaRow}>
-              <Text style={styles.richMetaLabel}>Current: {rich.current}%</Text>
-              <Text style={styles.richMetaLabel}>➔ Target: {rich.target}%</Text>
-            </View>
-            {rich.buttonLabel && (
-              <Pressable
-                style={styles.richActionBtn}
-                onPress={() => {
-                  setShowMentor(false);
-                  setActiveTab(rich.actionTab);
-                }}
-              >
-                <Text style={styles.richActionBtnText}>{rich.buttonLabel}</Text>
-              </Pressable>
+
+            {rich.percentage !== undefined && (
+              <View style={styles.richProgressTrack}>
+                <View style={[styles.richProgressBar, { width: `${Math.min(100, Math.max(5, rich.percentage))}%` }]} />
+              </View>
             )}
+
+            {(rich.current !== undefined || rich.target !== undefined) && (
+              <View style={styles.richMetaRow}>
+                <Text style={styles.richMetaLabel}>Current: {rich.current || 0}%</Text>
+                <Text style={styles.richMetaLabel}>➔ Target: {rich.target || 85}%</Text>
+              </View>
+            )}
+
+            {rich.duration && (
+              <Text style={styles.richDurationText}>⏱ Duration: {rich.duration}</Text>
+            )}
+
+            <Pressable
+              style={styles.richActionBtn}
+              onPress={() => {
+                setShowMentor(false);
+                setActiveTab(rich.actionTab || 'Learning');
+              }}
+            >
+              <Text style={styles.richActionBtnText}>{rich.buttonLabel || 'Start Learning Module'}</Text>
+            </Pressable>
           </View>
         );
+
       case 'resume_insights':
         return (
           <View style={styles.richResumeBox}>
-            <Text style={styles.richResumeScoreTitle}>Resume ATS Score: {rich.score}%</Text>
-            <View style={styles.richChecklist}>
-              {rich.points.map((pt, idx) => (
-                <Text key={idx} style={styles.richChecklistItem}>• {pt}</Text>
-              ))}
+            <View style={styles.richResumeHeaderRow}>
+              <Text style={styles.richResumeScoreTitle}>ATS Score</Text>
+              <View style={styles.richResumeScoreBadge}>
+                <Text style={styles.richResumeScoreBadgeText}>{rich.score || 80}/100</Text>
+              </View>
             </View>
+
+            {rich.points && rich.points.length > 0 && (
+              <View style={styles.richChecklist}>
+                {rich.points.map((pt, idx) => (
+                  <View key={idx} style={styles.richChecklistRow}>
+                    <Text style={styles.richChecklistBullet}>✓</Text>
+                    <Text style={styles.richChecklistItem}>{pt}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
             <Pressable
               style={styles.richActionBtn}
               onPress={() => {
                 setShowMentor(false);
-                setActiveTab('Resume');
+                setActiveTab(rich.actionTab || 'Resume');
               }}
             >
-              <Text style={styles.richActionBtnText}>Tailor Resume Now</Text>
+              <Text style={styles.richActionBtnText}>{rich.buttonLabel || 'Optimize Resume in Studio'}</Text>
             </Pressable>
           </View>
         );
+
       case 'internships_list':
         return (
           <View style={styles.richInternshipsBox}>
-            {rich.jobs.map((job, idx) => (
+            <Text style={styles.richInternshipsHeaderTitle}>{rich.title || 'Recommended Opportunities'}</Text>
+            {(rich.jobs || []).map((job, idx) => (
               <View key={idx} style={styles.richJobRow}>
                 <View style={styles.richJobHeader}>
-                  <Text style={styles.richJobTitle}>{job.title}</Text>
-                  <Text style={styles.richJobMatch}>{job.match}% Match</Text>
+                  <Text style={styles.richJobTitle} numberOfLines={1}>{job.title}</Text>
+                  <View style={styles.richMatchBadge}>
+                    <Text style={styles.richMatchBadgeText}>{job.match}% Match</Text>
+                  </View>
                 </View>
-                <Text style={styles.richJobCompany}>{job.company}</Text>
+                <Text style={styles.richJobCompany}>{job.company} • {job.location || 'Remote'}</Text>
+                {job.stipend && (
+                  <Text style={styles.richJobStipend}>{job.stipend}</Text>
+                )}
               </View>
             ))}
+
             <Pressable
               style={styles.richActionBtn}
               onPress={() => {
                 setShowMentor(false);
-                setActiveTab('Opportunities');
+                setActiveTab(rich.actionTab || 'Opportunities');
               }}
             >
-              <Text style={styles.richActionBtnText}>Go to Opportunities</Text>
+              <Text style={styles.richActionBtnText}>{rich.buttonLabel || 'Explore Matching Internships'}</Text>
             </Pressable>
           </View>
         );
+
       case 'text_link':
         return (
           <Pressable
             style={styles.richLinkBtn}
             onPress={() => {
               setShowMentor(false);
-              setActiveTab(rich.actionTab);
+              setActiveTab(rich.actionTab || 'Dashboard');
             }}
           >
             <Text style={styles.richLinkBtnText}>{rich.label} ➔</Text>
           </Pressable>
         );
+
       default:
         return null;
     }
@@ -702,16 +697,28 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
         {/* Header */}
         <View style={styles.mentorHeader}>
           <View style={styles.mentorHeaderInfo}>
-            <Text style={styles.mentorTitle}>AI Mentor</Text>
-            <Text style={styles.mentorSubtitle}>Your personal SkillSetu career assistant</Text>
-            <View style={styles.mentorStatusRow}>
-              <View style={styles.statusDot} />
-              <Text style={styles.mentorStatusText}>Ready</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.mentorTitle}>Personal AI Career Mentor</Text>
+              <Text style={{ fontSize: 13 }}>✨</Text>
             </View>
+            <Text style={styles.mentorSubtitle}>
+              Tailored for {user?.name || 'You'}
+            </Text>
+           
           </View>
-          <Pressable style={styles.closeMentorBtn} onPress={() => setShowMentor(false)}>
-            <Text style={styles.closeMentorBtnText}>×</Text>
-          </Pressable>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              style={styles.resetMentorBtn}
+              onPress={handleResetConversation}
+              disabled={isMentorLoading}
+            >
+              <Text style={styles.resetMentorBtnText}>↻ New</Text>
+            </Pressable>
+            <Pressable style={styles.closeMentorBtn} onPress={() => setShowMentor(false)}>
+              <Text style={styles.closeMentorBtnText}>×</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Messages list */}
@@ -732,28 +739,38 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
                 styles.messageBubble,
                 msg.sender === 'user' ? styles.messageBubbleUser : styles.messageBubbleAI
               ]}>
-                <Text style={[
-                  styles.messageText,
-                  msg.sender === 'user' ? styles.messageTextUser : styles.messageTextAI
-                ]}>
-                  {msg.text}
-                </Text>
+                {renderFormattedText(msg.text, msg.sender === 'user')}
 
-                {/* Render Rich component if exists */}
+                {/* Render Rich widget component if exists */}
                 {msg.richContent && renderRichContent(msg.richContent)}
               </View>
             </View>
           ))}
+
+          {/* Typing / Loading Indicator */}
+          {isMentorLoading && (
+            <View style={[styles.messageRow, styles.messageRowAI]}>
+              <View style={[styles.messageBubble, styles.messageBubbleAI, styles.loadingBubble]}>
+                <View style={styles.loadingDotsRow}>
+                  <View style={[styles.loadingDot, styles.loadingDot1]} />
+                  <View style={[styles.loadingDot, styles.loadingDot2]} />
+                  <View style={[styles.loadingDot, styles.loadingDot3]} />
+                  <Text style={styles.loadingText}>Analyzing your profile & SkillSetu data...</Text>
+                </View>
+              </View>
+            </View>
+          )}
         </ScrollView>
 
-        {/* Quick Actions */}
+        {/* Dynamic Suggested Prompts */}
         <View style={styles.quickActionsContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsScroll}>
-            {/* Contextual Action Button */}
+            {/* Contextual Action Button based on active screen tab */}
             {getContextualActionButton() && (
               <Pressable
                 style={[styles.quickActionBtn, styles.quickActionBtnContextual]}
-                onPress={() => handleQuickAction(getContextualActionButton().action, getContextualActionButton().label)}
+                onPress={() => handleSendMessage(getContextualActionButton().prompt)}
+                disabled={isMentorLoading}
               >
                 <Text style={[styles.quickActionText, styles.quickActionTextContextual]}>
                   ✨ {getContextualActionButton().label}
@@ -761,21 +778,14 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
               </Pressable>
             )}
 
-            {[
-              { label: '🎯 Next Best Action', action: 'next_action' },
-              { label: '📚 What Should I Learn?', action: 'what_to_learn' },
-              { label: '💼 Find Internships', action: 'find_internships' },
-              { label: '📄 Improve Resume', action: 'improve_resume' },
-              { label: '🧠 Analyze My Skills', action: 'analyze_skills' },
-              { label: '🎤 Prepare Interview', action: 'prepare_interview' },
-              { label: '🚀 Improve Career Match', action: 'improve_career_match' },
-            ].map((qa, index) => (
+            {suggestedPrompts.map((promptText, index) => (
               <Pressable
                 key={index}
                 style={styles.quickActionBtn}
-                onPress={() => handleQuickAction(qa.action, qa.label)}
+                onPress={() => handleSendMessage(promptText)}
+                disabled={isMentorLoading}
               >
-                <Text style={styles.quickActionText}>{qa.label}</Text>
+                <Text style={styles.quickActionText}>{promptText}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -785,14 +795,19 @@ export default function StudentHeader({ user, onLogout, onUpdateUser }) {
         <View style={styles.mentorInputRow}>
           <TextInput
             style={styles.mentorTextInput}
-            placeholder="Ask AI Mentor anything..."
+            placeholder="Ask your career mentor anything..."
             placeholderTextColor="#74766f"
             value={mentorInput}
             onChangeText={setMentorInput}
-            onSubmitEditing={handleSendMessage}
+            onSubmitEditing={() => handleSendMessage()}
+            editable={!isMentorLoading}
           />
-          <Pressable style={styles.mentorSendBtn} onPress={handleSendMessage}>
-            <Text style={styles.mentorSendBtnText}>Send</Text>
+          <Pressable
+            style={[styles.mentorSendBtn, isMentorLoading && styles.mentorSendBtnDisabled]}
+            onPress={() => handleSendMessage()}
+            disabled={isMentorLoading || !mentorInput.trim()}
+          >
+            <Text style={styles.mentorSendBtnText}>{isMentorLoading ? '...' : 'Send ➤'}</Text>
           </Pressable>
         </View>
       </Animated.View>
@@ -1206,10 +1221,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c7c55',
     marginRight: 6,
   },
+  statusDotActive: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+    marginRight: 6,
+  },
   mentorStatusText: {
     fontSize: 11.5,
     fontWeight: '600',
     color: '#1c7c55',
+  },
+  resetMentorBtn: {
+    backgroundColor: '#e6f4ea',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ccebd7',
+  },
+  resetMentorBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#137333',
   },
   closeMentorBtn: {
     width: 28,
@@ -1240,7 +1275,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   messageBubble: {
-    maxWidth: '85%',
+    maxWidth: '88%',
     borderRadius: 16,
     padding: 12,
   },
@@ -1254,7 +1289,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 13.5,
-    lineHeight: 19,
+    lineHeight: 20,
     textAlign: 'left',
   },
   messageTextUser: {
@@ -1262,6 +1297,40 @@ const styles = StyleSheet.create({
   },
   messageTextAI: {
     color: '#111318',
+  },
+  messageTextBold: {
+    fontWeight: '700',
+  },
+  messageTextBoldUser: {
+    color: '#ffffff',
+  },
+  messageTextBoldAI: {
+    color: '#071f14',
+  },
+  loadingBubble: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  loadingDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  loadingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16a34a',
+  },
+  loadingDot1: { opacity: 0.4 },
+  loadingDot2: { opacity: 0.7 },
+  loadingDot3: { opacity: 1.0 },
+  loadingText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#166534',
+    marginLeft: 4,
   },
   quickActionsContainer: {
     borderTopWidth: 1,
@@ -1278,7 +1347,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#dedfd3',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1310,7 +1379,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f3',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
     fontSize: 13.5,
     color: '#111318',
     outlineStyle: 'none',
@@ -1318,8 +1387,11 @@ const styles = StyleSheet.create({
   mentorSendBtn: {
     backgroundColor: '#00685f',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 8,
+  },
+  mentorSendBtnDisabled: {
+    opacity: 0.5,
   },
   mentorSendBtnText: {
     color: '#ffffff',
@@ -1335,14 +1407,34 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     marginTop: 10,
-    width: 260,
+    width: 270,
+  },
+  richCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   richSkillTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#111318',
-    marginBottom: 6,
+    flex: 1,
+    marginRight: 6,
     textAlign: 'left',
+  },
+  richProviderBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  richProviderBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1d4ed8',
   },
   richProgressTrack: {
     height: 6,
@@ -1359,23 +1451,29 @@ const styles = StyleSheet.create({
   richMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   richMetaLabel: {
     fontSize: 11,
     color: '#74766f',
     fontWeight: '500',
   },
+  richDurationText: {
+    fontSize: 11,
+    color: '#74766f',
+    marginBottom: 10,
+  },
   richActionBtn: {
     backgroundColor: '#00685f',
     borderRadius: 6,
-    paddingVertical: 6,
+    paddingVertical: 8,
     alignItems: 'center',
+    marginTop: 4,
   },
   richActionBtnText: {
     color: '#ffffff',
     fontSize: 11.5,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   richResumeBox: {
     backgroundColor: '#ffffff',
@@ -1384,23 +1482,52 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     marginTop: 10,
-    width: 260,
+    width: 270,
+  },
+  richResumeHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   richResumeScoreTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#111318',
-    marginBottom: 8,
     textAlign: 'left',
   },
+  richResumeScoreBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  richResumeScoreBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#15803d',
+  },
   richChecklist: {
-    gap: 4,
+    gap: 6,
     marginBottom: 10,
+  },
+  richChecklistRow: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'flex-start',
+  },
+  richChecklistBullet: {
+    fontSize: 12,
+    color: '#16a34a',
+    fontWeight: 'bold',
   },
   richChecklistItem: {
     fontSize: 11.5,
-    color: '#74766f',
-    lineHeight: 15,
+    color: '#4b5563',
+    lineHeight: 16,
+    flex: 1,
     textAlign: 'left',
   },
   richInternshipsBox: {
@@ -1410,17 +1537,24 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     marginTop: 10,
-    width: 260,
+    width: 270,
     gap: 8,
+  },
+  richInternshipsHeaderTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#111318',
+    marginBottom: 4,
   },
   richJobRow: {
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f3',
-    paddingBottom: 6,
+    paddingBottom: 8,
   },
   richJobHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
   richJobTitle: {
     fontSize: 12.5,
@@ -1430,10 +1564,16 @@ const styles = StyleSheet.create({
     marginRight: 6,
     textAlign: 'left',
   },
-  richJobMatch: {
+  richMatchBadge: {
+    backgroundColor: '#e6f4ea',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  richMatchBadgeText: {
     fontSize: 11,
-    color: '#1c7c55',
-    fontWeight: '700',
+    color: '#137333',
+    fontWeight: '800',
   },
   richJobCompany: {
     fontSize: 11,
@@ -1441,12 +1581,22 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'left',
   },
+  richJobStipend: {
+    fontSize: 10.5,
+    color: '#00685f',
+    fontWeight: '600',
+    marginTop: 2,
+  },
   richLinkBtn: {
     marginTop: 8,
     alignSelf: 'flex-start',
+    backgroundColor: '#e6f4ea',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
   richLinkBtnText: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#00685f',
     fontWeight: '700',
   },

@@ -31,3 +31,4 @@ __all__ = [
     "PROVIDER_REGISTRY",
     "get_course_provider",
 ]
+

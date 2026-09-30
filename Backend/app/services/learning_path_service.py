@@ -50,13 +50,37 @@ def _serialize_course(course: Optional[Course]) -> Optional[Dict[str, Any]]:
 
 
 def _serialize_path_item(item: LearningPathItem) -> Dict[str, Any]:
-    """Helper to serialize a single learning path item."""
+    """Helper to serialize a single learning path item with multi-skill and gap closure metadata."""
+    all_course_skills = [s.skill_name for s in item.course.skills] if (item.course and item.course.skills) else []
+    
+    # Extract secondary gaps from course skills excluding primary skill
+    primary_norm = (item.skill_name or "").lower().strip()
+    secondary = [s for s in all_course_skills if s.lower().strip() != primary_norm][:4]
+
+    # Find confidence
+    conf = 0.90
+    if item.course and item.course.skills:
+        for cs in item.course.skills:
+            if cs.skill_name.lower().strip() == primary_norm and cs.confidence is not None:
+                conf = cs.confidence
+                break
+
+    if conf >= 0.85:
+        gap_closure_type = "Closes Gap"
+    elif conf >= 0.70:
+        gap_closure_type = "Supports Skill"
+    else:
+        gap_closure_type = "Related Skill"
+
     return {
         "id": item.id,
         "learning_path_id": item.learning_path_id,
         "course_id": item.course_id,
         "skill_id": item.skill_id,
         "skill_name": item.skill_name,
+        "primary_gap": item.skill_name,
+        "secondary_gaps": secondary,
+        "gap_closure_type": gap_closure_type,
         "stage": item.stage,
         "sequence_order": item.sequence_order,
         "status": item.status,
@@ -147,7 +171,6 @@ def calculate_overall_path_progress(items: List[LearningPathItem]) -> float:
 
     evaluable_items = [item for item in items if item.status != "skipped"]
     if not evaluable_items:
-        # If all items are skipped
         return 100.0 if all(item.status == "skipped" for item in items) else 0.0
 
     total_progress = sum(min(100.0, max(0.0, item.progress_percent or 0.0)) for item in evaluable_items)
@@ -155,7 +178,7 @@ def calculate_overall_path_progress(items: List[LearningPathItem]) -> float:
 
 
 # ---------------------------------------------------------------------------
-# 1. Generate Learning Path
+# 1. Generate Learning Path (Multi-Skill Deduplicated & Marginal Coverage)
 # ---------------------------------------------------------------------------
 def generate_learning_path(
     db: Session,
@@ -165,7 +188,8 @@ def generate_learning_path(
 ) -> Dict[str, Any]:
     """
     Generate a personalized, stage-sequenced learning path based on the student's
-    active skill gaps and Phase 7 course recommendations.
+    active skill gaps and course recommendations.
+    Deduplicates courses so one course can address multiple skill gaps without redundant cards.
     """
     clean_email = student_email.lower().strip()
     student = db.query(StudentUser).filter(StudentUser.email == clean_email).first()
@@ -200,16 +224,16 @@ def generate_learning_path(
     if not skill_gaps:
         skill_gaps = gap_analysis.get("all_skills", [])
 
-    # 3. Retrieve Phase 7 course recommendations
+    # 3. Retrieve personalized course recommendations
     recommendations_dossier = course_recommendation_service.get_personalized_course_recommendations(
         db=db,
         student_email=clean_email,
         career_override=" & ".join(resolved_careers[:2]),
-        limit=40
+        limit=50
     )
     recommended_courses = recommendations_dossier.get("data", [])
 
-    # 4. Map top recommended courses to skill gaps
+    # 4. Map recommended courses to skill gaps using marginal coverage
     path_name = name.strip() if name and name.strip() else f"{' & '.join(resolved_careers[:2])} Learning Path"
 
     # Create parent LearningPath record
@@ -223,10 +247,6 @@ def generate_learning_path(
     db.add(learning_path)
     db.flush()
 
-    # Build Stage Sequence
-    items_to_add: List[LearningPathItem] = []
-    seen_course_skill_pairs: Set[Tuple[int, str]] = set()
-
     # Track sequence counters per stage
     stage_counters = {
         "Foundation": 1,
@@ -234,67 +254,105 @@ def generate_learning_path(
         "Advanced": 20
     }
 
-    for gap in skill_gaps:
+    items_to_add: List[LearningPathItem] = []
+    seen_course_ids: Set[int] = set()
+    unaddressed_gaps = list(skill_gaps)
+
+    while unaddressed_gaps:
+        gap = unaddressed_gaps[0]
         gap_name = gap.get("skill_name", "").strip()
         if not gap_name:
+            unaddressed_gaps.pop(0)
             continue
 
         norm_gap = gap_name.lower()
         req_careers = gap.get("required_by_careers", resolved_careers)
         priority = gap.get("priority", "Medium Priority")
 
-        # Find best matching recommended courses for this gap
+        # Find candidate courses covering this gap that have not been selected yet
         matching_courses = []
         for rc in recommended_courses:
+            if rc["course_id"] in seen_course_ids:
+                continue
+
             c_skills = [s.lower() for s in rc.get("all_skills", [])]
             covered_gaps = [cg.get("skill_name", "").lower() for cg in rc.get("covered_skill_gaps", [])]
 
             if norm_gap in c_skills or norm_gap in covered_gaps or any(norm_gap in s or s in norm_gap for s in c_skills):
-                matching_courses.append(rc)
+                # Count how many other unaddressed gaps this course covers (marginal coverage)
+                unaddressed_names = {g.get("skill_name", "").lower() for g in unaddressed_gaps}
+                overlap_count = sum(1 for s in c_skills if s in unaddressed_names)
+                matching_courses.append((rc, overlap_count))
 
-        # If no direct skill match in top recommendations, pick top semantic course
-        if not matching_courses and recommended_courses:
-            matching_courses = [recommended_courses[len(items_to_add) % len(recommended_courses)]]
-
-        # Select top primary course for this gap
-        for course_data in matching_courses[:1]:
-            course_id = course_data["course_id"]
-            pair_key = (course_id, norm_gap)
-            if pair_key in seen_course_skill_pairs:
-                continue
-            seen_course_skill_pairs.add(pair_key)
-
-            # Determine stage
-            learning_path_stage = course_data.get("learning_path", {}).get("stage", "Intermediate")
-            if "high" in priority.lower() and learning_path_stage == "Intermediate":
-                # High priority gap foundational to goal
-                learning_path_stage = "Foundation"
-
-            seq_num = stage_counters[learning_path_stage]
-            stage_counters[learning_path_stage] += 1
-
-            # Build explainable reason
-            if len(req_careers) > 1:
-                reason = f"Essential for both {', '.join(req_careers[:2])}. Closes identified gap in {gap_name}."
+        if matching_courses:
+            # Sort by overlap_count (marginal coverage) desc, then recommendation_score desc
+            matching_courses.sort(key=lambda x: (x[1], x[0].get("recommendation_score", 0.0)), reverse=True)
+            chosen_rc = matching_courses[0][0]
+        else:
+            # Fallback to top unselected recommendation
+            unselected = [rc for rc in recommended_courses if rc["course_id"] not in seen_course_ids]
+            if unselected:
+                chosen_rc = unselected[0]
+            elif recommended_courses:
+                chosen_rc = recommended_courses[0]
             else:
-                reason = f"Directly addresses skill gap in {gap_name} required for {req_careers[0] if req_careers else 'target career'}."
+                unaddressed_gaps.pop(0)
+                continue
 
-            # Find ESCO skill ID if available
-            esco_skill_obj = db.query(EscoSkill).filter(func.lower(EscoSkill.preferred_label) == norm_gap).first()
-            esco_id = esco_skill_obj.id if esco_skill_obj else None
+        course_id = chosen_rc["course_id"]
+        seen_course_ids.add(course_id)
 
-            path_item = LearningPathItem(
-                learning_path_id=learning_path.id,
-                course_id=course_id,
-                skill_id=esco_id,
-                skill_name=gap_name,
-                stage=learning_path_stage,
-                sequence_order=seq_num,
-                status="not_started",
-                progress_percent=0.0,
-                reason=reason
-            )
-            items_to_add.append(path_item)
+        # Identify gap closed by this chosen course
+        covered_from_unaddressed = [gap]
+        primary_gap = gap_name
+        secondary_gaps = [
+            s for s in chosen_rc.get("all_skills", [])
+            if s.lower() != gap_name.lower()
+        ][:3]
+
+        # Determine stage based on canonical technical skill domain
+        def get_skill_default_stage(sname: str, default_stg: str) -> str:
+            s_low = sname.lower()
+            if any(k in s_low for k in ['html', 'css', 'javascript', 'git', 'sql', 'python', 'ide', 'markup']):
+                return 'Foundation'
+            elif any(k in s_low for k in ['node', 'react', 'express', 'fastapi', 'postgres', 'rest', 'data analysis', 'pandas']):
+                return 'Intermediate'
+            elif any(k in s_low for k in ['docker', 'kubernetes', 'aws', 'cloud', 'machine learning', 'tensorflow', 'pytorch', 'architecture']):
+                return 'Advanced'
+            return default_stg
+
+        rc_stage = chosen_rc.get("learning_path", {}).get("stage", "Intermediate")
+        learning_path_stage = get_skill_default_stage(primary_gap, rc_stage)
+
+        seq_num = stage_counters[learning_path_stage]
+        stage_counters[learning_path_stage] += 1
+
+        # Build explainable reason with multi-skill coverage
+        if secondary_gaps:
+            reason = f"Addresses primary requirement in {primary_gap} and also covers {', '.join(secondary_gaps[:3])} for {', '.join(req_careers[:2])}."
+        elif len(req_careers) > 1:
+            reason = f"Essential for both {', '.join(req_careers[:2])}. Closes identified gap in {primary_gap}."
+        else:
+            reason = f"Directly addresses technical skill in {primary_gap} required for {req_careers[0] if req_careers else 'target career'}."
+
+        esco_skill_obj = db.query(EscoSkill).filter(func.lower(EscoSkill.preferred_label) == primary_gap.lower()).first()
+        esco_id = esco_skill_obj.id if esco_skill_obj else None
+
+        path_item = LearningPathItem(
+            learning_path_id=learning_path.id,
+            course_id=course_id,
+            skill_id=esco_id,
+            skill_name=primary_gap,
+            stage=learning_path_stage,
+            sequence_order=seq_num,
+            status="not_started",
+            progress_percent=0.0,
+            reason=reason
+        )
+        items_to_add.append(path_item)
+
+        # Pop current gap from unaddressed_gaps
+        unaddressed_gaps.pop(0)
 
     # If no items were created (e.g. no gaps), create paths from top recommendations
     if not items_to_add and recommended_courses:
@@ -321,7 +379,8 @@ def generate_learning_path(
         db.query(LearningPath)
         .options(
             joinedload(LearningPath.student),
-            joinedload(LearningPath.items).joinedload(LearningPathItem.course).joinedload(Course.provider)
+            joinedload(LearningPath.items).joinedload(LearningPathItem.course).joinedload(Course.provider),
+            joinedload(LearningPath.items).joinedload(LearningPathItem.course).joinedload(Course.skills)
         )
         .filter(LearningPath.id == learning_path.id)
         .first()
@@ -470,21 +529,6 @@ def update_learning_path_item_progress(
     else:
         item.learning_path.status = "active"
 
-    # Record learning progress / course completion evidence for Phase 9
-    try:
-        from app.services import skill_evidence_service
-        student_id = item.learning_path.student_id
-        if student_id:
-            skill_evidence_service.record_learning_progress_evidence(
-                db=db,
-                student_id=student_id,
-                course_id=item.course_id,
-                progress_percent=item.progress_percent or 0.0,
-                skill_name=item.skill_name
-            )
-    except Exception as ev_err:
-        logger.warning(f"Failed to record skill evidence for item {item_id}: {ev_err}")
-
     db.commit()
 
     return _serialize_path_item(item)
@@ -582,18 +626,24 @@ def refresh_learning_path(
         )
         recommended_courses = recommendations_dossier.get("data", [])
 
+        seen_course_skill_pairs = {(it.course_id, it.skill_name.lower().strip()) for it in preserved_items}
         for gap in new_gaps:
             gap_name = gap.get("skill_name", "").strip()
             norm_gap = gap_name.lower()
             matching = [
                 rc for rc in recommended_courses
-                if norm_gap in [s.lower() for s in rc.get("all_skills", [])]
+                if (rc["course_id"], norm_gap) not in seen_course_skill_pairs and (
+                    norm_gap in [s.lower() for s in rc.get("all_skills", [])] or
+                    norm_gap in [cg.get("skill_name", "").lower() for cg in rc.get("covered_skill_gaps", [])]
+                )
             ]
             if not matching and recommended_courses:
-                matching = [recommended_courses[0]]
+                unseen = [rc for rc in recommended_courses if (rc["course_id"], norm_gap) not in seen_course_skill_pairs]
+                matching = [unseen[0]] if unseen else [recommended_courses[0]]
 
             if matching:
                 top_c = matching[0]
+                seen_course_skill_pairs.add((top_c["course_id"], norm_gap))
                 st = top_c.get("learning_path", {}).get("stage", "Intermediate")
                 new_item = LearningPathItem(
                     learning_path_id=path.id,

@@ -1,7 +1,9 @@
 import math
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.database import get_db
 from app.services import course_service
@@ -215,6 +217,24 @@ def get_course_recommendations_endpoint(
     return recommendations_dossier
 
 
+@router.get("/recommendations/coverage", summary="Provider coverage analytics for recommendations")
+def get_recommendations_coverage_endpoint(
+    email: Optional[str] = Query(None, description="Student email identifier"),
+    career: Optional[str] = Query(None, description="Optional target career focus override"),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve live database analytics on courses, mapped skills, vector embeddings,
+    and eligible candidates for each course provider (NPTEL, SWAYAM, YouTube, freeCodeCamp).
+    """
+    from app.services import course_recommendation_service
+    return course_recommendation_service.get_recommendation_coverage_stats(
+        db=db,
+        student_email=email,
+        career_override=career
+    )
+
+
 # ---------------------------------------------------------------------------
 # 5. Single Course Detail Endpoint
 # ---------------------------------------------------------------------------
@@ -238,3 +258,109 @@ def get_course_detail(
         "status": "success",
         "data": CourseResponse.model_validate(course),
     }
+
+
+# ---------------------------------------------------------------------------
+# 6. Course Enrollment Endpoint
+# ---------------------------------------------------------------------------
+class CourseEnrollRequest(BaseModel):
+    email: Optional[str] = None
+
+@router.post("/{course_id}/enroll", summary="Enroll in a course for a student")
+def enroll_in_course(
+    course_id: int,
+    payload: Optional[CourseEnrollRequest] = None,
+    email: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Enroll a student into a specific course:
+    - Verifies course exists.
+    - Resolves student by email.
+    - Creates or updates enrollment in the student's active learning path in PostgreSQL.
+    - Returns enrollment state and action label.
+    """
+    from app.models import StudentUser, LearningPath, LearningPathItem
+    course = course_service.get_course(db, course_id=course_id)
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Course with ID {course_id} not found.",
+        )
+
+    student_email = (payload.email if payload and payload.email else email) or ""
+    student = None
+    if student_email.strip():
+        student = db.query(StudentUser).filter(func.lower(StudentUser.email) == student_email.lower().strip()).first()
+    if not student:
+        student = db.query(StudentUser).first()
+
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student user record not found.",
+        )
+
+    # Find or create active learning path
+    learning_path = (
+        db.query(LearningPath)
+        .filter(LearningPath.student_id == student.id)
+        .order_by(LearningPath.created_at.desc())
+        .first()
+    )
+    if not learning_path:
+        learning_path = LearningPath(
+            student_id=student.id,
+            name="My Personalized Learning Path",
+            status="active",
+            progress_percent=0.0
+        )
+        db.add(learning_path)
+        db.flush()
+
+    # Find or create learning path item
+    item = (
+        db.query(LearningPathItem)
+        .filter(
+            LearningPathItem.learning_path_id == learning_path.id,
+            LearningPathItem.course_id == course.id
+        )
+        .first()
+    )
+
+    if not item:
+        primary_skill = course.skills[0].skill_name if (course.skills and len(course.skills) > 0) else "Core Technical Skill"
+        item = LearningPathItem(
+            learning_path_id=learning_path.id,
+            course_id=course.id,
+            skill_name=primary_skill,
+            stage=course.level or "Intermediate",
+            sequence_order=1,
+            status="in_progress",
+            progress_percent=0.0,
+            started_at=func.now()
+        )
+        db.add(item)
+    else:
+        if item.status == "not_started":
+            item.status = "in_progress"
+            if not item.started_at:
+                item.started_at = func.now()
+
+    db.commit()
+    db.refresh(item)
+
+    return {
+        "status": "success",
+        "message": f"Successfully enrolled in '{course.title}'.",
+        "data": {
+            "course_id": course.id,
+            "learning_path_item_id": item.id,
+            "title": course.title,
+            "status": item.status,
+            "progress_percent": item.progress_percent,
+            "action": "Continue Learning" if item.progress_percent < 100 else "Completed",
+            "canonical_url": course.url
+        }
+    }
+

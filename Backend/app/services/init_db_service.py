@@ -409,13 +409,192 @@ def warmup_ai_embedding_model():
         logger.error(f"⚠️ Warning: Could not pre-warm embedding model: {e}")
 
 
+def seed_canonical_career_mappings(db: Session):
+    """
+    Enforces validated canonical ESCO occupation mappings for core tech careers.
+    Maps Full Stack Developer directly to ESCO web developer (c40a2919-48a9-40ea-b506-1f34f693496d).
+    """
+    canonical_mappings = [
+        ("car_fullstack_developer", "http://data.europa.eu/esco/occupation/c40a2919-48a9-40ea-b506-1f34f693496d"),  # web developer
+        ("car_full_stack_developer", "http://data.europa.eu/esco/occupation/c40a2919-48a9-40ea-b506-1f34f693496d"), # web developer
+        ("car_frontend_developer", "http://data.europa.eu/esco/occupation/866c7813-2c03-47d7-9bdc-192cfbace57c"),   # user interface developer
+        ("car_mobile_app_developer", "http://data.europa.eu/esco/occupation/2ed56c3f-61d6-4f7e-9ef8-8849eb102e4c"), # mobile application developer
+        ("car_devops_engineer", "http://data.europa.eu/esco/occupation/cc867bee-ab5c-427f-9244-f7a204d9574b"),      # cloud DevOps engineer
+        ("car_data_scientist", "http://data.europa.eu/esco/occupation/258e46f9-0075-4a2e-adae-1ff0477e0f30"),       # data scientist
+        ("car_data_analyst", "http://data.europa.eu/esco/occupation/d3edb8f8-3a06-47a0-8fb9-9b212c006aa2"),         # data analyst
+        ("car_ai_ml_engineer", "http://data.europa.eu/esco/occupation/35553663-deab-4d9a-bf22-15c1625d28e8"),       # artificial intelligence engineer
+    ]
+
+    for car_id, occ_uri in canonical_mappings:
+        car = db.query(models.SkillSetuCareer).filter(models.SkillSetuCareer.id == car_id).first()
+        if car:
+            car.esco_uri = occ_uri
+            
+        mapping = db.query(models.CareerOccupationMapping).filter(
+            models.CareerOccupationMapping.career_id == car_id
+        ).first()
+
+        if mapping:
+            mapping.esco_occupation_uri = occ_uri
+            mapping.mapping_status = "validated"
+            mapping.mapping_method = "manual"
+            mapping.confidence_score = 1.0
+            mapping.reasoning_summary = "Authoritative canonical ESCO occupation mapping"
+        else:
+            db.add(models.CareerOccupationMapping(
+                career_id=car_id,
+                esco_occupation_uri=occ_uri,
+                confidence_score=1.0,
+                mapping_status="validated",
+                mapping_method="manual",
+                reasoning_summary="Authoritative canonical ESCO occupation mapping"
+            ))
+    db.commit()
+
+
+def seed_canonical_career_skills(db: Session):
+    """
+    Seeds authoritative canonical technical skill associations into skillsetu_career_skills.
+    Ensures that real technical skills (JavaScript, React, Node.js, SQL, etc.) are bound to careers in PostgreSQL.
+    """
+    career_skills_data = [
+        # Full Stack Developer
+        ("car_fullstack_developer", "skill_javascript", "essential", 90),
+        ("car_fullstack_developer", "skill_typescript", "essential", 85),
+        ("car_fullstack_developer", "skill_react", "essential", 85),
+        ("car_fullstack_developer", "skill_nodejs", "essential", 85),
+        ("car_fullstack_developer", "skill_html_css", "essential", 85),
+        ("car_fullstack_developer", "skill_rest_api", "essential", 85),
+        ("car_fullstack_developer", "skill_sql", "essential", 80),
+        ("car_fullstack_developer", "skill_postgresql", "essential", 80),
+        ("car_fullstack_developer", "skill_git", "essential", 85),
+        ("car_fullstack_developer", "skill_docker", "optional", 75),
+
+        # Alias: car_full_stack_developer
+        ("car_full_stack_developer", "skill_javascript", "essential", 90),
+        ("car_full_stack_developer", "skill_typescript", "essential", 85),
+        ("car_full_stack_developer", "skill_react", "essential", 85),
+        ("car_full_stack_developer", "skill_nodejs", "essential", 85),
+        ("car_full_stack_developer", "skill_html_css", "essential", 85),
+        ("car_full_stack_developer", "skill_rest_api", "essential", 85),
+        ("car_full_stack_developer", "skill_sql", "essential", 80),
+        ("car_full_stack_developer", "skill_postgresql", "essential", 80),
+        ("car_full_stack_developer", "skill_git", "essential", 85),
+        ("car_full_stack_developer", "skill_docker", "optional", 75),
+
+        # Frontend Developer
+        ("car_frontend_developer", "skill_javascript", "essential", 90),
+        ("car_frontend_developer", "skill_typescript", "essential", 85),
+        ("car_frontend_developer", "skill_react", "essential", 90),
+        ("car_frontend_developer", "skill_html_css", "essential", 85),
+        ("car_frontend_developer", "skill_rest_api", "essential", 80),
+        ("car_frontend_developer", "skill_git", "essential", 85),
+        ("car_frontend_developer", "skill_ui_ux", "optional", 65),
+        ("car_frontend_developer", "skill_figma", "optional", 65),
+
+        # Backend Developer
+        ("car_backend_developer", "skill_nodejs", "essential", 85),
+        ("car_backend_developer", "skill_python", "essential", 85),
+        ("car_backend_developer", "skill_fastapi", "essential", 80),
+        ("car_backend_developer", "skill_sql", "essential", 85),
+        ("car_backend_developer", "skill_postgresql", "essential", 85),
+        ("car_backend_developer", "skill_rest_api", "essential", 90),
+        ("car_backend_developer", "skill_docker", "essential", 80),
+        ("car_backend_developer", "skill_git", "essential", 85),
+        ("car_backend_developer", "skill_aws", "optional", 75),
+        ("car_backend_developer", "skill_mongodb", "optional", 70),
+
+        # Mobile App Developer
+        ("car_mobile_app_developer", "skill_react_native", "essential", 90),
+        ("car_mobile_app_developer", "skill_javascript", "essential", 85),
+        ("car_mobile_app_developer", "skill_typescript", "essential", 80),
+        ("car_mobile_app_developer", "skill_rest_api", "essential", 85),
+        ("car_mobile_app_developer", "skill_git", "essential", 80),
+
+        # DevOps Engineer
+        ("car_devops_engineer", "skill_docker", "essential", 90),
+        ("car_devops_engineer", "skill_kubernetes", "essential", 85),
+        ("car_devops_engineer", "skill_aws", "essential", 85),
+        ("car_devops_engineer", "skill_git", "essential", 85),
+        ("car_devops_engineer", "skill_python", "optional", 70),
+
+        # Data Scientist
+        ("car_data_scientist", "skill_python", "essential", 90),
+        ("car_data_scientist", "skill_sql", "essential", 85),
+        ("car_data_scientist", "skill_machine_learning", "essential", 85),
+        ("car_data_scientist", "skill_pandas", "essential", 80),
+        ("car_data_scientist", "skill_tensorflow", "optional", 75),
+
+        # Data Analyst
+        ("car_data_analyst", "skill_sql", "essential", 95),
+        ("car_data_analyst", "skill_python", "essential", 85),
+        ("car_data_analyst", "skill_data_analysis", "essential", 90),
+        ("car_data_analyst", "skill_pandas", "essential", 85),
+
+        # AI / ML Engineer
+        ("car_ai_ml_engineer", "skill_python", "essential", 95),
+        ("car_ai_ml_engineer", "skill_machine_learning", "essential", 90),
+        ("car_ai_ml_engineer", "skill_tensorflow", "essential", 85),
+        ("car_ai_ml_engineer", "skill_pandas", "essential", 80),
+        ("car_ai_ml_engineer", "skill_docker", "optional", 70),
+
+        # UI/UX Designer
+        ("car_ui_ux_designer", "skill_figma", "essential", 90),
+        ("car_ui_ux_designer", "skill_ui_ux", "essential", 90),
+        ("car_ui_ux_designer", "skill_html_css", "optional", 60),
+    ]
+
+    for car_id, sk_id, rel_type, w in career_skills_data:
+        existing = db.query(models.SkillSetuCareerSkill).filter(
+            models.SkillSetuCareerSkill.career_id == car_id,
+            models.SkillSetuCareerSkill.skill_id == sk_id
+        ).first()
+        if existing:
+            existing.relation_type = rel_type
+            existing.weight = w
+        else:
+            db.add(models.SkillSetuCareerSkill(
+                career_id=car_id,
+                skill_id=sk_id,
+                relation_type=rel_type,
+                weight=w
+            ))
+    db.commit()
+
+
+def seed_internships_if_empty(db: Session):
+    """
+    Seeds verified real-world tech internship listings with required skills if table is empty.
+    """
+    if db.query(models.InternshipListing.id).first() is not None:
+        return
+
+    logger.info("🌱 Seeding verified tech internship listings...")
+    from app.services.ingestion.sync_engine import OpportunitySyncEngine
+    OpportunitySyncEngine.run_internship_sync(db, include_external=False)
+
+
+def seed_scholarships_if_empty(db: Session):
+    """
+    Seeds verified government and foundation scholarships with deterministic eligibility rules if table is empty.
+    """
+    if db.query(models.Scholarship.id).first() is not None:
+        return
+
+    logger.info("🌱 Seeding verified government & foundation scholarships...")
+    from app.services.ingestion.sync_engine import OpportunitySyncEngine
+    OpportunitySyncEngine.run_scholarship_sync(db)
+
+
 def init_system_on_startup(force_reseed: bool = False):
     """
     Main entrypoint called during server startup:
     1. Ensures DB schema is created.
     2. Ingests ESCO dataset if not present.
     3. Seeds default course providers.
-    4. Downloads/warms up the embedding model.
+    4. Seeds canonical career mappings.
+    5. Seeds curated internships.
+    6. Downloads/warms up the embedding model.
     """
     logger.info("🚀 SkillSetu Backend Initialization starting...")
     
@@ -444,13 +623,17 @@ def init_system_on_startup(force_reseed: bool = False):
         # 3. Seed locations
         seed_locations_if_empty(db)
 
-        # 4. Seed course providers only if empty
+        # 4. Seed canonical career mappings & technical skills
+        seed_canonical_career_mappings(db)
+        seed_canonical_career_skills(db)
+
+        # 5. Seed course providers only if empty
         if db.query(models.Provider.id).first() is None:
             seed_default_providers(db)
             logger.info("✅ Default course providers verified/seeded.")
 
-        # 5. Seed default admin account if empty
-        if db.query(models.AdminUser).first() is None:
+        # 6. Seed default admin account if empty
+        if hasattr(models, "AdminUser") and db.query(models.AdminUser).first() is None:
             from app.security import hash_password
             admin = models.AdminUser(
                 name="SkillSetu Admin",
@@ -463,13 +646,17 @@ def init_system_on_startup(force_reseed: bool = False):
             db.commit()
             logger.info("✅ Default admin user (admin@skillsetu.com) seeded.")
 
+        # 7. Seed internships & scholarships only if empty
+        seed_internships_if_empty(db)
+        seed_scholarships_if_empty(db)
+
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Error during data seeding: {e}")
     finally:
         db.close()
 
-    # 6. Pre-download / warm up AI embedding model
+    # 8. Pre-download / warm up AI embedding model
     warmup_ai_embedding_model()
     
     logger.info("🎉 SkillSetu Backend initialization completed successfully!")

@@ -28,7 +28,7 @@ def client():
 
 
 def test_get_providers_status_structure(db_session: Session):
-    """Verify provider status endpoint returns structured health data for exactly 3 providers."""
+    """Verify provider status endpoint returns structured health data for all 3 supported providers."""
     status_report = course_sync_service.get_providers_status(db_session)
     assert set(status_report.keys()) == {"nptel", "youtube", "freecodecamp"}
 
@@ -85,6 +85,7 @@ def test_api_provider_status_endpoint(client: TestClient):
     assert "nptel" in data["providers"]
     assert "youtube" in data["providers"]
     assert "freecodecamp" in data["providers"]
+    assert "swayam" not in data["providers"]
     assert "coursera" not in data["providers"]
     assert "udemy" not in data["providers"]
 

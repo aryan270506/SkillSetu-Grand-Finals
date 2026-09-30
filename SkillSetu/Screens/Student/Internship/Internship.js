@@ -1,6 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
+  ActivityIndicator,
   Animated,
+  Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -9,8 +12,13 @@ import {
   TextInput,
   useWindowDimensions,
   View,
-  Modal,
 } from 'react-native';
+import {
+  fetchRecommendedInternships,
+  toggleSaveInternship,
+  applyToInternship,
+} from '../services/internshipService';
+import { fetchStudentApplications } from '../services/applicationService';
 
 const COLORS = {
   canvas: '#f9f9f8',       // Warm off-white canvas
@@ -40,7 +48,7 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
     if (Platform.OS === 'web') {
       Animated.parallel([
         Animated.spring(scale, {
-          toValue: 1.02,
+          toValue: 1.015,
           friction: 8,
           tension: 100,
           useNativeDriver: Platform.OS !== 'web',
@@ -77,11 +85,6 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
     outputRange: [0.03, 0.1],
   });
 
-  const shadowRadius = shadow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [6, 16],
-  });
-
   const flatStyle = StyleSheet.flatten(style);
   const containerLayout = {};
   if (flatStyle) {
@@ -98,7 +101,7 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
     transform: [{ scale }],
     shadowColor: '#1e293b',
     shadowOpacity,
-    shadowRadius,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   };
 
@@ -116,214 +119,191 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
   );
 }
 
-const MOCK_INTERNSHIPS = [
-  {
-    id: 1,
-    title: 'Backend Developer Intern',
-    company: 'TechNova Solutions',
-    location: 'Bangalore',
-    type: 'Hybrid',
-    duration: '3 mo',
-    stipend: '₹25,000 / month',
-    stipendVal: 25000,
-    matchRate: 92,
-    status: 'Eligible',
-    logoText: 'TN',
-    logoBg: '#e6f4ea',
-    logoColor: '#0e4f34',
-    description: 'We are looking for a backend developer intern with hands-on experience in building microservices and RESTful APIs using Python and FastAPI.',
-    whyMatches: [
-      'Strong alignment with your Python & FastAPI skill endorsements.',
-      'Your recent project "E-commerce API" validates required SQL competency.'
-    ],
-    skills: ['Python', 'FastAPI', 'SQL'],
-    missingSkills: [],
-    featured: true,
-    posted: '3 days ago',
-    postedDays: 3,
-  },
-  {
-    id: 2,
-    title: 'Data Analyst Intern',
-    company: 'FinFlow Analytics',
-    location: 'Remote',
-    type: 'Remote',
-    duration: '6 mo',
-    stipend: '₹30,000 / month',
-    stipendVal: 30000,
-    matchRate: 81,
-    status: 'Almost Eligible',
-    logoText: 'FF',
-    logoBg: '#fef3c7',
-    logoColor: '#b45309',
-    description: 'Analyze user data, create dashboards, and work closely with product teams. Great Python base, but lacks basic Tableau exposure.',
-    whyMatches: [
-      'Great fit for your Pandas and Data Visualization skills.',
-    ],
-    gapWarning: 'Missing required Tableau certification. Complete short course to qualify.',
-    skills: ['Pandas', 'Data Viz'],
-    missingSkills: ['Tableau'],
-    featured: true,
-    posted: '4 days ago',
-    postedDays: 4,
-  },
-  {
-    id: 3,
-    title: 'Frontend Intern',
-    company: 'Nexus E-commerce',
-    location: 'Bangalore',
-    type: 'Hybrid',
-    duration: '3 mo',
-    stipend: '₹20,000 / month',
-    stipendVal: 20000,
-    matchRate: 88,
-    status: 'Eligible',
-    logoText: 'NX',
-    logoBg: '#e0f2fe',
-    logoColor: '#0369a1',
-    description: 'Strong match for your React and Tailwind CSS projects. Prior e-commerce experience is highly valued.',
-    skills: ['React', 'Tailwind', 'Figma'],
-    missingSkills: [],
-    featured: false,
-    posted: '2 days ago',
-    postedDays: 2,
-  },
-  {
-    id: 4,
-    title: 'ML Engineering Intern',
-    company: 'NeuroSys AI',
-    location: 'Remote',
-    type: 'Remote',
-    duration: '6 mo',
-    stipend: '₹35,000 / month',
-    stipendVal: 35000,
-    matchRate: 72,
-    status: 'Almost Eligible',
-    logoText: 'NS',
-    logoBg: '#f5f3ff',
-    logoColor: '#6d28d9',
-    description: 'Good Python base, but lacks basic AWS exposure required for deployment tasks and cloud pipelining.',
-    skills: ['Python', 'PyTorch'],
-    missingSkills: ['AWS'],
-    featured: false,
-    posted: '5 days ago',
-    postedDays: 5,
-  },
-  {
-    id: 5,
-    title: 'Cybersecurity Intern',
-    company: 'Global Bank',
-    location: 'Mumbai',
-    type: 'On-site',
-    duration: '6 mo',
-    stipend: '₹40,000 / month',
-    stipendVal: 40000,
-    matchRate: 45,
-    status: 'Skill Gap',
-    logoText: 'GB',
-    logoBg: '#fee2e2',
-    logoColor: '#b91c1c',
-    description: 'Significant gaps in required security certifications (CEH) and hands-on Linux system administration.',
-    skills: ['Networking'],
-    missingSkills: ['CEH', 'Linux'],
-    featured: false,
-    posted: '1 week ago',
-    postedDays: 7,
-  },
-  {
-    id: 6,
-    title: 'UI/UX Design Intern',
-    company: 'PixelCraft Agency',
-    location: 'Remote',
-    type: 'Remote',
-    duration: '3 mo',
-    stipend: '₹22,000 / month',
-    stipendVal: 22000,
-    matchRate: 90,
-    status: 'Eligible',
-    logoText: 'PC',
-    logoBg: '#fce7f3',
-    logoColor: '#be185d',
-    description: 'Outstanding design portfolio matches wireframing and prototyping expectations. Collaboration with engineers.',
-    skills: ['Figma', 'Prototyping', 'Wireframing'],
-    missingSkills: [],
-    featured: false,
-    posted: 'Just now',
-    postedDays: 0,
-  },
-];
-
-const MOCK_APPLICATIONS = [
-  {
-    id: 1,
-    role: 'Frontend Developer Intern',
-    company: 'WebSolutions Inc.',
-    appliedOn: 'Oct 12, 2023',
-    status: 'Interview Scheduled',
-    statusBadgeColor: '#e6f4ea',
-    statusTextColor: '#0e4f34',
-    timeline: [
-      { title: 'Submitted', date: 'Oct 12', done: true },
-      { title: 'Shortlisted', date: 'Oct 15', done: true },
-      { title: 'Interview', date: 'Oct 20', done: true, active: true },
-      { title: 'Decision', date: '', done: false },
-    ],
-  },
-  {
-    id: 2,
-    role: 'Junior Data Analyst',
-    company: 'MetricsCorp',
-    appliedOn: 'Oct 08, 2023',
-    status: 'Shortlisted',
-    statusBadgeColor: '#fef3c7',
-    statusTextColor: '#b45309',
-    timeline: [
-      { title: 'Submitted', date: 'Oct 08', done: true },
-      { title: 'Shortlisted', date: 'Oct 12', done: true, active: true },
-      { title: 'Interview', date: '', done: false },
-      { title: 'Decision', date: '', done: false },
-    ],
-  },
-  {
-    id: 3,
-    role: 'Software Engineer Intern',
-    company: 'InnoTech',
-    appliedOn: 'Oct 01, 2023',
-    status: 'Applied',
-    statusBadgeColor: '#f3f4f3',
-    statusTextColor: '#3d4947',
-    timeline: [
-      { title: 'Submitted', date: 'Oct 01', done: true, active: true },
-      { title: 'Shortlisted', date: '', done: false },
-      { title: 'Interview', date: '', done: false },
-      { title: 'Decision', date: '', done: false },
-    ],
-  },
-];
-
-export default function Internship() {
+export default function Internship({ user, profileData, onNavigate }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const isDesktop = width >= 1024;
 
-  // Calculate dynamic card width for responsive layout
-  const cardWidth = isDesktop ? '20%' : isTablet ? '48%' : '100%';
+  const cardWidth = isDesktop ? '31%' : isTablet ? '48%' : '100%';
+  const studentEmail = user?.email || profileData?.personalInfo?.email || 'abhoge27@gmail.com';
 
+  // API State
+  const [internships, setInternships] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [locationFilter, setLocationFilter] = useState('Bangalore');
-  const [typeFilter, setTypeFilter] = useState('Hybrid');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [sortOption, setSortOption] = useState('Best Match');
-  const [showAppliedModal, setShowAppliedModal] = useState(false);
-  const [appliedJob, setAppliedJob] = useState(null);
+
+  // Modals & UI State
   const [selectedDetailJob, setSelectedDetailJob] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  
-  // Interactive expansion for active applications timeline
+  const [showAppliedModal, setShowAppliedModal] = useState(false);
+  const [appliedJob, setAppliedJob] = useState(null);
   const [expandedAppId, setExpandedAppId] = useState(null);
+  const [savingId, setSavingId] = useState(null);
+  const [applyingId, setApplyingId] = useState(null);
 
-  const handleApply = (job) => {
-    setAppliedJob(job);
-    setShowAppliedModal(true);
+  // Initial load
+  const loadData = async (isManualRefresh = false) => {
+    if (isManualRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const [recRes, appRes] = await Promise.all([
+        fetchRecommendedInternships({
+          email: studentEmail,
+          page: 1,
+          pageSize: 50,
+          search: searchQuery,
+          location: locationFilter,
+          workMode: typeFilter,
+        }),
+        fetchStudentApplications(studentEmail),
+      ]);
+
+      if (recRes && recRes.status === 'success') {
+        setInternships(recRes.items || []);
+      } else {
+        setError(recRes?.message || 'Unable to load recommended internships');
+      }
+
+      if (appRes && appRes.internships) {
+        setApplications(appRes.internships);
+      }
+    } catch (err) {
+      console.error('[Internship Screen] Error loading data:', err);
+      setError(err.message || 'Failed to connect to opportunities server');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [studentEmail, locationFilter, typeFilter]);
+
+  // Handle Search submit
+  const handleSearchSubmit = () => {
+    loadData(true);
+  };
+
+  // Dynamic Metrics derived from real matching results
+  const metrics = useMemo(() => {
+    if (!internships.length) {
+      return { eligibleCount: 0, almostCount: 0, gapCount: 0, avgMatch: 0 };
+    }
+    let eligible = 0;
+    let almost = 0;
+    let gap = 0;
+    let totalScore = 0;
+
+    internships.forEach((job) => {
+      const score = Number(job.match_score || 0);
+      totalScore += score;
+      if (job.eligibility_status === 'ELIGIBLE' && score >= 75) {
+        eligible++;
+      } else if (score >= 50 || job.eligibility_status === 'POSSIBLY_ELIGIBLE') {
+        almost++;
+      } else {
+        gap++;
+      }
+    });
+
+    return {
+      eligibleCount: eligible,
+      almostCount: almost,
+      gapCount: gap,
+      avgMatch: Math.round(totalScore / internships.length),
+    };
+  }, [internships]);
+
+  // Featured recommendations
+  const featuredJobs = useMemo(() => {
+    return internships.slice(0, 2);
+  }, [internships]);
+
+  // Filtered & Sorted Listings
+  const filteredJobs = useMemo(() => {
+    let list = [...internships];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((job) => {
+        const titleMatch = job.title?.toLowerCase().includes(q);
+        const compMatch = job.company?.toLowerCase().includes(q);
+        const skillMatch = (job.skills || []).some((s) => s.toLowerCase().includes(q));
+        const locMatch = job.location?.toLowerCase().includes(q);
+        return titleMatch || compMatch || skillMatch || locMatch;
+      });
+    }
+
+    return list.sort((a, b) => {
+      if (sortOption === 'Best Match') {
+        return (b.match_score || 0) - (a.match_score || 0);
+      } else if (sortOption === 'Stipend (High to Low)') {
+        const sA = a.stipend_max || a.stipend_min || 0;
+        const sB = b.stipend_max || b.stipend_min || 0;
+        return sB - sA;
+      } else if (sortOption === 'Newest') {
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      }
+      return 0;
+    });
+  }, [internships, searchQuery, sortOption]);
+
+  // Apply Handler
+  const handleApply = async (job) => {
+    setApplyingId(job.id);
+    try {
+      // 1. Record application on backend
+      const res = await applyToInternship(job.id, studentEmail);
+      
+      // 2. Open official portal if application URL exists
+      const targetUrl = job.application_url || job.source_url || res?.data?.application_url;
+      if (targetUrl) {
+        Linking.openURL(targetUrl).catch((err) => {
+          console.warn('Could not open external URL:', err);
+        });
+      }
+
+      setAppliedJob(job);
+      setShowAppliedModal(true);
+
+      // Refresh applications table
+      const appRes = await fetchStudentApplications(studentEmail);
+      if (appRes && appRes.internships) {
+        setApplications(appRes.internships);
+      }
+    } catch (err) {
+      console.error('Apply error:', err);
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
+  // Save / Bookmark Handler
+  const handleToggleSave = async (job) => {
+    setSavingId(job.id);
+    const willSave = !job.is_saved;
+    try {
+      await toggleSaveInternship(job.id, studentEmail, willSave);
+      // Update local state
+      setInternships((prev) =>
+        prev.map((item) => (item.id === job.id ? { ...item, is_saved: willSave } : item))
+      );
+    } catch (err) {
+      console.error('Save error:', err);
+    } finally {
+      setSavingId(null);
+    }
   };
 
   const handleViewDetails = (job) => {
@@ -332,41 +312,10 @@ export default function Internship() {
   };
 
   const handleClearFilters = () => {
-    setLocationFilter(null);
-    setTypeFilter(null);
+    setLocationFilter('');
+    setTypeFilter('');
+    setSearchQuery('');
   };
-
-  // Filter and sort logic
-  const filteredJobs = MOCK_INTERNSHIPS.filter((job) => {
-    // 1. Search Query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const matchTitle = job.title.toLowerCase().includes(query);
-      const matchCompany = job.company.toLowerCase().includes(query);
-      const matchSkills = job.skills.some((s) => s.toLowerCase().includes(query));
-      if (!matchTitle && !matchCompany && !matchSkills) {
-        return false;
-      }
-    }
-    // 2. Location filter
-    if (locationFilter && job.location !== locationFilter) {
-      return false;
-    }
-    // 3. Type filter
-    if (typeFilter && job.type !== typeFilter) {
-      return false;
-    }
-    return true;
-  }).sort((a, b) => {
-    if (sortOption === 'Best Match') {
-      return b.matchRate - a.matchRate;
-    } else if (sortOption === 'Stipend (High to Low)') {
-      return b.stipendVal - a.stipendVal;
-    } else if (sortOption === 'Newest') {
-      return a.postedDays - b.postedDays;
-    }
-    return 0;
-  });
 
   return (
     <View style={styles.container}>
@@ -381,7 +330,7 @@ export default function Internship() {
               Find Internships{'\n'}That <Text style={styles.textGreenUnderline}>Match You</Text>
             </Text>
             <Text style={styles.bentoSubtext}>
-              SkillSetu analyzes your skills, education, projects, and career goals to surface the highest-converting internship opportunities tailored for your unique profile.
+              SkillSetu analyzes your verified ESCO skills, career trajectory, projects, and eligibility rules to surface authentic, source-verified internships tailored for your exact profile.
             </Text>
           </View>
 
@@ -391,25 +340,24 @@ export default function Internship() {
               <View style={styles.profileCardHeader}>
                 <View>
                   <Text style={styles.profileCardTitle}>Your Match Profile</Text>
-                  <Text style={styles.profileCardSubtitle}>Based on 14 data points</Text>
+                  <Text style={styles.profileCardSubtitle}>Deterministic AI & ESCO Match</Text>
                 </View>
-                {/* Circular gauge representation */}
                 <View style={styles.gaugeContainer}>
-                  <Text style={styles.gaugeVal}>76%</Text>
+                  <Text style={styles.gaugeVal}>{metrics.avgMatch}%</Text>
                 </View>
               </View>
 
               <View style={styles.profileStatsRow}>
                 <View style={[styles.statBox, styles.statBoxTeal]}>
-                  <Text style={[styles.statValue, { color: COLORS.teal }]}>12</Text>
+                  <Text style={[styles.statValue, { color: COLORS.teal }]}>{metrics.eligibleCount}</Text>
                   <Text style={styles.statLabel}>Eligible</Text>
                 </View>
                 <View style={[styles.statBox, styles.statBoxAmber]}>
-                  <Text style={[styles.statValue, { color: COLORS.amber }]}>8</Text>
+                  <Text style={[styles.statValue, { color: COLORS.amber }]}>{metrics.almostCount}</Text>
                   <Text style={styles.statLabel}>Almost{'\n'}Eligible</Text>
                 </View>
                 <View style={[styles.statBox, styles.statBoxRose]}>
-                  <Text style={[styles.statValue, { color: COLORS.rose }]}>4</Text>
+                  <Text style={[styles.statValue, { color: COLORS.rose }]}>{metrics.gapCount}</Text>
                   <Text style={styles.statLabel}>Skill{'\n'}Gaps</Text>
                 </View>
               </View>
@@ -417,481 +365,384 @@ export default function Internship() {
           </View>
         </View>
 
-        {/* 2. Recommended for You (Featured) */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionIcon}>⭐</Text>
-            <Text style={styles.sectionTitle}>Recommended for You</Text>
+        {/* Loading State */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.green} />
+            <Text style={styles.loadingText}>Evaluating verified internships & matching algorithms...</Text>
           </View>
-
-          <View style={[styles.featuredGrid, isTablet ? styles.rowLayout : styles.columnLayout]}>
-            
-            {/* Featured Card 1 */}
-            <HoverableCard style={[styles.featuredCard, { backgroundColor: '#f0fdfa', borderColor: COLORS.subtle }]}>
-              <View style={styles.featuredBadgeRow}>
-                <View style={styles.eligibleBadge}>
-                  <Text style={styles.eligibleBadgeText}>✓ Eligible (92% Match)</Text>
-                </View>
-                <View style={styles.rowTags}>
-                  <View style={styles.tagLabel}><Text style={styles.tagLabelText}>Hybrid</Text></View>
-                  <View style={styles.tagLabel}><Text style={styles.tagLabelText}>3 mo</Text></View>
-                </View>
-              </View>
-
-              <View style={styles.companyRow}>
-                <View style={[styles.logoSquare, { backgroundColor: '#e6f4ea' }]}>
-                  <Text style={[styles.logoText, { color: '#0e4f34' }]}>TN</Text>
-                </View>
-                <View style={styles.companyInfo}>
-                  <Text style={styles.featuredJobTitle}>Backend Developer Intern</Text>
-                  <Text style={styles.featuredCompany}>TechNova Solutions • Bangalore</Text>
-                </View>
-              </View>
-
-              <View style={styles.stipendRow}>
-                <Text style={styles.stipendIcon}>💵</Text>
-                <Text style={styles.stipendText}>₹25,000 / month</Text>
-              </View>
-
-              <View style={styles.whyMatchesBlock}>
-                <Text style={styles.whyMatchesTitle}>🧠 Why this matches you:</Text>
-                <View style={styles.matchBullets}>
-                  <Text style={styles.bulletItem}>• Strong alignment with your Python & FastAPI skill endorsements.</Text>
-                  <Text style={styles.bulletItem}>• Your recent project "E-commerce API" validates SQL competency.</Text>
-                </View>
-              </View>
-
-              <View style={styles.actionsRow}>
-                <Pressable style={styles.btnSecondary}><Text style={styles.btnSecondaryText}>View Details</Text></Pressable>
-                <Pressable onPress={() => handleApply(MOCK_INTERNSHIPS[0])} style={styles.btnPrimary}>
-                  <Text style={styles.btnPrimaryText}>Apply Now</Text>
-                </Pressable>
-              </View>
-            </HoverableCard>
-
-            {/* Featured Card 2 */}
-            <HoverableCard style={[styles.featuredCard, { backgroundColor: '#fffbf2', borderColor: COLORS.subtle }]}>
-              <View style={styles.featuredBadgeRow}>
-                <View style={styles.almostBadge}>
-                  <Text style={styles.almostBadgeText}>⚠ Almost Eligible (81%)</Text>
-                </View>
-                <View style={styles.rowTags}>
-                  <View style={styles.tagLabel}><Text style={styles.tagLabelText}>Remote</Text></View>
-                  <View style={styles.tagLabel}><Text style={styles.tagLabelText}>6 mo</Text></View>
-                </View>
-              </View>
-
-              <View style={styles.companyRow}>
-                <View style={[styles.logoSquare, { backgroundColor: '#fef3c7' }]}>
-                  <Text style={[styles.logoText, { color: '#b45309' }]}>FF</Text>
-                </View>
-                <View style={styles.companyInfo}>
-                  <Text style={styles.featuredJobTitle}>Data Analyst Intern</Text>
-                  <Text style={styles.featuredCompany}>FinFlow Analytics • Remote</Text>
-                </View>
-              </View>
-
-              <View style={styles.stipendRow}>
-                <Text style={styles.stipendIcon}>💵</Text>
-                <Text style={styles.stipendText}>₹30,000 / month</Text>
-              </View>
-
-              <View style={styles.whyMatchesBlock}>
-                <Text style={styles.whyMatchesTitle}>📊 Bridge the Gap:</Text>
-                <View style={styles.matchBullets}>
-                  <Text style={styles.bulletItem}>• Great fit for your Pandas and Data Viz skills.</Text>
-                  <Text style={[styles.bulletItem, { color: COLORS.amber, fontWeight: '600' }]}>
-                    ⚠ Missing Tableau certification. Complete course to qualify.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.actionsRow}>
-                <Pressable style={styles.btnSecondary}><Text style={styles.btnSecondaryText}>View Details</Text></Pressable>
-                <Pressable style={[styles.btnPrimary, { backgroundColor: COLORS.amber }]}>
-                  <Text style={styles.btnPrimaryText}>⚡ Upskill Now</Text>
-                </Pressable>
-              </View>
-            </HoverableCard>
-
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={styles.errorTitle}>Unable to Load Internships</Text>
+            <Text style={styles.errorSubtitle}>{error}</Text>
+            <Pressable style={styles.retryBtn} onPress={() => loadData(true)}>
+              <Text style={styles.retryBtnText}>Retry Connection</Text>
+            </Pressable>
           </View>
-        </View>
-
-        {/* 3. NEW: Personalized Match Analysis */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionIcon}>📈</Text>
-            <Text style={styles.sectionTitle}>Personalized Match Analysis</Text>
-          </View>
-
-          <View style={[styles.gridTwoCol, isTablet ? styles.rowLayout : styles.columnLayout]}>
-            {/* Left Panel: Metrics Breakdown */}
-            <View style={[styles.panelCard, { flex: 1 }]}>
-              <Text style={styles.panelCardTitle}>Metrics Breakdown</Text>
-              
-              <View style={styles.metricItem}>
-                <View style={styles.metricLabelRow}>
-                  <Text style={styles.metricLabel}>Skills</Text>
-                  <Text style={styles.metricPercent}>82%</Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressBar, { width: '82%', backgroundColor: COLORS.green }]} />
-                </View>
-              </View>
-
-              <View style={styles.metricItem}>
-                <View style={styles.metricLabelRow}>
-                  <Text style={styles.metricLabel}>Education</Text>
-                  <Text style={styles.metricPercent}>95%</Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressBar, { width: '95%', backgroundColor: COLORS.green }]} />
-                </View>
-              </View>
-
-              <View style={styles.metricItem}>
-                <View style={styles.metricLabelRow}>
-                  <Text style={styles.metricLabel}>Projects</Text>
-                  <Text style={styles.metricPercent}>70%</Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressBar, { width: '70%', backgroundColor: COLORS.amber }]} />
-                </View>
-              </View>
-
-              <View style={styles.metricItem}>
-                <View style={styles.metricLabelRow}>
-                  <Text style={styles.metricLabel}>Experience</Text>
-                  <Text style={styles.metricPercent}>40%</Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressBar, { width: '40%', backgroundColor: COLORS.rose }]} />
-                </View>
-              </View>
-            </View>
-
-            {/* Right Panel: Primary Skill Gap Warning */}
-            <View style={[styles.panelCard, styles.panelCardWarning, { flex: 1 }]}>
-              <View style={styles.gapHeaderRow}>
-                <Text style={styles.warningIcon}>⚠</Text>
-                <Text style={styles.gapTitle}>Primary Skill Gap</Text>
-              </View>
-              <Text style={styles.gapText}>
-                Your profile falls short in <Text style={styles.boldText}>Docker (42/80)</Text>. Improving this skill could significantly boost your match rate for backend developer roles.
-              </Text>
-              
-              <View style={styles.comparisonBox}>
-                <View style={styles.comparisonItem}>
-                  <Text style={styles.comparisonValue}>81%</Text>
-                  <Text style={styles.comparisonLabel}>Current</Text>
-                </View>
-                <Text style={styles.comparisonArrow}>➔</Text>
-                <View style={styles.comparisonItem}>
-                  <Text style={[styles.comparisonValue, { color: COLORS.green }]}>94%</Text>
-                  <Text style={styles.comparisonLabel}>Potential</Text>
-                </View>
-              </View>
-              
-              <Pressable style={styles.btnFindCourse}>
-                <Text style={styles.btnFindCourseText}>Find Docker Courses</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
-        {/* 4. NEW: Eligibility & Readiness / AI Insights */}
-        <View style={styles.section}>
-          <View style={[styles.gridTwoCol, isTablet ? styles.rowLayout : styles.columnLayout]}>
-            {/* Left Panel: Application Readiness & Resume */}
-            <View style={[styles.panelCard, { flex: 1 }]}>
-              <Text style={styles.panelCardTitle}>Application Readiness</Text>
-              <View style={styles.readinessList}>
-                <View style={styles.readinessItem}>
-                  <Text style={styles.checkIcon}>✓</Text>
-                  <Text style={styles.readinessText}>Profile Complete (100%)</Text>
-                </View>
-                <View style={styles.readinessItem}>
-                  <Text style={styles.checkIcon}>✓</Text>
-                  <Text style={styles.readinessText}>Resume Uploaded</Text>
-                </View>
-                <View style={styles.readinessItem}>
-                  <Text style={styles.pendingIcon}>⧗</Text>
-                  <Text style={styles.readinessText}>Skills Verified (2 pending)</Text>
-                </View>
-              </View>
-
-              <View style={styles.innerOptimizationBox}>
-                <Text style={styles.innerTitle}>Resume Optimization</Text>
-                <Text style={styles.innerSubtitle}>Optimize your resume for specific roles using AI to improve your match score.</Text>
-                
-                <View style={styles.scoreRow}>
-                  <Text style={styles.scoreLabel}>General Resume</Text>
-                  <Text style={styles.scoreValue}>76%</Text>
-                </View>
-                <View style={[styles.scoreRow, styles.scoreRowOptimized]}>
-                  <Text style={[styles.scoreLabel, { color: COLORS.green }]}>AI Optimized</Text>
-                  <Text style={[styles.scoreValue, { color: COLORS.green }]}>91%</Text>
+        ) : (
+          <>
+            {/* 2. Recommended for You (Featured) */}
+            {featuredJobs.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.sectionIcon}>⭐</Text>
+                  <Text style={styles.sectionTitle}>Top Recommended Opportunities</Text>
                 </View>
 
-                <Pressable style={styles.btnOptimizeNow}>
-                  <Text style={styles.btnOptimizeNowText}>✦ Optimize Now</Text>
-                </Pressable>
-              </View>
-            </View>
+                <View style={[styles.featuredGrid, isTablet ? styles.rowLayout : styles.columnLayout]}>
+                  {featuredJobs.map((job) => {
+                    const isEligible = job.eligibility_status === 'ELIGIBLE';
+                    const matchPercent = Math.round(job.match_score || 0);
 
-            {/* Right Panel: AI Insights */}
-            <View style={[styles.panelCard, styles.panelCardInsights, { flex: 1 }]}>
-              <View style={styles.insightHeaderRow}>
-                <View style={styles.lightbulbCircle}>
-                  <Text style={styles.lightbulbText}>💡</Text>
-                </View>
-                <Text style={styles.panelCardTitle}>AI Insights</Text>
-              </View>
-              
-              <Text style={styles.insightsMainText}>
-                Improving your <Text style={[styles.boldText, { color: COLORS.green }]}>Docker</Text> and <Text style={[styles.boldText, { color: COLORS.green }]}>AWS</Text> skills could unlock <Text style={[styles.boldText, { color: COLORS.amber }]}>8 additional internships</Text> currently categorized as 'Almost Eligible'.
-              </Text>
-
-              <View style={styles.insightTagsRow}>
-                <View style={styles.insightTag}><Text style={styles.insightTagText}>Cloud Computing</Text></View>
-                <View style={styles.insightTag}><Text style={styles.insightTagText}>DevOps Basics</Text></View>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* 5. NEW: Active Applications & Timeline tracking */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionIcon}>🎯</Text>
-            <Text style={styles.sectionTitle}>Active Applications</Text>
-          </View>
-
-          <View style={styles.tableCard}>
-            {/* Table Header */}
-            <View style={styles.tableHeaderRow}>
-              <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Role</Text>
-              <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Company</Text>
-              <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Applied On</Text>
-              <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Status</Text>
-            </View>
-
-            {/* Table Body */}
-            {MOCK_APPLICATIONS.map((app) => {
-              const isExpanded = expandedAppId === app.id;
-              return (
-                <View key={app.id} style={styles.tableRowContainer}>
-                  <Pressable 
-                    style={styles.tableBodyRow}
-                    onPress={() => setExpandedAppId(isExpanded ? null : app.id)}
-                  >
-                    <Text style={[styles.tableCell, styles.boldCellText, { flex: 2 }]}>{app.role}</Text>
-                    <Text style={[styles.tableCell, { flex: 2 }]}>{app.company}</Text>
-                    <Text style={[styles.tableCell, { flex: 1.5 }]}>{app.appliedOn}</Text>
-                    <View style={[{ flex: 2 }, styles.statusBadgeWrapper]}>
-                      <View style={[styles.appStatusBadge, { backgroundColor: app.statusBadgeColor }]}>
-                        <Text style={[styles.appStatusBadgeText, { color: app.statusTextColor }]}>{app.status}</Text>
-                      </View>
-                    </View>
-                  </Pressable>
-
-                  {/* Expandable Timeline details */}
-                  {isExpanded && (
-                    <View style={styles.timelineDetailsBox}>
-                      <Text style={styles.timelineTitle}>Application Timeline</Text>
-                      <View style={styles.timelineTrackRow}>
-                        {app.timeline.map((step, idx) => (
-                          <View key={idx} style={styles.timelineStep}>
-                            <View style={[
-                              styles.timelineIndicatorCircle,
-                              step.done && styles.timelineCircleDone,
-                              step.active && styles.timelineCircleActive
-                            ]}>
-                              {step.done && <Text style={styles.timelineCheckText}>✓</Text>}
-                            </View>
-                            <Text style={[
-                              styles.timelineStepLabel,
-                              step.active && { fontWeight: '750', color: COLORS.green }
-                            ]}>
-                              {step.title}
+                    return (
+                      <HoverableCard
+                        key={job.id}
+                        style={[
+                          styles.featuredCard,
+                          {
+                            backgroundColor: isEligible ? '#f0fdfa' : '#fffbf2',
+                            borderColor: COLORS.subtle,
+                          },
+                        ]}
+                      >
+                        <View style={styles.featuredBadgeRow}>
+                          <View style={isEligible ? styles.eligibleBadge : styles.almostBadge}>
+                            <Text style={isEligible ? styles.eligibleBadgeText : styles.almostBadgeText}>
+                              {isEligible ? `✓ Eligible (${matchPercent}% Match)` : `⚠ ${job.eligibility_status} (${matchPercent}%)`}
                             </Text>
-                            {step.date ? <Text style={styles.timelineStepDate}>{step.date}</Text> : null}
                           </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* 6. Explore Opportunities Listings */}
-        <View style={styles.section}>
-          <View style={[styles.listingsHeader, !isTablet && styles.columnLayout]}>
-            <Text style={styles.listingsTitle}>Explore Opportunities</Text>
-
-            {/* Quick Filters Bar */}
-            <View style={[styles.filtersContainer, !isTablet && { width: '100%' }]}>
-              <View style={styles.searchWrapper}>
-                <Text style={styles.searchIcon}>🔍</Text>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search roles, skills..."
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholderTextColor={COLORS.muted}
-                />
-              </View>
-
-              {/* Filter Toggle and Sort */}
-              <View style={styles.filterControls}>
-                <Pressable style={styles.filterBtn} onPress={() => {}}>
-                  <Text style={styles.filterBtnText}>⚙ Filters</Text>
-                </Pressable>
-                
-                <View style={styles.selectWrapper}>
-                  <Pressable
-                    style={styles.selectBox}
-                    onPress={() => {
-                      const options = ['Best Match', 'Stipend (High to Low)', 'Newest'];
-                      const nextIndex = (options.indexOf(sortOption) + 1) % options.length;
-                      setSortOption(options[nextIndex]);
-                    }}
-                  >
-                    <Text style={styles.selectBoxText}>Sort: {sortOption}</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Active Filter Chips */}
-          {(locationFilter || typeFilter) ? (
-            <View style={styles.activeChipsRow}>
-              {locationFilter && (
-                <View style={styles.chip}>
-                  <Text style={styles.chipText}>Location: {locationFilter}</Text>
-                  <Pressable onPress={() => setLocationFilter(null)} style={styles.chipClose}>
-                    <Text style={styles.chipCloseText}>×</Text>
-                  </Pressable>
-                </View>
-              )}
-              {typeFilter && (
-                <View style={styles.chip}>
-                  <Text style={styles.chipText}>Type: {typeFilter}</Text>
-                  <Pressable onPress={() => setTypeFilter(null)} style={styles.chipClose}>
-                    <Text style={styles.chipCloseText}>×</Text>
-                  </Pressable>
-                </View>
-              )}
-              <Pressable onPress={handleClearFilters} style={styles.clearFiltersBtn}>
-                <Text style={styles.clearFiltersText}>Clear All</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {/* Listings Grid */}
-          <View style={styles.listingsGrid}>
-            {filteredJobs.length > 0 ? (
-              filteredJobs.map((job) => {
-                const isEligible = job.status === 'Eligible';
-                const isAlmost = job.status === 'Almost Eligible';
-
-                return (
-                  <HoverableCard key={job.id} style={[styles.jobCard, { width: cardWidth }]}>
-                    <View style={styles.jobCardHeader}>
-                      <View style={[styles.logoSquareCompact, { backgroundColor: job.logoBg }]}>
-                        <Text style={[styles.logoTextCompact, { color: job.logoColor }]}>{job.logoText}</Text>
-                      </View>
-                      <View style={styles.jobBadgeWrap}>
-                        <View style={[
-                          styles.miniBadge,
-                          isEligible && styles.miniBadgeGreen,
-                          isAlmost && styles.miniBadgeAmber,
-                          job.status === 'Skill Gap' && styles.miniBadgeRose
-                        ]}>
-                          <Text style={[
-                            styles.miniBadgeText,
-                            isEligible && { color: COLORS.green },
-                            isAlmost && { color: COLORS.amber },
-                            job.status === 'Skill Gap' && { color: COLORS.rose }
-                          ]}>
-                            {job.matchRate}% Match
-                          </Text>
+                          <View style={styles.rowTags}>
+                            <View style={styles.tagLabel}>
+                              <Text style={styles.tagLabelText}>{job.work_mode || (job.is_remote ? 'Remote' : 'On-site')}</Text>
+                            </View>
+                            {job.duration && (
+                              <View style={styles.tagLabel}>
+                                <Text style={styles.tagLabelText}>{job.duration}</Text>
+                              </View>
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    </View>
 
-                    <Text style={styles.jobTitle}>{job.title}</Text>
-                    <Text style={styles.jobCompany}>{job.company} • {job.location} ({job.type})</Text>
-
-                    {/* NEW: Job Card Short Description */}
-                    <Text style={styles.jobDescription} numberOfLines={2}>
-                      {job.description}
-                    </Text>
-
-                    {/* Skills tags list */}
-                    <View style={styles.skillsTagRow}>
-                      {job.skills.map((s, idx) => (
-                        <View key={idx} style={styles.skillTag}>
-                          <Text style={styles.skillTagText}>{s}</Text>
+                        <View style={styles.companyRow}>
+                          <View style={[styles.logoSquare, { backgroundColor: '#e6f4ea' }]}>
+                            <Text style={[styles.logoText, { color: '#0e4f34' }]}>
+                              {job.company ? job.company.substring(0, 2).toUpperCase() : 'IN'}
+                            </Text>
+                          </View>
+                          <View style={styles.companyInfo}>
+                            <Text style={styles.featuredJobTitle}>{job.title}</Text>
+                            <Text style={styles.featuredCompany}>
+                              {job.company} • {job.location || 'Pan-India'}
+                            </Text>
+                          </View>
                         </View>
-                      ))}
-                      {job.missingSkills && job.missingSkills.map((s, idx) => (
-                        <View key={idx} style={[styles.skillTag, { backgroundColor: COLORS.roseLight }]}>
-                          <Text style={[styles.skillTagText, { color: COLORS.rose }]}>Missing: {s}</Text>
-                        </View>
-                      ))}
-                    </View>
 
-                    <View style={styles.jobCardFooter}>
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <Text style={styles.jobStipend} numberOfLines={1}>{job.stipend.split(' ')[0]} • {job.duration}</Text>
-                        <Text style={styles.jobPosted}>{job.posted}</Text>
-                      </View>
-                      
-                      <View style={styles.jobCardFooterRight}>
-                        <Pressable
-                          style={({ pressed }) => [styles.btnCardDetails, pressed && styles.pressed]}
-                          onPress={() => handleViewDetails(job)}
-                        >
-                          <Text style={styles.btnCardDetailsText}>Details</Text>
-                        </Pressable>
-                        <Pressable
-                          style={({ pressed }) => [styles.btnCardApply, pressed && styles.pressed]}
-                          onPress={() => handleApply(job)}
-                        >
-                          <Text style={styles.btnCardApplyText}>Apply</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  </HoverableCard>
-                );
-              })
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateIcon}>🔍</Text>
-                <Text style={styles.emptyStateTitle}>No Opportunities Found</Text>
-                <Text style={styles.emptyStateSubtitle}>
-                  No listings match your search query or filters. Clear filters to see all available internships.
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    setSearchQuery('');
-                    handleClearFilters();
-                  }}
-                  style={styles.emptyStateBtn}
-                >
-                  <Text style={styles.emptyStateBtnText}>Reset Filters</Text>
-                </Pressable>
+                        <View style={styles.stipendRow}>
+                          <Text style={styles.stipendIcon}>💵</Text>
+                          <Text style={styles.stipendText}>{job.stipend || 'Stipend Disclosed Upon Selection'}</Text>
+                        </View>
+
+                        {/* Why this matches */}
+                        <View style={styles.whyMatchesBlock}>
+                          <Text style={styles.whyMatchesTitle}>🧠 Why this matches you:</Text>
+                          <View style={styles.matchBullets}>
+                            {job.match_reasons && job.match_reasons.length > 0 ? (
+                              job.match_reasons.slice(0, 2).map((reason, idx) => (
+                                <Text key={idx} style={styles.bulletItem}>• {reason}</Text>
+                              ))
+                            ) : (
+                              <Text style={styles.bulletItem}>• Evaluated against your active verified competencies and target career.</Text>
+                            )}
+                          </View>
+                        </View>
+
+                        <View style={styles.actionsRow}>
+                          <Pressable style={styles.btnSecondary} onPress={() => handleViewDetails(job)}>
+                            <Text style={styles.btnSecondaryText}>View Details</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleApply(job)}
+                            style={styles.btnPrimary}
+                            disabled={applyingId === job.id}
+                          >
+                            <Text style={styles.btnPrimaryText}>
+                              {applyingId === job.id ? 'Applying...' : 'Apply on Portal'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </HoverableCard>
+                    );
+                  })}
+                </View>
               </View>
             )}
-          </View>
-        </View>
+
+            {/* 3. Active Applications Section */}
+            {applications.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.sectionIcon}>🎯</Text>
+                  <Text style={styles.sectionTitle}>Your Tracked Applications</Text>
+                </View>
+
+                <View style={styles.tableCard}>
+                  <View style={styles.tableHeaderRow}>
+                    <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Role</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Company</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Applied On</Text>
+                    <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Status</Text>
+                  </View>
+
+                  {applications.map((app) => {
+                    const isExpanded = expandedAppId === app.id;
+                    const appliedDate = app.applied_at ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently';
+
+                    return (
+                      <View key={app.id} style={styles.tableRowContainer}>
+                        <Pressable 
+                          style={styles.tableBodyRow}
+                          onPress={() => setExpandedAppId(isExpanded ? null : app.id)}
+                        >
+                          <Text style={[styles.tableCell, styles.boldCellText, { flex: 2 }]}>
+                            {app.internship?.title || app.title || 'Internship Application'}
+                          </Text>
+                          <Text style={[styles.tableCell, { flex: 2 }]}>
+                            {app.internship?.company || app.company || 'Direct'}
+                          </Text>
+                          <Text style={[styles.tableCell, { flex: 1.5 }]}>{appliedDate}</Text>
+                          <View style={[{ flex: 2 }, styles.statusBadgeWrapper]}>
+                            <View style={[styles.appStatusBadge, { backgroundColor: COLORS.greenLight }]}>
+                              <Text style={[styles.appStatusBadgeText, { color: COLORS.green }]}>
+                                {app.status || 'APPLIED'}
+                              </Text>
+                            </View>
+                          </View>
+                        </Pressable>
+
+                        {isExpanded && (
+                          <View style={styles.timelineDetailsBox}>
+                            <Text style={styles.timelineTitle}>Application Timeline</Text>
+                            <View style={styles.timelineTrackRow}>
+                              <View style={styles.timelineStep}>
+                                <View style={[styles.timelineIndicatorCircle, styles.timelineCircleDone]}>
+                                  <Text style={styles.timelineCheckText}>✓</Text>
+                                </View>
+                                <Text style={[styles.timelineStepLabel, { fontWeight: '700', color: COLORS.green }]}>
+                                  Portal Launched
+                                </Text>
+                                <Text style={styles.timelineStepDate}>{appliedDate}</Text>
+                              </View>
+                              <View style={styles.timelineStep}>
+                                <View style={[styles.timelineIndicatorCircle, styles.timelineCircleActive]}>
+                                  <Text style={styles.timelineCheckText}>⧗</Text>
+                                </View>
+                                <Text style={styles.timelineStepLabel}>Under Review</Text>
+                                <Text style={styles.timelineStepDate}>In Progress</Text>
+                              </View>
+                              <View style={styles.timelineStep}>
+                                <View style={styles.timelineIndicatorCircle}>
+                                  <Text style={styles.timelineCheckText}>•</Text>
+                                </View>
+                                <Text style={styles.timelineStepLabel}>Shortlisted / Decision</Text>
+                              </View>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            <View style={styles.divider} />
+
+            {/* 4. Explore Opportunities Listings */}
+            <View style={styles.section}>
+              <View style={[styles.listingsHeader, !isTablet && styles.columnLayout]}>
+                <Text style={styles.listingsTitle}>All Verified Opportunities ({filteredJobs.length})</Text>
+
+                {/* Filters */}
+                <View style={[styles.filtersContainer, !isTablet && { width: '100%' }]}>
+                  <View style={styles.searchWrapper}>
+                    <Text style={styles.searchIcon}>🔍</Text>
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Search roles, skills, companies..."
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      onSubmitEditing={handleSearchSubmit}
+                      placeholderTextColor={COLORS.muted}
+                    />
+                  </View>
+
+                  <View style={styles.filterControls}>
+                    <View style={styles.selectWrapper}>
+                      <Pressable
+                        style={styles.selectBox}
+                        onPress={() => {
+                          const options = ['Best Match', 'Stipend (High to Low)', 'Newest'];
+                          const nextIndex = (options.indexOf(sortOption) + 1) % options.length;
+                          setSortOption(options[nextIndex]);
+                        }}
+                      >
+                        <Text style={styles.selectBoxText}>Sort: {sortOption}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Active Filter Chips */}
+              {(locationFilter || typeFilter || searchQuery) ? (
+                <View style={styles.activeChipsRow}>
+                  {searchQuery ? (
+                    <View style={styles.chip}>
+                      <Text style={styles.chipText}>Query: {searchQuery}</Text>
+                      <Pressable onPress={() => setSearchQuery('')} style={styles.chipClose}>
+                        <Text style={styles.chipCloseText}>×</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  {locationFilter ? (
+                    <View style={styles.chip}>
+                      <Text style={styles.chipText}>Location: {locationFilter}</Text>
+                      <Pressable onPress={() => setLocationFilter('')} style={styles.chipClose}>
+                        <Text style={styles.chipCloseText}>×</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  {typeFilter ? (
+                    <View style={styles.chip}>
+                      <Text style={styles.chipText}>Type: {typeFilter}</Text>
+                      <Pressable onPress={() => setTypeFilter('')} style={styles.chipClose}>
+                        <Text style={styles.chipCloseText}>×</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  <Pressable onPress={handleClearFilters} style={styles.clearFiltersBtn}>
+                    <Text style={styles.clearFiltersText}>Clear All</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {/* Listings Grid */}
+              <View style={styles.listingsGrid}>
+                {filteredJobs.length > 0 ? (
+                  filteredJobs.map((job) => {
+                    const isEligible = job.eligibility_status === 'ELIGIBLE';
+                    const isAlmost = job.eligibility_status === 'POSSIBLY_ELIGIBLE';
+                    const matchPercent = Math.round(job.match_score || 0);
+
+                    return (
+                      <HoverableCard key={job.id} style={[styles.jobCard, { width: cardWidth }]}>
+                        <View style={styles.jobCardHeader}>
+                          <View style={[styles.logoSquareCompact, { backgroundColor: '#e0f2fe' }]}>
+                            <Text style={[styles.logoTextCompact, { color: '#0369a1' }]}>
+                              {job.company ? job.company.substring(0, 2).toUpperCase() : 'IN'}
+                            </Text>
+                          </View>
+                          <View style={styles.jobBadgeWrap}>
+                            <View style={[
+                              styles.miniBadge,
+                              isEligible && styles.miniBadgeGreen,
+                              isAlmost && styles.miniBadgeAmber,
+                              !isEligible && !isAlmost && styles.miniBadgeRose
+                            ]}>
+                              <Text style={[
+                                styles.miniBadgeText,
+                                isEligible && { color: COLORS.green },
+                                isAlmost && { color: COLORS.amber },
+                                !isEligible && !isAlmost && { color: COLORS.rose }
+                              ]}>
+                                {matchPercent}% Match
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        <Text style={styles.jobTitle}>{job.title}</Text>
+                        <Text style={styles.jobCompany}>
+                          {job.company} • {job.location || 'India'} ({job.work_mode || (job.is_remote ? 'Remote' : 'On-site')})
+                        </Text>
+
+                        {/* Attribution */}
+                        <Text style={styles.jobSourceText}>
+                          Source: <Text style={{ fontWeight: '700' }}>{job.source || 'Verified Source'}</Text>
+                        </Text>
+
+                        {/* Short Description */}
+                        <Text style={styles.jobDescription} numberOfLines={2}>
+                          {job.description}
+                        </Text>
+
+                        {/* Skills tags list */}
+                        <View style={styles.skillsTagRow}>
+                          {(job.skills || []).slice(0, 3).map((s, idx) => (
+                            <View key={idx} style={styles.skillTag}>
+                              <Text style={styles.skillTagText}>{s}</Text>
+                            </View>
+                          ))}
+                          {(job.missing_skills || []).slice(0, 2).map((s, idx) => (
+                            <View key={idx} style={[styles.skillTag, { backgroundColor: COLORS.roseLight }]}>
+                              <Text style={[styles.skillTagText, { color: COLORS.rose }]}>Gap: {s}</Text>
+                            </View>
+                          ))}
+                        </View>
+
+                        <View style={styles.jobCardFooter}>
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={styles.jobStipend} numberOfLines={1}>
+                              {job.stipend || 'Competitive'}
+                            </Text>
+                            {job.application_deadline && (
+                              <Text style={styles.jobPosted}>
+                                Deadline: {new Date(job.application_deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </Text>
+                            )}
+                          </View>
+                          
+                          <View style={styles.jobCardFooterRight}>
+                            <Pressable
+                              style={({ pressed }) => [styles.btnCardDetails, pressed && styles.pressed]}
+                              onPress={() => handleViewDetails(job)}
+                            >
+                              <Text style={styles.btnCardDetailsText}>Details</Text>
+                            </Pressable>
+                            <Pressable
+                              style={({ pressed }) => [styles.btnCardApply, pressed && styles.pressed]}
+                              onPress={() => handleApply(job)}
+                              disabled={applyingId === job.id}
+                            >
+                              <Text style={styles.btnCardApplyText}>
+                                {applyingId === job.id ? '...' : 'Apply'}
+                              </Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      </HoverableCard>
+                    );
+                  })
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateIcon}>🔍</Text>
+                    <Text style={styles.emptyStateTitle}>No Opportunities Found</Text>
+                    <Text style={styles.emptyStateSubtitle}>
+                      No active listings match your filters. Try resetting your search or filter parameters.
+                    </Text>
+                    <Pressable
+                      onPress={handleClearFilters}
+                      style={styles.emptyStateBtn}
+                    >
+                      <Text style={styles.emptyStateBtnText}>Reset Filters</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </View>
+          </>
+        )}
 
       </ScrollView>
 
@@ -906,13 +757,13 @@ export default function Internship() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
               <Text style={styles.modalSuccessIcon}>🚀</Text>
-              <Text style={styles.modalTitle}>Application Submitted!</Text>
+              <Text style={styles.modalTitle}>Official Portal Launched</Text>
               <Text style={styles.modalMessage}>
-                Your application for <Text style={styles.bold}>{appliedJob.title}</Text> at <Text style={styles.bold}>{appliedJob.company}</Text> has been successfully sent.
+                We tracked your interest for <Text style={styles.bold}>{appliedJob.title}</Text> at <Text style={styles.bold}>{appliedJob.company}</Text> and opened the official listing portal.
               </Text>
               <View style={styles.modalDetails}>
-                <Text style={styles.modalDetailsLabel}>Match Strength: {appliedJob.matchRate}%</Text>
-                <Text style={styles.modalDetailsLabel}>Stipend: {appliedJob.stipend}</Text>
+                <Text style={styles.modalDetailsLabel}>Match Score: {Math.round(appliedJob.match_score || 0)}%</Text>
+                <Text style={styles.modalDetailsLabel}>Source: {appliedJob.source}</Text>
               </View>
               <Pressable style={styles.modalCloseBtn} onPress={() => setShowAppliedModal(false)}>
                 <Text style={styles.modalCloseBtnText}>Done</Text>
@@ -932,11 +783,10 @@ export default function Internship() {
         >
           <View style={styles.modalOverlay}>
             <View style={[styles.modalCard, styles.detailsModalCard]}>
-              {/* Header with Close */}
               <View style={styles.detailsModalHeader}>
-                <View style={[styles.logoSquareCompact, { backgroundColor: selectedDetailJob.logoBg }]}>
-                  <Text style={[styles.logoTextCompact, { color: selectedDetailJob.logoColor }]}>
-                    {selectedDetailJob.logoText}
+                <View style={[styles.logoSquareCompact, { backgroundColor: '#e0f2fe' }]}>
+                  <Text style={[styles.logoTextCompact, { color: '#0369a1' }]}>
+                    {selectedDetailJob.company ? selectedDetailJob.company.substring(0, 2).toUpperCase() : 'IN'}
                   </Text>
                 </View>
                 <Pressable style={styles.closeModalCross} onPress={() => setShowDetailsModal(false)}>
@@ -944,68 +794,59 @@ export default function Internship() {
                 </Pressable>
               </View>
 
-              {/* Job Title and Info */}
               <Text style={styles.detailsModalTitle}>{selectedDetailJob.title}</Text>
               <Text style={styles.detailsModalCompany}>
-                {selectedDetailJob.company} • {selectedDetailJob.location} ({selectedDetailJob.type})
+                {selectedDetailJob.company} • {selectedDetailJob.location || 'India'} ({selectedDetailJob.work_mode || (selectedDetailJob.is_remote ? 'Remote' : 'On-site')})
               </Text>
               
               <View style={styles.detailsModalMetaRow}>
                 <View style={styles.detailsMetaItem}>
                   <Text style={styles.detailsMetaLabel}>STIPEND</Text>
-                  <Text style={styles.detailsMetaValue}>{selectedDetailJob.stipend}</Text>
+                  <Text style={styles.detailsMetaValue}>{selectedDetailJob.stipend || 'Competitive'}</Text>
                 </View>
                 <View style={styles.detailsMetaItem}>
-                  <Text style={styles.detailsMetaLabel}>DURATION</Text>
-                  <Text style={styles.detailsMetaValue}>{selectedDetailJob.duration}</Text>
+                  <Text style={styles.detailsMetaLabel}>SOURCE</Text>
+                  <Text style={styles.detailsMetaValue}>{selectedDetailJob.source}</Text>
                 </View>
                 <View style={styles.detailsMetaItem}>
                   <Text style={styles.detailsMetaLabel}>MATCH SCORE</Text>
                   <Text style={[styles.detailsMetaValue, { color: COLORS.green }]}>
-                    {selectedDetailJob.matchRate}% Match
+                    {Math.round(selectedDetailJob.match_score || 0)}% Match
                   </Text>
                 </View>
               </View>
 
-              {/* Description */}
-              <Text style={styles.detailsModalSectionTitle}>Job Description</Text>
-              <Text style={styles.detailsModalDescription}>{selectedDetailJob.description}</Text>
+              <Text style={styles.detailsModalSectionTitle}>Role Description</Text>
+              <ScrollView style={{ maxHeight: 150, width: '100%', marginBottom: 12 }}>
+                <Text style={styles.detailsModalDescription}>{selectedDetailJob.description}</Text>
+              </ScrollView>
 
-              {/* Skills */}
-              <Text style={styles.detailsModalSectionTitle}>Skills Checklist</Text>
+              <Text style={styles.detailsModalSectionTitle}>Skill Alignment</Text>
               <View style={styles.detailsModalSkillsList}>
-                {selectedDetailJob.skills.map((s, idx) => (
+                {(selectedDetailJob.skills || []).map((s, idx) => (
                   <View key={idx} style={styles.detailSkillRow}>
                     <Text style={styles.detailCheckIcon}>✓</Text>
-                    <Text style={styles.detailSkillName}>{s} (Possessed)</Text>
+                    <Text style={styles.detailSkillName}>{s} (Matched)</Text>
                   </View>
                 ))}
-                {selectedDetailJob.missingSkills && selectedDetailJob.missingSkills.map((s, idx) => (
+                {(selectedDetailJob.missing_skills || []).map((s, idx) => (
                   <View key={idx} style={styles.detailSkillRow}>
                     <Text style={styles.detailWarningIcon}>⚠</Text>
-                    <Text style={[styles.detailSkillName, { color: COLORS.rose }]}>{s} (Missing)</Text>
+                    <Text style={[styles.detailSkillName, { color: COLORS.rose }]}>{s} (Gap)</Text>
                   </View>
                 ))}
               </View>
 
-              {/* Match reason or gaps */}
-              {selectedDetailJob.whyMatches && selectedDetailJob.whyMatches.length > 0 && (
+              {/* Match Reasons */}
+              {selectedDetailJob.match_reasons && selectedDetailJob.match_reasons.length > 0 && (
                 <View style={styles.detailWhyBox}>
                   <Text style={styles.detailWhyTitle}>Why you match this role:</Text>
-                  {selectedDetailJob.whyMatches.map((m, idx) => (
+                  {selectedDetailJob.match_reasons.map((m, idx) => (
                     <Text key={idx} style={styles.detailWhyText}>• {m}</Text>
                   ))}
                 </View>
               )}
 
-              {selectedDetailJob.gapWarning && (
-                <View style={[styles.detailWhyBox, { backgroundColor: '#fffbe8', borderColor: '#fef3c7' }]}>
-                  <Text style={[styles.detailWhyTitle, { color: COLORS.amber }]}>Bridge the Gap:</Text>
-                  <Text style={styles.detailWhyText}>{selectedDetailJob.gapWarning}</Text>
-                </View>
-              )}
-
-              {/* Modal Actions */}
               <View style={styles.detailsModalActions}>
                 <Pressable 
                   style={styles.detailsModalCloseBtn} 
@@ -1020,7 +861,7 @@ export default function Internship() {
                     handleApply(selectedDetailJob);
                   }}
                 >
-                  <Text style={styles.detailsModalApplyBtnText}>Apply Now</Text>
+                  <Text style={styles.detailsModalApplyBtnText}>Apply on Portal</Text>
                 </Pressable>
               </View>
             </View>
@@ -1156,6 +997,52 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     textAlign: 'center',
     lineHeight: 14,
+  },
+  loadingContainer: {
+    padding: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 15,
+    color: COLORS.muted,
+    fontWeight: '500',
+  },
+  errorContainer: {
+    backgroundColor: '#fff5f5',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  errorIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.rose,
+    marginBottom: 4,
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    color: COLORS.muted,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryBtn: {
+    backgroundColor: COLORS.green,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    color: COLORS.paper,
+    fontWeight: '600',
   },
   section: {
     marginBottom: 36,
@@ -1339,254 +1226,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  gridTwoCol: {
-    gap: 20,
-  },
-  panelCard: {
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#1e293b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.02,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  panelCardWarning: {
-    backgroundColor: '#fff5f5',
-    borderColor: '#fca5a5',
-  },
-  panelCardInsights: {
-    backgroundColor: '#f0fdfa',
-    borderColor: COLORS.subtle,
-  },
-  panelCardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.ink,
-    marginBottom: 16,
-  },
-  metricItem: {
-    marginBottom: 16,
-  },
-  metricLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  metricLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.muted,
-  },
-  metricPercent: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  progressTrack: {
-    height: 8,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  gapHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  warningIcon: {
-    fontSize: 20,
-    color: COLORS.rose,
-  },
-  gapTitle: {
-    fontSize: 16,
-    fontWeight: '750',
-    color: COLORS.ink,
-  },
-  gapText: {
-    fontSize: 14,
-    color: COLORS.muted,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  boldText: {
-    fontWeight: '750',
-  },
-  comparisonBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    borderRadius: 8,
-    paddingVertical: 12,
-    gap: 16,
-    marginBottom: 16,
-  },
-  comparisonItem: {
-    alignItems: 'center',
-  },
-  comparisonValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  comparisonLabel: {
-    fontSize: 11,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  comparisonArrow: {
-    fontSize: 18,
-    color: COLORS.muted,
-  },
-  btnFindCourse: {
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnFindCourseText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.ink,
-  },
-  readinessList: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  readinessItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  checkIcon: {
-    fontSize: 16,
-    color: COLORS.green,
-    fontWeight: 'bold',
-  },
-  pendingIcon: {
-    fontSize: 16,
-    color: COLORS.amber,
-    fontWeight: 'bold',
-  },
-  readinessText: {
-    fontSize: 14.5,
-    color: COLORS.ink,
-    fontWeight: '550',
-  },
-  innerOptimizationBox: {
-    backgroundColor: COLORS.panel,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    padding: 16,
-  },
-  innerTitle: {
-    fontSize: 15,
-    fontWeight: '750',
-    color: COLORS.ink,
-    marginBottom: 4,
-  },
-  innerSubtitle: {
-    fontSize: 12.5,
-    color: COLORS.muted,
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  scoreRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 8,
-  },
-  scoreRowOptimized: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.greenLight,
-  },
-  scoreLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.ink,
-  },
-  scoreValue: {
-    fontSize: 14,
-    fontWeight: '750',
-    color: COLORS.ink,
-  },
-  btnOptimizeNow: {
-    backgroundColor: COLORS.green,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  btnOptimizeNowText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.paper,
-  },
-  insightHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  lightbulbCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: COLORS.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.green,
-  },
-  lightbulbText: {
-    fontSize: 18,
-  },
-  insightsMainText: {
-    fontSize: 17,
-    color: COLORS.ink,
-    lineHeight: 26,
-    marginBottom: 20,
-  },
-  insightTagsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  insightTag: {
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  insightTagText: {
-    fontSize: 12,
-    color: COLORS.muted,
-    fontWeight: '550',
-  },
   tableCard: {
     backgroundColor: COLORS.paper,
     borderWidth: 1,
@@ -1708,12 +1347,6 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     marginTop: 2,
   },
-  jobDescription: {
-    fontSize: 13.5,
-    color: COLORS.muted,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
   divider: {
     height: 1,
     backgroundColor: COLORS.subtle,
@@ -1763,22 +1396,6 @@ const styles = StyleSheet.create({
   filterControls: {
     flexDirection: 'row',
     gap: 8,
-  },
-  filterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
-    justifyContent: 'center',
-  },
-  filterBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.muted,
   },
   selectWrapper: {
     position: 'relative',
@@ -1916,6 +1533,17 @@ const styles = StyleSheet.create({
   jobCompany: {
     fontSize: 13,
     color: COLORS.muted,
+    marginBottom: 4,
+  },
+  jobSourceText: {
+    fontSize: 11,
+    color: COLORS.muted,
+    marginBottom: 8,
+  },
+  jobDescription: {
+    fontSize: 13,
+    color: COLORS.muted,
+    lineHeight: 18,
     marginBottom: 12,
   },
   skillsTagRow: {
@@ -1986,8 +1614,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '600',
   },
-
-  // Details Modal styles
   detailsModalCard: {
     maxWidth: 520,
     padding: 24,

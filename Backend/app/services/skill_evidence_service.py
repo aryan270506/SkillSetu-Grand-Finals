@@ -93,7 +93,7 @@ def aggregate_skill_scores(evidence_records: List[StudentSkillEvidence]) -> Tupl
         if effective > 0.0:
             product_unobserved *= (1.0 - effective)
 
-        if rec.source_type in {"github", "verified_assessment"} and effective >= 0.40:
+        if rec.source_type == "verified_assessment" and effective >= 0.40:
             has_strong_technical_source = True
 
         sources_list.append({
@@ -114,10 +114,74 @@ def aggregate_skill_scores(evidence_records: List[StudentSkillEvidence]) -> Tupl
     elif unified_score < STATUS_EVIDENCED_THRESHOLD:
         status_label = "evidenced"
     else:
-        # Verified requires strong technical evidence (e.g. GitHub or verified assessment)
+        # Verified requires strong technical evidence (ONLY verified assessment)
         status_label = "verified" if has_strong_technical_source else "evidenced"
 
     return unified_score, status_label, sources_list
+
+def record_verified_assessment_evidence(
+    db: Session,
+    student_id: int,
+    skill_name: str,
+    score_pct: int,
+    attempt_id: int
+) -> StudentSkillEvidence:
+    """
+    Record verified assessment evidence for a passed skill test.
+    """
+    from datetime import datetime, timezone
+    
+    # Find matching ESCO skill ID
+    esco_skill = db.query(EscoSkill).filter(func.lower(EscoSkill.preferred_label) == skill_name.lower().strip()).first()
+    esco_id = esco_skill.id if esco_skill else None
+    
+    source_id = f"assessment:{attempt_id}"
+    metadata_json = json.dumps({
+        "attempt_id": attempt_id,
+        "score_pct": score_pct
+    })
+    
+    now_utc = datetime.now(timezone.utc)
+    
+    existing = (
+        db.query(StudentSkillEvidence)
+        .filter(
+            StudentSkillEvidence.student_id == student_id,
+            func.lower(StudentSkillEvidence.skill_name) == skill_name.lower().strip(),
+            StudentSkillEvidence.source_type == "verified_assessment"
+        )
+        .first()
+    )
+    
+    evidence_score = score_pct / 100.0
+    
+    if existing:
+        # Keep highest score
+        if evidence_score > (existing.evidence_score or 0.0):
+            existing.evidence_score = evidence_score
+            existing.confidence_score = 1.0
+            existing.source_id = source_id
+            existing.evidence_metadata = metadata_json
+            existing.updated_at = now_utc
+            db.commit()
+        return existing
+    else:
+        new_rec = StudentSkillEvidence(
+            student_id=student_id,
+            esco_skill_id=esco_id,
+            skill_name=skill_name,
+            source_type="verified_assessment",
+            source_id=source_id,
+            evidence_score=evidence_score,
+            confidence_score=1.0,
+            evidence_metadata=metadata_json,
+            created_at=now_utc,
+            updated_at=now_utc
+        )
+        db.add(new_rec)
+        db.commit()
+        return new_rec
+
 
 
 # ---------------------------------------------------------------------------

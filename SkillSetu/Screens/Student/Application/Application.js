@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
+  ActivityIndicator,
   Animated,
-  Dimensions,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { fetchStudentApplications } from '../services/applicationService';
 
 const COLORS = {
   canvas: '#f9f9f8',
@@ -31,121 +33,6 @@ const COLORS = {
   blueLight: '#d5e0f8',
   gray: '#eeeeed',
 };
-
-const MOCK_APPLICATIONS_DATA = [
-  {
-    id: 1,
-    company: 'TechNova Solutions',
-    role: 'Backend Developer Intern',
-    status: 'Under Review',
-    statusClass: 'UNDER REVIEW',
-    statusColor: COLORS.amber,
-    statusBg: COLORS.amberLight,
-    matchRate: 92,
-    dateApplied: 'Aug 24, 2023',
-    deadline: 'Sep 12, 2023',
-    resumeUsed: 'Backend Resume v2.pdf',
-    atsScore: 91,
-    nextAction: 'Waiting for employer review',
-    logoText: 'TN',
-    logoBg: '#e6f4ea',
-    logoColor: '#0e4f34',
-    timeline: [
-      { title: 'Saved', date: 'Aug 18', done: true },
-      { title: 'Application Submitted', date: 'Aug 24', done: true },
-      { title: 'Resume Viewed', date: 'Aug 26', done: true },
-      { title: 'Under Review', date: 'Aug 28', done: true, active: true },
-      { title: 'Shortlisted', date: '', done: false },
-      { title: 'Assessment', date: '', done: false },
-      { title: 'Interview', date: '', done: false },
-    ],
-  },
-  {
-    id: 2,
-    company: 'FinFlow Analytics',
-    role: 'Data Analyst Intern',
-    status: 'Shortlisted',
-    statusClass: 'SHORTLISTED',
-    statusColor: COLORS.amber,
-    statusBg: COLORS.amberLight,
-    matchRate: 81,
-    dateApplied: 'Aug 21, 2023',
-    deadline: 'Sep 05, 2023',
-    resumeUsed: 'Data Analyst Resume.pdf',
-    atsScore: 85,
-    nextAction: 'Complete assessment',
-    logoText: 'FF',
-    logoBg: '#fffbeb',
-    logoColor: '#b45309',
-    timeline: [
-      { title: 'Saved', date: 'Aug 17', done: true },
-      { title: 'Application Submitted', date: 'Aug 21', done: true },
-      { title: 'Resume Viewed', date: 'Aug 23', done: true },
-      { title: 'Under Review', date: 'Aug 24', done: true },
-      { title: 'Shortlisted', date: 'Aug 25', done: true, active: true },
-      { title: 'Assessment', date: 'Pending', done: false, required: true },
-      { title: 'Interview', date: '', done: false },
-    ],
-    assessment: {
-      title: 'Backend Technical Assessment',
-      duration: '45 mins',
-      questions: '30 questions',
-    },
-  },
-  {
-    id: 3,
-    company: 'InnovateLabs',
-    role: 'Software Engineer Intern',
-    status: 'Rejected',
-    statusClass: 'REJECTED',
-    statusColor: COLORS.rose,
-    statusBg: COLORS.roseLight,
-    matchRate: 78,
-    dateApplied: 'Aug 15, 2023',
-    deadline: 'Aug 30, 2023',
-    resumeUsed: 'Software Engineer Resume.pdf',
-    atsScore: 88,
-    nextAction: 'View Feedback',
-    logoText: 'IL',
-    logoBg: '#fee2e2',
-    logoColor: '#b91c1c',
-    timeline: [
-      { title: 'Saved', date: 'Aug 12', done: true },
-      { title: 'Application Submitted', date: 'Aug 15', done: true },
-      { title: 'Resume Viewed', date: 'Aug 18', done: true },
-      { title: 'Rejected', date: 'Aug 22', done: true, failed: true },
-    ],
-  },
-  {
-    id: 4,
-    company: 'DataSphere',
-    role: 'ML Intern',
-    status: 'Selected',
-    statusClass: 'SELECTED',
-    statusColor: '#059669',
-    statusBg: '#d1fae5',
-    matchRate: 94,
-    dateApplied: 'Aug 10, 2023',
-    deadline: 'Aug 25, 2023',
-    resumeUsed: 'Machine Learning Resume.pdf',
-    atsScore: 94,
-    nextAction: 'View Onboarding',
-    logoText: 'DS',
-    logoBg: '#ecfdf5',
-    logoColor: '#047857',
-    timeline: [
-      { title: 'Saved', date: 'Aug 08', done: true },
-      { title: 'Application Submitted', date: 'Aug 10', done: true },
-      { title: 'Resume Viewed', date: 'Aug 12', done: true },
-      { title: 'Under Review', date: 'Aug 14', done: true },
-      { title: 'Shortlisted', date: 'Aug 18', done: true },
-      { title: 'Assessment Completed', date: 'Aug 20', done: true },
-      { title: 'Interview Scheduled', date: 'Aug 24', done: true },
-      { title: 'Offer Extended', date: 'Aug 28', done: true },
-      { title: 'Selected', date: 'Aug 29', done: true, active: true },
-    ],
-  },
-];
 
 // Reusable HoverableCard helper for desktop/web animations
 function HoverableCard({ children, style, containerStyle, ...props }) {
@@ -193,11 +80,6 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
     outputRange: [0.03, 0.08],
   });
 
-  const shadowRadius = shadow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [4, 12],
-  });
-
   const flatStyle = StyleSheet.flatten(style);
   const containerLayout = {};
   if (flatStyle) {
@@ -214,7 +96,7 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
     transform: [{ scale }],
     shadowColor: '#1e293b',
     shadowOpacity,
-    shadowRadius,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   };
 
@@ -232,16 +114,27 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
   );
 }
 
-export default function Application() {
+export default function Application({ user, profileData }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const isDesktop = width >= 1024;
+
+  const studentEmail = user?.email || profileData?.personalInfo?.email || 'abhoge27@gmail.com';
 
   const [activeTab, setActiveTab] = useState('All Applications');
   const [selectedApp, setSelectedApp] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
 
-  // Animated sliding value for side sheet drawer
+  // API State
+  const [appData, setAppData] = useState({
+    stats: { total: 0, active: 0, under_review: 0, shortlisted: 0, accepted: 0, rejected: 0 },
+    internships: [],
+    scholarships: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
   const slideAnim = useRef(new Animated.Value(width)).current;
 
   // Sync drawer slides
@@ -249,388 +142,287 @@ export default function Application() {
     if (showDrawer) {
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 250,
         useNativeDriver: Platform.OS !== 'web',
       }).start();
     } else {
       Animated.timing(slideAnim, {
         toValue: width,
-        duration: 300,
+        duration: 200,
         useNativeDriver: Platform.OS !== 'web',
       }).start();
     }
-  }, [showDrawer, width]);
+  }, [showDrawer, width, slideAnim]);
 
-  const handleOpenAppDetails = (app) => {
+  const loadApplications = async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const data = await fetchStudentApplications(studentEmail);
+      if (data) {
+        setAppData(data);
+      }
+    } catch (err) {
+      console.error('[Application Screen] Error loading applications:', err);
+      setError(err.message || 'Failed to connect to application tracking server');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadApplications();
+  }, [studentEmail]);
+
+  // Combined and filtered application list
+  const filteredList = useMemo(() => {
+    const intList = (appData.internships || []).map((item) => ({
+      ...item,
+      type: 'internship',
+      title: item.internship?.title || item.title || 'Internship Application',
+      organization: item.internship?.company || item.company || 'Direct Employer',
+      appliedDate: item.applied_at ? new Date(item.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently',
+      portalUrl: item.internship?.application_url || item.internship?.source_url,
+    }));
+
+    const schList = (appData.scholarships || []).map((item) => ({
+      ...item,
+      type: 'scholarship',
+      title: item.scholarship?.name || item.name || 'Scholarship Scheme',
+      organization: item.scholarship?.provider || item.provider || 'Scholarship Provider',
+      appliedDate: item.applied_at ? new Date(item.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently',
+      portalUrl: item.scholarship?.application_url || item.scholarship?.source_url,
+    }));
+
+    let all = [...intList, ...schList];
+
+    if (activeTab === 'Internships') {
+      return all.filter((a) => a.type === 'internship');
+    } else if (activeTab === 'Scholarships') {
+      return all.filter((a) => a.type === 'scholarship');
+    } else if (activeTab === 'Under Review') {
+      return all.filter((a) => a.status === 'UNDER_REVIEW' || a.status === 'APPLIED');
+    } else if (activeTab === 'Shortlisted / Accepted') {
+      return all.filter((a) => a.status === 'SHORTLISTED' || a.status === 'ACCEPTED');
+    }
+    return all;
+  }, [appData, activeTab]);
+
+  const handleCardClick = (app) => {
     setSelectedApp(app);
     setShowDrawer(true);
   };
 
-  const handleCloseDrawer = () => {
-    setShowDrawer(false);
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'ACCEPTED':
+        return { text: '#047857', bg: '#d1fae5' };
+      case 'SHORTLISTED':
+        return { text: COLORS.teal, bg: COLORS.mint };
+      case 'UNDER_REVIEW':
+      case 'APPLIED':
+        return { text: COLORS.amber, bg: COLORS.amberLight };
+      case 'REJECTED':
+        return { text: COLORS.rose, bg: COLORS.roseLight };
+      default:
+        return { text: COLORS.muted, bg: COLORS.panel };
+    }
   };
-
-  const filteredApps = MOCK_APPLICATIONS_DATA.filter((app) => {
-    if (activeTab === 'All Applications') return true;
-    if (activeTab === 'Applied') return app.status === 'Applied' || app.status === 'Under Review' || app.status === 'Shortlisted';
-    return app.status.toLowerCase() === activeTab.toLowerCase();
-  });
 
   return (
     <View style={styles.container}>
-      {/* Background dimmer overlay when drawer is open */}
-      {showDrawer && (
-        <Pressable style={styles.drawerBackdrop} onPress={handleCloseDrawer} />
-      )}
-
       <ScrollView contentContainerStyle={styles.contentContainer}>
-        <View style={[styles.mainGrid, isDesktop ? styles.rowLayout : styles.columnLayout]}>
-          
-          {/* Left / Center Column (Overview & Cards List) */}
-          <View style={[styles.leftColumn, isDesktop ? { flex: 9 } : {}]}>
-            
-            {/* Header */}
-            <View style={styles.header}>
-              <Text style={styles.displayHeading}>Applied Internships</Text>
-              <Text style={styles.bentoSubtext}>
-                Track your internship applications, deadlines, assessments, and outcomes in one place.
-              </Text>
-            </View>
+        {/* Header Bento */}
+        <View style={styles.header}>
+          <Text style={styles.pageTitle}>Application Tracker</Text>
+          <Text style={styles.pageSubtitle}>
+            Real-time status tracking for all your verified internship and scholarship submissions.
+          </Text>
+        </View>
 
-            {/* Bento Statistics Grid */}
-            <View style={styles.statsGrid}>
-              <View style={styles.statSquare}>
-                <Text style={styles.statLabel}>Total</Text>
-                <Text style={[styles.statValue, { color: COLORS.green }]}>18</Text>
-              </View>
-              <View style={styles.statSquare}>
-                <Text style={styles.statLabel}>Applied</Text>
-                <Text style={[styles.statValue, { color: COLORS.ink }]}>12</Text>
-              </View>
-              <View style={styles.statSquare}>
-                <Text style={styles.statLabel}>Under Review</Text>
-                <Text style={[styles.statValue, { color: '#d97706' }]}>5</Text>
-              </View>
-              <View style={styles.statSquare}>
-                <Text style={styles.statLabel}>Shortlisted</Text>
-                <Text style={[styles.statValue, { color: '#d97706' }]}>3</Text>
-              </View>
-              <View style={styles.statSquare}>
-                <Text style={styles.statLabel}>Assessment</Text>
-                <Text style={[styles.statValue, { color: COLORS.teal }]}>2</Text>
-              </View>
-              <View style={styles.statSquare}>
-                <Text style={styles.statLabel}>Selected</Text>
-                <Text style={[styles.statValue, { color: '#059669' }]}>1</Text>
-              </View>
-              <View style={styles.statSquare}>
-                <Text style={styles.statLabel}>Rejected</Text>
-                <Text style={[styles.statValue, { color: COLORS.rose }]}>4</Text>
-              </View>
-              <View style={styles.statSquare}>
-                <Text style={styles.statLabel}>Saved</Text>
-                <Text style={[styles.statValue, { color: COLORS.blue }]}>6</Text>
-              </View>
-            </View>
+        {/* Dynamic Metric Gauges */}
+        <View style={[styles.statsRow, isTablet ? styles.rowLayout : styles.columnLayout]}>
+          <View style={[styles.statCard, { borderTopColor: COLORS.teal }]}>
+            <Text style={styles.statNumber}>{appData.stats?.total || 0}</Text>
+            <Text style={styles.statLabel}>Total Tracked</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: COLORS.amber }]}>
+            <Text style={styles.statNumber}>{appData.stats?.under_review || 0}</Text>
+            <Text style={styles.statLabel}>Under Review</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: COLORS.green }]}>
+            <Text style={styles.statNumber}>{appData.stats?.shortlisted || 0}</Text>
+            <Text style={styles.statLabel}>Shortlisted</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: '#059669' }]}>
+            <Text style={styles.statNumber}>{appData.stats?.accepted || 0}</Text>
+            <Text style={styles.statLabel}>Accepted</Text>
+          </View>
+        </View>
 
-            {/* Horizontal Filter Tabs */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.tabsRow}
-              contentContainerStyle={styles.tabsRowContent}
+        {/* Tab Filters */}
+        <View style={styles.tabBar}>
+          {['All Applications', 'Internships', 'Scholarships', 'Under Review', 'Shortlisted / Accepted'].map((tab) => (
+            <Pressable
+              key={tab}
+              style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
+              onPress={() => setActiveTab(tab)}
             >
-              {[
-                'All Applications',
-                'Applied',
-                'Under Review',
-                'Shortlisted',
-                'Assessment',
-                'Selected',
-                'Rejected',
-              ].map((tab) => {
-                const isActive = activeTab === tab;
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Loading / Error States */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.green} />
+            <Text style={styles.loadingText}>Fetching tracked applications...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={styles.errorTitle}>Failed to Load Applications</Text>
+            <Text style={styles.errorSubtitle}>{error}</Text>
+            <Pressable style={styles.retryBtn} onPress={() => loadApplications(true)}>
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.applicationsList}>
+            {filteredList.length > 0 ? (
+              filteredList.map((item) => {
+                const badge = getStatusColor(item.status);
                 return (
-                  <Pressable
-                    key={tab}
-                    onPress={() => setActiveTab(tab)}
-                    style={[styles.tabButton, isActive && styles.tabButtonActive]}
+                  <HoverableCard
+                    key={`${item.type}-${item.id}`}
+                    style={styles.appCard}
+                    onPress={() => handleCardClick(item)}
                   >
-                    <Text style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
-                      {tab}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Applications List */}
-            <View style={styles.listCard}>
-              {filteredApps.map((app) => {
-                return (
-                  <HoverableCard 
-                    key={app.id} 
-                    style={styles.listRow}
-                    onPress={() => handleOpenAppDetails(app)}
-                  >
-                    <View style={styles.rowLayout}>
-                      <View style={styles.rowMainLeft}>
-                        <View style={styles.rowHeader}>
-                          <Text style={styles.companyName}>{app.company}</Text>
-                          <View style={[styles.statusBadge, { backgroundColor: app.statusBg }]}>
-                            <Text style={[styles.statusBadgeText, { color: app.statusColor }]}>
-                              {app.statusClass}
-                            </Text>
-                          </View>
-                          <View style={styles.matchRateTag}>
-                            <Text style={styles.matchRateTagText}>⚡ {app.matchRate}% Match</Text>
-                          </View>
-                        </View>
-                        
-                        <Text style={styles.jobRole}>{app.role}</Text>
-
-                        <View style={[styles.rowLayout, styles.metaStatsRow]}>
-                          <Text style={styles.metaStatText}>📅 Applied: {app.dateApplied.split(',')[0]}</Text>
-                          <Text style={[styles.metaStatText, { color: '#b45309' }]}>⏰ Deadline: {app.deadline.split(',')[0]}</Text>
-                          <Text style={styles.metaStatText}>📄 {app.resumeUsed}</Text>
-                        </View>
+                    <View style={styles.appCardHeader}>
+                      <View style={styles.appLogo}>
+                        <Text style={styles.appLogoText}>
+                          {item.organization ? item.organization.substring(0, 2).toUpperCase() : 'AP'}
+                        </Text>
                       </View>
-
-                      <View style={styles.rowMainRight}>
-                        <Text style={styles.nextActionLabel}>Next Action:</Text>
-                        {app.status === 'Shortlisted' ? (
-                          <Pressable 
-                            style={styles.actionBtnTakeAssessment}
-                            onPress={() => handleOpenAppDetails(app)}
-                          >
-                            <Text style={styles.actionBtnText}>Take Assessment</Text>
-                          </Pressable>
-                        ) : app.status === 'Rejected' ? (
-                          <Pressable 
-                            style={styles.actionBtnFeedback}
-                            onPress={() => handleOpenAppDetails(app)}
-                          >
-                            <Text style={styles.actionBtnFeedbackText}>View Feedback</Text>
-                          </Pressable>
-                        ) : app.status === 'Selected' ? (
-                          <Pressable 
-                            style={styles.actionBtnTakeAssessment}
-                            onPress={() => handleOpenAppDetails(app)}
-                          >
-                            <Text style={styles.actionBtnText}>View Onboarding</Text>
-                          </Pressable>
-                        ) : (
-                          <Text style={styles.nextActionText}>{app.nextAction}</Text>
-                        )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.appTitle}>{item.title}</Text>
+                        <Text style={styles.appCompany}>
+                          {item.organization} • {item.type === 'internship' ? 'Internship' : 'Scholarship'}
+                        </Text>
                       </View>
+                      <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                        <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                          {item.status || 'APPLIED'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.appCardMeta}>
+                      <Text style={styles.appliedDateText}>Applied on: {item.appliedDate}</Text>
+                      {item.portalUrl && (
+                        <Pressable
+                          style={styles.portalLink}
+                          onPress={() => Linking.openURL(item.portalUrl)}
+                        >
+                          <Text style={styles.portalLinkText}>Open Portal ↗</Text>
+                        </Pressable>
+                      )}
                     </View>
                   </HoverableCard>
                 );
-              })}
-            </View>
-
-          </View>
-
-          {/* Right Column (Sidebar Panels) */}
-          <View style={[styles.rightColumn, isDesktop ? { flex: 3 } : {}]}>
-            
-            {/* AI Application Insights */}
-            <View style={styles.sidebarPanelTeal}>
-              <View style={styles.sidebarPanelHeader}>
-                <Text style={styles.sidebarIcon}>✨</Text>
-                <Text style={styles.sidebarPanelTitleTeal}>AI Application Insights</Text>
-              </View>
-              <View style={styles.insightsList}>
-                <View style={styles.insightItem}>
-                  <Text style={styles.insightBulletIcon}>ℹ</Text>
-                  <Text style={styles.insightItemText}>
-                    You have <Text style={styles.boldText}>3 applications</Text> currently under review.
-                  </Text>
-                </View>
-                <View style={styles.insightItem}>
-                  <Text style={[styles.insightBulletIcon, { color: '#d97706' }]}>⚠</Text>
-                  <Text style={styles.insightItemText}>
-                    <Text style={styles.boldText}>2 shortlisted applications</Text> require an assessment completion soon.
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Upcoming Deadlines */}
-            <View style={styles.sidebarPanelCard}>
-              <Text style={styles.sidebarPanelTitle}>Upcoming Deadlines</Text>
-              <View style={styles.deadlinesList}>
-                <View style={[styles.deadlineStripe, { borderLeftColor: COLORS.rose }]}>
-                  <Text style={[styles.deadlineDateLabel, { color: COLORS.rose }]}>Deadline Tomorrow</Text>
-                  <Text style={styles.deadlineTitle}>Docker Backend Intern</Text>
-                </View>
-                <View style={[styles.deadlineStripe, { borderLeftColor: '#d97706' }]}>
-                  <Text style={[styles.deadlineDateLabel, { color: '#d97706' }]}>Sep 2</Text>
-                  <Text style={styles.deadlineTitle}>FinFlow Assessment</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Application Analytics */}
-            <View style={styles.sidebarPanelCard}>
-              <Text style={styles.sidebarPanelTitle}>Application Analytics</Text>
-              <View style={styles.analyticsGrid}>
-                <View style={styles.analyticBox}>
-                  <Text style={styles.analyticLabel}>Selection Rate</Text>
-                  <Text style={styles.analyticValue}>5.5%</Text>
-                </View>
-                <View style={styles.analyticBox}>
-                  <Text style={styles.analyticLabel}>Avg Match</Text>
-                  <Text style={styles.analyticValue}>84%</Text>
-                </View>
-              </View>
-            </View>
-
-          </View>
-
-        </View>
-      </ScrollView>
-
-      {/* Slide-out Side Drawer Details Panel */}
-      {selectedApp && (
-        <Animated.View 
-          style={[
-            styles.drawerContainer, 
-            { transform: [{ translateX: slideAnim }] }
-          ]}
-        >
-          {/* Header */}
-          <View style={styles.drawerHeader}>
-            <Text style={styles.drawerTitle}>Application Details</Text>
-            <Pressable style={styles.drawerCloseBtn} onPress={handleCloseDrawer}>
-              <Text style={styles.drawerCloseBtnText}>×</Text>
-            </Pressable>
-          </View>
-
-          {/* Scrollable details */}
-          <ScrollView contentContainerStyle={styles.drawerContentScroll}>
-            
-            {/* Company Info Box */}
-            <View style={styles.drawerCompanyBlock}>
-              <View style={[styles.logoSquare, { backgroundColor: selectedApp.logoBg }]}>
-                <Text style={[styles.logoText, { color: selectedApp.logoColor }]}>{selectedApp.logoText}</Text>
-              </View>
-              <View style={styles.drawerTitleBlock}>
-                <View style={styles.rowLayout}>
-                  <Text style={styles.drawerJobTitle} numberOfLines={1}>{selectedApp.role}</Text>
-                  <View style={styles.drawerMatchTag}>
-                    <Text style={styles.drawerMatchTagText}>⚡ {selectedApp.matchRate}% Match</Text>
-                  </View>
-                </View>
-                <Text style={styles.drawerCompanyName}>{selectedApp.company}</Text>
-              </View>
-            </View>
-
-            {/* Info Grid Card */}
-            <View style={styles.drawerInfoCard}>
-              <View style={styles.infoCardRow}>
-                <View style={styles.infoCardItem}>
-                  <Text style={styles.infoCardLabel}>Date Applied</Text>
-                  <Text style={styles.infoCardVal}>{selectedApp.dateApplied}</Text>
-                </View>
-                <View style={styles.infoCardItem}>
-                  <Text style={styles.infoCardLabel}>Deadline</Text>
-                  <Text style={styles.infoCardVal}>{selectedApp.deadline}</Text>
-                </View>
-              </View>
-              <View style={styles.infoCardDivider} />
-              <View style={styles.infoCardFileItem}>
-                <Text style={styles.infoCardLabel}>Resume Used</Text>
-                <View style={styles.resumeInfoBox}>
-                  <View style={styles.rowLayout}>
-                    <Text style={styles.resumeIcon}>📄</Text>
-                    <Text style={styles.resumeNameText} numberOfLines={1}>{selectedApp.resumeUsed}</Text>
-                  </View>
-                  <View style={styles.atsBadge}>
-                    <Text style={styles.atsBadgeText}>{selectedApp.atsScore} ATS Score</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Status Timeline */}
-            <View style={styles.drawerSection}>
-              <Text style={styles.drawerSectionTitle}>Status Timeline</Text>
-              <View style={styles.timelineVerticalTrack}>
-                <View style={styles.verticalLine} />
-                <View style={styles.timelineList}>
-                  {selectedApp.timeline.map((step, idx) => {
-                    const isDone = step.done;
-                    const isActive = step.active;
-                    const isFailed = step.failed;
-                    return (
-                      <View key={idx} style={styles.timelineRow}>
-                        <View style={[
-                          styles.timelineCircle,
-                          isDone && styles.timelineCircleDone,
-                          isActive && styles.timelineCircleActive,
-                          isFailed && styles.timelineCircleFailed,
-                        ]}>
-                          {isDone && <Text style={styles.timelineCheckIcon}>✓</Text>}
-                        </View>
-                        <View style={styles.timelineLabelBox}>
-                          <Text style={[
-                            styles.timelineLabelText,
-                            isActive && { fontWeight: '750', color: COLORS.green }
-                          ]}>
-                            {step.title}
-                          </Text>
-                          <Text style={styles.timelineDateText}>{step.date || 'Pending'}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-
-            {/* Assessment block if needed */}
-            {selectedApp.assessment && (
-              <View style={styles.assessmentPanel}>
-                <View style={styles.rowLayout}>
-                  <Text style={styles.assessmentIcon}>✍</Text>
-                  <Text style={styles.assessmentPanelTitle}>Assessment Required</Text>
-                </View>
-                <Text style={styles.assessmentJobTitle}>{selectedApp.assessment.title}</Text>
-                <View style={[styles.rowLayout, styles.assessmentDetailsRow]}>
-                  <Text style={styles.assessmentDetailText}>⏱ {selectedApp.assessment.duration}</Text>
-                  <Text style={styles.assessmentDetailText}>📋 {selectedApp.assessment.questions}</Text>
-                </View>
-                <Pressable style={styles.btnStartAssessment}>
-                  <Text style={styles.btnStartAssessmentText}>Start Assessment ➔</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {/* Interview Prep box */}
-            {!selectedApp.assessment && selectedApp.status !== 'Rejected' && (
-              <View style={styles.dottedPrepCard}>
-                <View style={styles.dottedIconCircle}>
-                  <Text style={styles.dottedIcon}>🎙</Text>
-                </View>
-                <Text style={styles.dottedTitle}>Interview Prep Available</Text>
-                <Text style={styles.dottedSubtitle}>
-                  You will be notified once the recruiter initiates the next phase. Start prep workspace.
+              })
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>📋</Text>
+                <Text style={styles.emptyTitle}>No Applications Found</Text>
+                <Text style={styles.emptySubtitle}>
+                  You have not submitted or launched applications in this category yet. Explore verified internships and scholarships to apply!
                 </Text>
               </View>
             )}
+          </View>
+        )}
+      </ScrollView>
 
-          </ScrollView>
-
-          {/* Sticky footer actions */}
-          <View style={styles.drawerFooter}>
-            <Pressable style={styles.btnWithdraw}>
-              <Text style={styles.btnWithdrawText}>Withdraw Application</Text>
-            </Pressable>
-            <Pressable style={styles.btnPrepare}>
-              <Text style={styles.btnPrepareText}>🎙 Prepare for Interview</Text>
+      {/* Slide-over Side Sheet Drawer for Application Details */}
+      {selectedApp && (
+        <Animated.View style={[styles.sideDrawer, { transform: [{ translateX: slideAnim }] }]}>
+          <View style={styles.drawerHeader}>
+            <Text style={styles.drawerHeading}>Application Progress</Text>
+            <Pressable style={styles.closeDrawerBtn} onPress={() => setShowDrawer(false)}>
+              <Text style={styles.closeDrawerText}>×</Text>
             </Pressable>
           </View>
+
+          <ScrollView style={styles.drawerContent}>
+            <Text style={styles.drawerTitle}>{selectedApp.title}</Text>
+            <Text style={styles.drawerCompany}>{selectedApp.organization}</Text>
+
+            <View style={styles.drawerMetaBox}>
+              <View>
+                <Text style={styles.drawerMetaLabel}>TYPE</Text>
+                <Text style={styles.drawerMetaVal}>
+                  {selectedApp.type === 'internship' ? 'Internship' : 'Scholarship'}
+                </Text>
+              </View>
+              <View>
+                <Text style={styles.drawerMetaLabel}>APPLIED DATE</Text>
+                <Text style={styles.drawerMetaVal}>{selectedApp.appliedDate}</Text>
+              </View>
+              <View>
+                <Text style={styles.drawerMetaLabel}>STATUS</Text>
+                <Text style={[styles.drawerMetaVal, { color: COLORS.green }]}>
+                  {selectedApp.status || 'APPLIED'}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.drawerSectionTitle}>STATUS TIMELINE</Text>
+            <View style={styles.drawerTimeline}>
+              <View style={styles.drawerStep}>
+                <View style={[styles.stepCircle, styles.stepCircleDone]}>
+                  <Text style={styles.stepCheck}>✓</Text>
+                </View>
+                <View style={styles.stepInfo}>
+                  <Text style={styles.stepTitle}>Application Launched</Text>
+                  <Text style={styles.stepDate}>{selectedApp.appliedDate}</Text>
+                </View>
+              </View>
+              <View style={styles.drawerStep}>
+                <View style={[styles.stepCircle, styles.stepCircleActive]}>
+                  <Text style={styles.stepCheck}>⧗</Text>
+                </View>
+                <View style={styles.stepInfo}>
+                  <Text style={styles.stepTitle}>Under Verification</Text>
+                  <Text style={styles.stepDate}>In Progress</Text>
+                </View>
+              </View>
+              <View style={styles.drawerStep}>
+                <View style={styles.stepCircle}>
+                  <Text style={styles.stepCheck}>•</Text>
+                </View>
+                <View style={styles.stepInfo}>
+                  <Text style={styles.stepTitle}>Shortlisted / Final Decision</Text>
+                  <Text style={styles.stepDate}>Pending review</Text>
+                </View>
+              </View>
+            </View>
+
+            {selectedApp.portalUrl && (
+              <Pressable
+                style={styles.drawerPortalBtn}
+                onPress={() => Linking.openURL(selectedApp.portalUrl)}
+              >
+                <Text style={styles.drawerPortalBtnText}>Open Official Portal ↗</Text>
+              </Pressable>
+            )}
+          </ScrollView>
         </Animated.View>
       )}
     </View>
@@ -645,9 +437,25 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 24,
     paddingBottom: 48,
-    maxWidth: 1440,
+    maxWidth: 1200,
     width: '100%',
     alignSelf: 'center',
+  },
+  header: {
+    marginBottom: 24,
+  },
+  pageTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: COLORS.ink,
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  pageSubtitle: {
+    fontSize: 15,
+    color: COLORS.muted,
+    maxWidth: 600,
+    lineHeight: 22,
   },
   rowLayout: {
     flexDirection: 'row',
@@ -655,314 +463,211 @@ const styles = StyleSheet.create({
   columnLayout: {
     flexDirection: 'column',
   },
-  mainGrid: {
-    gap: 24,
+  statsRow: {
+    gap: 16,
+    marginBottom: 24,
   },
-  leftColumn: {
-    gap: 24,
-  },
-  rightColumn: {
-    gap: 24,
-  },
-  header: {
-    marginBottom: 8,
-  },
-  displayHeading: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: COLORS.ink,
-    letterSpacing: -0.6,
-    marginBottom: 8,
-  },
-  bentoSubtext: {
-    fontSize: 15,
-    color: COLORS.muted,
-    lineHeight: 22,
-    maxWidth: 680,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statSquare: {
+  statCard: {
     flex: 1,
-    minWidth: 100,
+    minWidth: 140,
     backgroundColor: COLORS.paper,
     borderWidth: 1,
     borderColor: COLORS.subtle,
-    borderRadius: 10,
-    padding: 14,
+    borderTopWidth: 4,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#1e293b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 6,
-    elevation: 1,
+  },
+  statNumber: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.ink,
+    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.muted,
-    textTransform: 'capitalize',
-    marginBottom: 4,
-    textAlign: 'center',
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  tabsRow: {
+  tabBar: {
+    flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.subtle,
-    marginTop: 8,
+    marginBottom: 24,
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  tabsRowContent: {
-    paddingBottom: 1,
-    gap: 16,
-  },
-  tabButton: {
+  tabItem: {
     paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
-  tabButtonActive: {
+  tabItemActive: {
     borderBottomColor: COLORS.green,
   },
-  tabButtonText: {
+  tabText: {
     fontSize: 13.5,
     fontWeight: '600',
     color: COLORS.muted,
   },
-  tabButtonTextActive: {
+  tabTextActive: {
     color: COLORS.green,
-    fontWeight: '700',
-  },
-  listCard: {
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  listRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray,
-    padding: 20,
-  },
-  rowMainLeft: {
-    flex: 7,
-    gap: 8,
-  },
-  rowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  companyName: {
-    fontSize: 16,
     fontWeight: '750',
-    color: COLORS.ink,
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 9999,
+  loadingContainer: {
+    padding: 60,
+    alignItems: 'center',
   },
-  statusBadgeText: {
-    fontSize: 11,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: COLORS.muted,
+  },
+  errorContainer: {
+    backgroundColor: COLORS.roseLight,
+    padding: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  errorIcon: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  errorTitle: {
+    fontSize: 16,
     fontWeight: '700',
+    color: COLORS.rose,
   },
-  matchRateTag: {
-    backgroundColor: COLORS.panel,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+  errorSubtitle: {
+    fontSize: 13,
+    color: COLORS.rose,
+    marginVertical: 4,
   },
-  matchRateTagText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: COLORS.ink,
-  },
-  jobRole: {
-    fontSize: 14.5,
-    fontWeight: '550',
-    color: COLORS.muted,
-  },
-  metaStatsRow: {
-    gap: 16,
-    flexWrap: 'wrap',
-    marginTop: 4,
-  },
-  metaStatText: {
-    fontSize: 12.5,
-    color: COLORS.muted,
-  },
-  rowMainRight: {
-    flex: 3,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingLeft: 12,
-  },
-  nextActionLabel: {
-    fontSize: 11.5,
-    color: COLORS.muted,
-    fontWeight: '500',
-    marginBottom: 6,
-  },
-  nextActionText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: COLORS.ink,
-    fontStyle: 'italic',
-    textAlign: 'right',
-  },
-  actionBtnTakeAssessment: {
+  retryBtn: {
     backgroundColor: COLORS.green,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginTop: 8,
   },
-  actionBtnText: {
+  retryBtnText: {
     color: COLORS.paper,
-    fontSize: 12.5,
     fontWeight: '600',
+    fontSize: 13,
   },
-  actionBtnFeedback: {
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  actionBtnFeedbackText: {
-    color: COLORS.green,
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
-  sidebarPanelTeal: {
-    backgroundColor: COLORS.mint,
-    borderWidth: 1,
-    borderColor: COLORS.mintBorder,
-    borderRadius: 12,
-    padding: 20,
+  applicationsList: {
     gap: 16,
   },
-  sidebarPanelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sidebarIcon: {
-    fontSize: 18,
-  },
-  sidebarPanelTitleTeal: {
-    fontSize: 16,
-    fontWeight: '750',
-    color: COLORS.green,
-  },
-  insightsList: {
-    gap: 12,
-  },
-  insightItem: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  insightBulletIcon: {
-    fontSize: 15,
-    color: COLORS.green,
-    fontWeight: 'bold',
-  },
-  insightItemText: {
-    fontSize: 13.5,
-    color: COLORS.muted,
-    lineHeight: 18,
-    flex: 1,
-  },
-  boldText: {
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  sidebarPanelCard: {
+  appCard: {
     backgroundColor: COLORS.paper,
     borderWidth: 1,
     borderColor: COLORS.subtle,
     borderRadius: 12,
-    padding: 20,
+    padding: 18,
   },
-  sidebarPanelTitle: {
-    fontSize: 16,
-    fontWeight: '750',
-    color: COLORS.ink,
-    marginBottom: 16,
-  },
-  deadlinesList: {
-    gap: 16,
-  },
-  deadlineStripe: {
-    borderLeftWidth: 4,
-    paddingLeft: 12,
-    paddingVertical: 2,
-  },
-  deadlineDateLabel: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  deadlineTitle: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: COLORS.ink,
-  },
-  analyticsGrid: {
+  appCardHeader: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  analyticBox: {
-    flex: 1,
-    backgroundColor: COLORS.panel,
-    borderRadius: 8,
-    padding: 12,
     alignItems: 'center',
+    gap: 14,
+    marginBottom: 12,
   },
-  analyticLabel: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontWeight: '500',
-    marginBottom: 4,
+  appLogo: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: COLORS.mint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.mintBorder,
   },
-  analyticValue: {
-    fontSize: 16,
+  appLogoText: {
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.green,
   },
-  drawerBackdrop: {
-    position: 'absolute',
-    inset: 0,
-    backgroundColor: 'rgba(26, 28, 28, 0.3)',
-    zIndex: 99,
+  appTitle: {
+    fontSize: 16,
+    fontWeight: '750',
+    color: COLORS.ink,
   },
-  drawerContainer: {
+  appCompany: {
+    fontSize: 13,
+    color: COLORS.muted,
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '750',
+  },
+  appCardMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.panel,
+    paddingTop: 10,
+  },
+  appliedDateText: {
+    fontSize: 12,
+    color: COLORS.muted,
+  },
+  portalLink: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  portalLinkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.green,
+  },
+  emptyContainer: {
+    padding: 48,
+    alignItems: 'center',
+    backgroundColor: COLORS.paper,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.subtle,
+  },
+  emptyIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '750',
+    color: COLORS.ink,
+  },
+  emptySubtitle: {
+    fontSize: 13.5,
+    color: COLORS.muted,
+    textAlign: 'center',
+    maxWidth: 420,
+    marginTop: 6,
+    lineHeight: 19,
+  },
+  sideDrawer: {
     position: 'absolute',
+    right: 0,
     top: 0,
     bottom: 0,
-    right: 0,
-    width: Platform.OS === 'web' ? 460 : '100%',
-    maxWidth: '100%',
+    width: 380,
     backgroundColor: COLORS.paper,
     borderLeftWidth: 1,
     borderLeftColor: COLORS.subtle,
-    shadowColor: '#000000',
+    shadowColor: '#1e293b',
     shadowOffset: { width: -4, height: 0 },
     shadowOpacity: 0.1,
     shadowRadius: 16,
-    zIndex: 100,
-    flexDirection: 'column',
+    elevation: 8,
+    zIndex: 999,
   },
   drawerHeader: {
     flexDirection: 'row',
@@ -971,327 +676,111 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.subtle,
-    backgroundColor: COLORS.paper,
+  },
+  drawerHeading: {
+    fontSize: 16,
+    fontWeight: '750',
+    color: COLORS.ink,
+  },
+  closeDrawerBtn: {
+    padding: 4,
+  },
+  closeDrawerText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.muted,
+  },
+  drawerContent: {
+    padding: 20,
   },
   drawerTitle: {
     fontSize: 18,
-    fontWeight: '750',
-    color: COLORS.ink,
-  },
-  drawerCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.panel,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  drawerCloseBtnText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.muted,
-    lineHeight: 22,
-  },
-  drawerContentScroll: {
-    padding: 24,
-    gap: 24,
-  },
-  drawerCompanyBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  logoSquare: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-  },
-  logoText: {
-    fontSize: 20,
     fontWeight: '800',
-  },
-  drawerTitleBlock: {
-    flex: 1,
-  },
-  drawerJobTitle: {
-    fontSize: 18,
-    fontWeight: '750',
     color: COLORS.ink,
-    maxWidth: '65%',
-  },
-  drawerMatchTag: {
-    backgroundColor: COLORS.greenLight,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  drawerMatchTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.green,
-  },
-  drawerCompanyName: {
-    fontSize: 14,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  drawerInfoCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 10,
-    padding: 16,
-    gap: 16,
-  },
-  infoCardRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  infoCardItem: {
-    flex: 1,
-  },
-  infoCardLabel: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginBottom: 4,
   },
-  infoCardVal: {
+  drawerCompany: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  infoCardDivider: {
-    height: 1,
-    backgroundColor: COLORS.subtle,
-  },
-  infoCardFileItem: {
-    width: '100%',
-  },
-  resumeInfoBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 6,
-    padding: 10,
-    marginTop: 4,
-  },
-  resumeIcon: {
-    fontSize: 16,
-    marginRight: 6,
-  },
-  resumeNameText: {
-    fontSize: 13,
-    color: COLORS.ink,
-    fontWeight: '550',
-    maxWidth: 160,
-  },
-  atsBadge: {
-    backgroundColor: COLORS.greenLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  atsBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.green,
-  },
-  drawerSection: {
-    width: '100%',
-  },
-  drawerSectionTitle: {
-    fontSize: 15,
-    fontWeight: '750',
-    color: COLORS.ink,
+    color: COLORS.muted,
     marginBottom: 16,
   },
-  timelineVerticalTrack: {
-    position: 'relative',
-    paddingLeft: 12,
+  drawerMetaBox: {
+    backgroundColor: COLORS.panel,
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
+    marginBottom: 20,
   },
-  verticalLine: {
-    position: 'absolute',
-    top: 10,
-    bottom: 24,
-    left: 21,
-    width: 2,
-    backgroundColor: COLORS.gray,
-  },
-  timelineList: {
-    gap: 20,
-  },
-  timelineRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 16,
-  },
-  timelineCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: COLORS.gray,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.gray,
-    zIndex: 2,
-    marginTop: 2,
-  },
-  timelineCircleDone: {
-    backgroundColor: COLORS.green,
-    borderColor: COLORS.green,
-  },
-  timelineCircleActive: {
-    backgroundColor: COLORS.paper,
-    borderColor: COLORS.green,
-    borderWidth: 3.5,
-    width: 20,
-    height: 20,
-  },
-  timelineCircleFailed: {
-    backgroundColor: COLORS.rose,
-    borderColor: COLORS.rose,
-  },
-  timelineCheckIcon: {
-    color: COLORS.paper,
+  drawerMetaLabel: {
     fontSize: 10,
-    fontWeight: 'bold',
-  },
-  timelineLabelBox: {
-    flex: 1,
-  },
-  timelineLabelText: {
-    fontSize: 13.5,
-    color: COLORS.ink,
-    fontWeight: '600',
-  },
-  timelineDateText: {
-    fontSize: 11.5,
+    fontWeight: '700',
     color: COLORS.muted,
-    marginTop: 2,
   },
-  assessmentPanel: {
-    backgroundColor: COLORS.mint,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  assessmentIcon: {
-    fontSize: 16,
-    marginRight: 6,
-  },
-  assessmentPanelTitle: {
-    fontSize: 13.5,
-    fontWeight: '750',
-    color: COLORS.green,
-  },
-  assessmentJobTitle: {
-    fontSize: 14.5,
+  drawerMetaVal: {
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.ink,
   },
-  assessmentDetailsRow: {
-    gap: 16,
-  },
-  assessmentDetailText: {
-    fontSize: 12.5,
+  drawerSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
     color: COLORS.muted,
-  },
-  btnStartAssessment: {
-    backgroundColor: COLORS.green,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnStartAssessmentText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.paper,
-  },
-  dottedPrepCard: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: COLORS.subtle,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.canvas,
-  },
-  dottedIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.panel,
-    alignItems: 'center',
-    justifyContent: 'center',
+    letterSpacing: 0.8,
     marginBottom: 12,
   },
-  dottedIcon: {
-    fontSize: 20,
+  drawerTimeline: {
+    gap: 16,
+    marginBottom: 24,
   },
-  dottedTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: COLORS.ink,
-    marginBottom: 4,
-  },
-  dottedSubtitle: {
-    fontSize: 12.5,
-    color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  drawerFooter: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.subtle,
-    backgroundColor: COLORS.paper,
+  drawerStep: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
-  btnWithdraw: {
-    flex: 1.2,
-    borderWidth: 1.5,
+  stepCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.panel,
+    borderWidth: 2,
     borderColor: COLORS.subtle,
-    backgroundColor: COLORS.paper,
-    paddingVertical: 10,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnWithdrawText: {
+  stepCircleDone: {
+    backgroundColor: COLORS.green,
+    borderColor: COLORS.green,
+  },
+  stepCircleActive: {
+    borderColor: COLORS.green,
+    backgroundColor: COLORS.paper,
+  },
+  stepCheck: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.paper,
+  },
+  stepInfo: {
+    flex: 1,
+  },
+  stepTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.ink,
   },
-  btnPrepare: {
-    flex: 1.8,
+  stepDate: {
+    fontSize: 11,
+    color: COLORS.muted,
+  },
+  drawerPortalBtn: {
     backgroundColor: COLORS.green,
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  btnPrepareText: {
-    fontSize: 13,
-    fontWeight: '600',
+  drawerPortalBtnText: {
     color: COLORS.paper,
+    fontWeight: '700',
+    fontSize: 13.5,
   },
 });

@@ -2,6 +2,7 @@ import re
 import json
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app import models
 
 
@@ -140,72 +141,76 @@ SKILL_NORMALIZATION_MAP = {
     'ci/cd': 'CI/CD Pipelines'
 }
 
-# Curated occupational skill requirements fallback matching ESCO structure
+# Curated occupational skill requirements matching canonical technical skills
 CURATED_OCCUPATION_SKILLS = {
     "backend developer": [
-        {"name": "Node.js", "relation": "essential", "required_level": 85, "icon": "🟢"},
-        {"name": "Docker", "relation": "essential", "required_level": 80, "icon": "🐳"},
-        {"name": "PostgreSQL", "relation": "essential", "required_level": 85, "icon": "🐘"},
-        {"name": "AWS", "relation": "essential", "required_level": 75, "icon": "☁️"},
-        {"name": "REST APIs", "relation": "essential", "required_level": 90, "icon": "⚡"},
-        {"name": "Python", "relation": "essential", "required_level": 85, "icon": "🐍"},
-        {"name": "SQL", "relation": "essential", "required_level": 80, "icon": "🗄️"},
-        {"name": "MongoDB", "relation": "optional", "required_level": 70, "icon": "🍃"},
-        {"name": "Redis", "relation": "optional", "required_level": 65, "icon": "⚡"},
-        {"name": "Git", "relation": "essential", "required_level": 85, "icon": "📦"}
+        {"name": "Node.js", "skill_id": "skill_nodejs", "relation": "essential", "required_level": 85, "icon": "🟢"},
+        {"name": "Python", "skill_id": "skill_python", "relation": "essential", "required_level": 85, "icon": "🐍"},
+        {"name": "FastAPI", "skill_id": "skill_fastapi", "relation": "essential", "required_level": 80, "icon": "⚡"},
+        {"name": "SQL", "skill_id": "skill_sql", "relation": "essential", "required_level": 85, "icon": "🗄️"},
+        {"name": "PostgreSQL", "skill_id": "skill_postgresql", "relation": "essential", "required_level": 85, "icon": "🐘"},
+        {"name": "REST APIs", "skill_id": "skill_rest_api", "relation": "essential", "required_level": 90, "icon": "⚡"},
+        {"name": "Docker", "skill_id": "skill_docker", "relation": "essential", "required_level": 80, "icon": "🐳"},
+        {"name": "Git", "skill_id": "skill_git", "relation": "essential", "required_level": 85, "icon": "📦"},
+        {"name": "AWS", "skill_id": "skill_aws", "relation": "optional", "required_level": 75, "icon": "☁️"},
+        {"name": "MongoDB", "skill_id": "skill_mongodb", "relation": "optional", "required_level": 70, "icon": "🍃"}
     ],
     "frontend developer": [
-        {"name": "React", "relation": "essential", "required_level": 90, "icon": "⚛️"},
-        {"name": "TypeScript", "relation": "essential", "required_level": 85, "icon": "🟦"},
-        {"name": "JavaScript", "relation": "essential", "required_level": 90, "icon": "🟨"},
-        {"name": "HTML & CSS", "relation": "essential", "required_level": 85, "icon": "🎨"},
-        {"name": "REST APIs", "relation": "essential", "required_level": 80, "icon": "⚡"},
-        {"name": "Git", "relation": "essential", "required_level": 85, "icon": "📦"},
-        {"name": "UI/UX Design", "relation": "optional", "required_level": 65, "icon": "✨"}
+        {"name": "React", "skill_id": "skill_react", "relation": "essential", "required_level": 90, "icon": "⚛️"},
+        {"name": "JavaScript", "skill_id": "skill_javascript", "relation": "essential", "required_level": 90, "icon": "🟨"},
+        {"name": "TypeScript", "skill_id": "skill_typescript", "relation": "essential", "required_level": 85, "icon": "🟦"},
+        {"name": "HTML & CSS", "skill_id": "skill_html_css", "relation": "essential", "required_level": 85, "icon": "🎨"},
+        {"name": "REST APIs", "skill_id": "skill_rest_api", "relation": "essential", "required_level": 80, "icon": "⚡"},
+        {"name": "Git", "skill_id": "skill_git", "relation": "essential", "required_level": 85, "icon": "📦"},
+        {"name": "UI/UX Design", "skill_id": "skill_ui_ux", "relation": "optional", "required_level": 65, "icon": "✨"}
     ],
     "full stack developer": [
-        {"name": "React", "relation": "essential", "required_level": 85, "icon": "⚛️"},
-        {"name": "Node.js", "relation": "essential", "required_level": 85, "icon": "🟢"},
-        {"name": "TypeScript", "relation": "essential", "required_level": 80, "icon": "🟦"},
-        {"name": "PostgreSQL", "relation": "essential", "required_level": 80, "icon": "🐘"},
-        {"name": "Docker", "relation": "optional", "required_level": 75, "icon": "🐳"},
-        {"name": "REST APIs", "relation": "essential", "required_level": 85, "icon": "⚡"}
+        {"name": "JavaScript", "skill_id": "skill_javascript", "relation": "essential", "required_level": 90, "icon": "🟨"},
+        {"name": "TypeScript", "skill_id": "skill_typescript", "relation": "essential", "required_level": 85, "icon": "🟦"},
+        {"name": "React", "skill_id": "skill_react", "relation": "essential", "required_level": 85, "icon": "⚛️"},
+        {"name": "Node.js", "skill_id": "skill_nodejs", "relation": "essential", "required_level": 85, "icon": "🟢"},
+        {"name": "HTML & CSS", "skill_id": "skill_html_css", "relation": "essential", "required_level": 85, "icon": "🎨"},
+        {"name": "REST APIs", "skill_id": "skill_rest_api", "relation": "essential", "required_level": 85, "icon": "⚡"},
+        {"name": "SQL", "skill_id": "skill_sql", "relation": "essential", "required_level": 80, "icon": "🗄️"},
+        {"name": "PostgreSQL", "skill_id": "skill_postgresql", "relation": "essential", "required_level": 80, "icon": "🐘"},
+        {"name": "Git", "skill_id": "skill_git", "relation": "essential", "required_level": 85, "icon": "📦"},
+        {"name": "Docker", "skill_id": "skill_docker", "relation": "optional", "required_level": 75, "icon": "🐳"}
     ],
     "data scientist": [
-        {"name": "Python", "relation": "essential", "required_level": 90, "icon": "🐍"},
-        {"name": "SQL", "relation": "essential", "required_level": 85, "icon": "🗄️"},
-        {"name": "Machine Learning", "relation": "essential", "required_level": 85, "icon": "🤖"},
-        {"name": "Pandas", "relation": "essential", "required_level": 80, "icon": "📊"},
-        {"name": "NumPy", "relation": "essential", "required_level": 80, "icon": "🔢"},
-        {"name": "TensorFlow", "relation": "optional", "required_level": 75, "icon": "🧠"},
-        {"name": "PyTorch", "relation": "optional", "required_level": 75, "icon": "🔥"}
+        {"name": "Python", "skill_id": "skill_python", "relation": "essential", "required_level": 90, "icon": "🐍"},
+        {"name": "SQL", "skill_id": "skill_sql", "relation": "essential", "required_level": 85, "icon": "🗄️"},
+        {"name": "Machine Learning", "skill_id": "skill_machine_learning", "relation": "essential", "required_level": 85, "icon": "🤖"},
+        {"name": "Pandas", "skill_id": "skill_pandas", "relation": "essential", "required_level": 80, "icon": "📊"},
+        {"name": "NumPy", "skill_id": "skill_pandas", "relation": "essential", "required_level": 80, "icon": "🔢"},
+        {"name": "TensorFlow", "skill_id": "skill_tensorflow", "relation": "optional", "required_level": 75, "icon": "🧠"},
+        {"name": "PyTorch", "skill_id": "skill_tensorflow", "relation": "optional", "required_level": 75, "icon": "🔥"}
     ],
     "devops engineer": [
-        {"name": "Docker", "relation": "essential", "required_level": 90, "icon": "🐳"},
-        {"name": "Kubernetes", "relation": "essential", "required_level": 85, "icon": "☸️"},
-        {"name": "AWS", "relation": "essential", "required_level": 85, "icon": "☁️"},
-        {"name": "CI/CD Pipelines", "relation": "essential", "required_level": 85, "icon": "🔄"},
-        {"name": "Linux", "relation": "essential", "required_level": 85, "icon": "🐧"},
-        {"name": "Python", "relation": "optional", "required_level": 70, "icon": "🐍"}
+        {"name": "Docker", "skill_id": "skill_docker", "relation": "essential", "required_level": 90, "icon": "🐳"},
+        {"name": "Kubernetes", "skill_id": "skill_kubernetes", "relation": "essential", "required_level": 85, "icon": "☸️"},
+        {"name": "AWS", "skill_id": "skill_aws", "relation": "essential", "required_level": 85, "icon": "☁️"},
+        {"name": "CI/CD Pipelines", "skill_id": "skill_git", "relation": "essential", "required_level": 85, "icon": "🔄"},
+        {"name": "Linux", "skill_id": "skill_git", "relation": "essential", "required_level": 85, "icon": "🐧"},
+        {"name": "Python", "skill_id": "skill_python", "relation": "optional", "required_level": 70, "icon": "🐍"}
     ],
     "mobile app developer": [
-        {"name": "React Native", "relation": "essential", "required_level": 90, "icon": "📱"},
-        {"name": "JavaScript", "relation": "essential", "required_level": 85, "icon": "🟨"},
-        {"name": "TypeScript", "relation": "essential", "required_level": 80, "icon": "🟦"},
-        {"name": "REST APIs", "relation": "essential", "required_level": 85, "icon": "⚡"},
-        {"name": "Git", "relation": "essential", "required_level": 80, "icon": "📦"}
+        {"name": "React Native", "skill_id": "skill_react_native", "relation": "essential", "required_level": 90, "icon": "📱"},
+        {"name": "JavaScript", "skill_id": "skill_javascript", "relation": "essential", "required_level": 85, "icon": "🟨"},
+        {"name": "TypeScript", "skill_id": "skill_typescript", "relation": "essential", "required_level": 80, "icon": "🟦"},
+        {"name": "REST APIs", "skill_id": "skill_rest_api", "relation": "essential", "required_level": 85, "icon": "⚡"},
+        {"name": "Git", "skill_id": "skill_git", "relation": "essential", "required_level": 80, "icon": "📦"}
     ],
     "ai / ml engineer": [
-        {"name": "Python", "relation": "essential", "required_level": 95, "icon": "🐍"},
-        {"name": "Machine Learning", "relation": "essential", "required_level": 90, "icon": "🤖"},
-        {"name": "TensorFlow", "relation": "essential", "required_level": 85, "icon": "🧠"},
-        {"name": "PyTorch", "relation": "essential", "required_level": 85, "icon": "🔥"},
-        {"name": "SQL", "relation": "optional", "required_level": 75, "icon": "🗄️"}
+        {"name": "Python", "skill_id": "skill_python", "relation": "essential", "required_level": 95, "icon": "🐍"},
+        {"name": "Machine Learning", "skill_id": "skill_machine_learning", "relation": "essential", "required_level": 90, "icon": "🤖"},
+        {"name": "TensorFlow", "skill_id": "skill_tensorflow", "relation": "essential", "required_level": 85, "icon": "🧠"},
+        {"name": "PyTorch", "skill_id": "skill_tensorflow", "relation": "essential", "required_level": 85, "icon": "🔥"},
+        {"name": "SQL", "skill_id": "skill_sql", "relation": "optional", "required_level": 75, "icon": "🗄️"}
     ],
     "ui/ux designer": [
-        {"name": "Figma", "relation": "essential", "required_level": 90, "icon": "🎨"},
-        {"name": "UI/UX Design", "relation": "essential", "required_level": 90, "icon": "✨"},
-        {"name": "HTML & CSS", "relation": "optional", "required_level": 60, "icon": "💻"}
+        {"name": "Figma", "skill_id": "skill_figma", "relation": "essential", "required_level": 90, "icon": "🎨"},
+        {"name": "UI/UX Design", "skill_id": "skill_ui_ux", "relation": "essential", "required_level": 90, "icon": "✨"},
+        {"name": "HTML & CSS", "skill_id": "skill_html_css", "relation": "optional", "required_level": 60, "icon": "💻"}
     ]
 }
 
@@ -315,7 +320,7 @@ def get_candidate_esco_occupations(career_name: str, db: Session, limit: int = 1
     elif 'frontend' in t_lower or 'ui' in t_lower:
         domain_queries = ['user interface developer', 'web designer', 'web developer', 'digital media designer']
     elif 'fullstack' in t_lower or 'full stack' in t_lower:
-        domain_queries = ['software developer', 'cloud software developer', 'web developer', 'application developer']
+        domain_queries = ['web developer', 'cloud software developer', 'application developer', 'software developer']
     elif 'data' in t_lower or 'analyst' in t_lower or 'statistician' in t_lower:
         domain_queries = ['data analyst', 'statistician', 'data warehouse designer', 'business intelligence']
     elif 'ai' in t_lower or 'ml' in t_lower or 'machine learning' in t_lower:
@@ -488,13 +493,69 @@ def validate_career_esco_mapping_with_groq(career_id: str, db: Session) -> Dict[
 
 def fetch_esco_required_skills(target_career: str, db: Session, essential_only: bool = True) -> List[Dict[str, Any]]:
     """
-    Fetches required ESCO skills for a given career title or ID directly from PostgreSQL.
-    When essential_only=True, retrieves only essential career requirement relationships.
-    Preserves canonical ESCO label, skill_type, reuse_level, concept_uri, and description.
+    Fetches required technical skills and competencies for a given career title or ID directly from PostgreSQL.
+    Prioritizes canonical technical skills from skillsetu_career_skills joined with skillsetu_skills.
+    Preserves canonical skill ID, name, relation, required_level, skill_type ('technical'), concept_uri, and description.
     """
     resolved_name = resolve_career_name(target_career, db)
     clean_target = (resolved_name or target_career).strip().lower()
 
+    # 1. First Priority: Query canonical technical skills from SkillSetuCareerSkill joined with SkillSetuSkill
+    career_rec = db.query(models.SkillSetuCareer).filter(
+        (models.SkillSetuCareer.id == target_career) |
+        (models.SkillSetuCareer.id == f"car_{clean_target.replace(' ', '_')}") |
+        (models.SkillSetuCareer.name.ilike(clean_target))
+    ).first()
+
+    if career_rec:
+        cs_query = db.query(models.SkillSetuCareerSkill).filter(
+            models.SkillSetuCareerSkill.career_id == career_rec.id
+        )
+        if essential_only:
+            cs_query = cs_query.filter(models.SkillSetuCareerSkill.relation_type == 'essential')
+        career_skills = cs_query.all()
+        if career_skills:
+            results = []
+            seen_sk_ids = set()
+            for cs in career_skills:
+                sk = db.query(models.SkillSetuSkill).filter(models.SkillSetuSkill.id == cs.skill_id).first()
+                if sk and sk.id not in seen_sk_ids:
+                    seen_sk_ids.add(sk.id)
+                    req_lvl = cs.weight if (cs.weight and cs.weight > 10) else (85 if cs.relation_type == 'essential' else 70)
+                    results.append({
+                        "skill_id": sk.id,
+                        "skill_name": sk.name,
+                        "relation": cs.relation_type or 'essential',
+                        "required_level": req_lvl,
+                        "skill_type": sk.skill_type or "technical",
+                        "reuse_level": "sector-specific",
+                        "concept_uri": sk.esco_uri or f"skillsetu://{sk.id}",
+                        "description": sk.description or f"Canonical technical skill requirement for {career_rec.name}",
+                        "icon": get_skill_icon(sk.name)
+                    })
+            if results:
+                return results
+
+    # 2. Second Priority: Fallback to Curated Tech Occupation taxonomy
+    for key, skills in CURATED_OCCUPATION_SKILLS.items():
+        if key in clean_target or clean_target in key:
+            return [
+                {
+                    "skill_id": s.get("skill_id") or f"skill_{s['name'].lower().replace(' ', '_').replace('.', '').replace('/', '_')}",
+                    "skill_name": s["name"],
+                    "relation": s["relation"],
+                    "required_level": s["required_level"],
+                    "skill_type": "technical",
+                    "reuse_level": "sector-specific",
+                    "concept_uri": f"curated://{s['name'].lower().replace(' ', '_')}",
+                    "description": f"Curated core technical requirement for {clean_target}",
+                    "icon": s["icon"]
+                }
+                for s in skills
+                if (not essential_only or s["relation"] == "essential")
+            ]
+
+    # 3. Third Priority: Query ESCO database
     mapping = get_validated_esco_mapping(target_career, db)
     esco_occ = None
 
@@ -530,7 +591,9 @@ def fetch_esco_required_skills(target_career: str, db: Session, essential_only: 
                     seen_skills.add(raw_label.lower())
                     is_essential = (rel.relation_type == 'essential')
                     req_level = 85 if is_essential else 70
+                    sid = f"skill_esco_{esco_sk.concept_uri.split('/')[-1]}"
                     results.append({
+                        "skill_id": sid,
                         "skill_name": raw_label,
                         "relation": 'essential' if is_essential else 'optional',
                         "required_level": req_level,
@@ -543,31 +606,13 @@ def fetch_esco_required_skills(target_career: str, db: Session, essential_only: 
         if results:
             return results
 
-    # Fallback to curated tech occupation requirements if DB occupation has no linked skills
-    for key, skills in CURATED_OCCUPATION_SKILLS.items():
-        if key in clean_target or clean_target in key:
-            return [
-                {
-                    "skill_name": s["name"],
-                    "relation": s["relation"],
-                    "required_level": s["required_level"],
-                    "skill_type": "skill/competence",
-                    "reuse_level": "sector-specific",
-                    "concept_uri": f"curated://{s['name'].lower().replace(' ', '_')}",
-                    "description": f"Curated core competency requirement for {clean_target}",
-                    "icon": s["icon"]
-                }
-                for s in skills
-                if (not essential_only or s["relation"] == "essential")
-            ]
-
     # Standard default backend skills
     return [
-        {"skill_name": "Node.js", "relation": "essential", "required_level": 85, "skill_type": "skill/competence", "reuse_level": "sector-specific", "concept_uri": "curated://node", "description": "", "icon": "🟢"},
-        {"skill_name": "Docker", "relation": "essential", "required_level": 80, "skill_type": "skill/competence", "reuse_level": "sector-specific", "concept_uri": "curated://docker", "description": "", "icon": "🐳"},
-        {"skill_name": "PostgreSQL", "relation": "essential", "required_level": 85, "skill_type": "skill/competence", "reuse_level": "sector-specific", "concept_uri": "curated://postgres", "description": "", "icon": "🐘"},
-        {"skill_name": "AWS", "relation": "essential", "required_level": 75, "skill_type": "skill/competence", "reuse_level": "sector-specific", "concept_uri": "curated://aws", "description": "", "icon": "☁️"},
-        {"skill_name": "REST APIs", "relation": "essential", "required_level": 90, "skill_type": "skill/competence", "reuse_level": "sector-specific", "concept_uri": "curated://rest_api", "description": "", "icon": "⚡"}
+        {"skill_id": "skill_nodejs", "skill_name": "Node.js", "relation": "essential", "required_level": 85, "skill_type": "technical", "reuse_level": "sector-specific", "concept_uri": "curated://node", "description": "", "icon": "🟢"},
+        {"skill_id": "skill_docker", "skill_name": "Docker", "relation": "essential", "required_level": 80, "skill_type": "technical", "reuse_level": "sector-specific", "concept_uri": "curated://docker", "description": "", "icon": "🐳"},
+        {"skill_id": "skill_postgresql", "skill_name": "PostgreSQL", "relation": "essential", "required_level": 85, "skill_type": "technical", "reuse_level": "sector-specific", "concept_uri": "curated://postgres", "description": "", "icon": "🐘"},
+        {"skill_id": "skill_aws", "skill_name": "AWS", "relation": "essential", "required_level": 75, "skill_type": "technical", "reuse_level": "sector-specific", "concept_uri": "curated://aws", "description": "", "icon": "☁️"},
+        {"skill_id": "skill_rest_api", "skill_name": "REST APIs", "relation": "essential", "required_level": 90, "skill_type": "technical", "reuse_level": "sector-specific", "concept_uri": "curated://rest_api", "description": "", "icon": "⚡"}
     ]
 
 
@@ -586,6 +631,7 @@ def aggregate_student_evidence(
 
     # 1. Process GitHub evidence (strong repository provenance)
     if github_skills:
+        evidence_map['Git'] = 85.0
         for item in github_skills:
             raw_name = item.get('name') or item.get('skill') or ''
             norm = normalize_skill_name(raw_name)
@@ -679,6 +725,122 @@ def resolve_esco_skill_evidence_level(esco_skill_name: str, student_evidence: Di
     for sk_name, score in student_evidence.items():
         if sk_name.lower() == clean_esco and score > 0:
             return score, [sk_name], "DIRECT"
+
+    # 1b. Direct Technical Skill Aliases & Framework Inferences
+    if clean_esco in ('javascript', 'js'):
+        if 'JavaScript' in student_evidence and student_evidence['JavaScript'] > 0:
+            return student_evidence['JavaScript'], ['JavaScript'], "DIRECT"
+        if 'TypeScript' in student_evidence and student_evidence['TypeScript'] > 0:
+            return student_evidence['TypeScript'], ['TypeScript'], "RELATED"
+
+    if clean_esco in ('typescript', 'ts'):
+        if 'TypeScript' in student_evidence and student_evidence['TypeScript'] > 0:
+            return student_evidence['TypeScript'], ['TypeScript'], "DIRECT"
+
+    if clean_esco in ('react', 'react.js', 'reactjs'):
+        if 'React' in student_evidence and student_evidence['React'] > 0:
+            return student_evidence['React'], ['React'], "DIRECT"
+        if 'React Native' in student_evidence and student_evidence['React Native'] > 0:
+            return student_evidence['React Native'], ['React Native'], "RELATED"
+
+    if clean_esco in ('react native', 'react-native'):
+        if 'React Native' in student_evidence and student_evidence['React Native'] > 0:
+            return student_evidence['React Native'], ['React Native'], "DIRECT"
+
+    if clean_esco in ('node.js', 'nodejs', 'node'):
+        node_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('Node.js', 'Express', 'FastAPI', 'Socket.io', 'Mongoose', 'Axios') and sc > 0
+        ]
+        if node_matches:
+            node_matches.sort(key=lambda x: x[1], reverse=True)
+            best_sk, best_sc = node_matches[0]
+            lvl = "DIRECT" if best_sk == "Node.js" else "RELATED"
+            return best_sc, [m[0] for m in node_matches], lvl
+
+    if clean_esco in ('rest apis', 'rest api', 'restful apis', 'rest'):
+        api_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('REST APIs', 'Express', 'FastAPI', 'Axios', 'Socket.io', 'Postman') and sc > 0
+        ]
+        if api_matches:
+            api_matches.sort(key=lambda x: x[1], reverse=True)
+            best_sk, best_sc = api_matches[0]
+            lvl = "DIRECT" if best_sk == "REST APIs" else "RELATED"
+            return best_sc, [m[0] for m in api_matches], lvl
+
+    if clean_esco in ('html & css', 'html and css', 'html', 'css', 'html5', 'css3'):
+        css_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('HTML & CSS', 'Tailwind CSS', 'CSS', 'HTML', 'Sass', 'SCSS') and sc > 0
+        ]
+        if css_matches:
+            css_matches.sort(key=lambda x: x[1], reverse=True)
+            best_sk, best_sc = css_matches[0]
+            lvl = "DIRECT" if best_sk == "HTML & CSS" else "RELATED"
+            return best_sc, [m[0] for m in css_matches], lvl
+
+    if clean_esco in ('sql', 'query languages'):
+        sql_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('SQL', 'PostgreSQL', 'MongoDB', 'Supabase', 'MySQL', 'SQLite', 'Mongoose') and sc > 0
+        ]
+        if sql_matches:
+            sql_matches.sort(key=lambda x: x[1], reverse=True)
+            best_sk, best_sc = sql_matches[0]
+            lvl = "DIRECT" if best_sk == "SQL" else "RELATED"
+            return best_sc, [m[0] for m in sql_matches], lvl
+
+    if clean_esco in ('postgresql', 'postgres'):
+        pg_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('PostgreSQL', 'SQL', 'Supabase') and sc > 0
+        ]
+        if pg_matches:
+            pg_matches.sort(key=lambda x: x[1], reverse=True)
+            best_sk, best_sc = pg_matches[0]
+            lvl = "DIRECT" if best_sk == "PostgreSQL" else "RELATED"
+            return best_sc, [m[0] for m in pg_matches], lvl
+
+    if clean_esco in ('git', 'git & github', 'github'):
+        git_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('Git', 'Git & GitHub', 'GitHub', 'GitLab') and sc > 0
+        ]
+        if git_matches:
+            git_matches.sort(key=lambda x: x[1], reverse=True)
+            return git_matches[0][1], [m[0] for m in git_matches], "DIRECT"
+
+    if clean_esco in ('docker', 'docker containers'):
+        if 'Docker' in student_evidence and student_evidence['Docker'] > 0:
+            return student_evidence['Docker'], ['Docker'], "DIRECT"
+
+    if clean_esco in ('pandas & numpy', 'pandas and numpy', 'pandas', 'numpy'):
+        data_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('Pandas', 'NumPy', 'Pandas & NumPy') and sc > 0
+        ]
+        if data_matches:
+            data_matches.sort(key=lambda x: x[1], reverse=True)
+            return data_matches[0][1], [m[0] for m in data_matches], "DIRECT"
+
+    if clean_esco in ('tensorflow / pytorch', 'tensorflow', 'pytorch', 'machine learning'):
+        ai_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('Machine Learning', 'TensorFlow', 'PyTorch', 'Scikit-Learn') and sc > 0
+        ]
+        if ai_matches:
+            ai_matches.sort(key=lambda x: x[1], reverse=True)
+            return ai_matches[0][1], [m[0] for m in ai_matches], "DIRECT"
+
+    if clean_esco in ('ui/ux design', 'ui/ux', 'figma'):
+        ui_matches = [
+            (sk, sc) for sk, sc in student_evidence.items()
+            if sk in ('Figma', 'UI/UX Design', 'UI/UX') and sc > 0
+        ]
+        if ui_matches:
+            ui_matches.sort(key=lambda x: x[1], reverse=True)
+            return ui_matches[0][1], [m[0] for m in ui_matches], "DIRECT"
 
     # 2. Strict Domain Taxonomy Mappings
     # A. "computer programming" / "web programming" -> Programming languages & web frameworks
@@ -1144,10 +1306,12 @@ def calculate_multi_career_skill_gaps(
             reuse_score = 5.0
 
         s_type = gap_item.get("skill_type", "")
-        if s_type == "skill/competence":
+        if s_type in ("skill/competence", "technical"):
             type_score = 20.0
         elif s_type == "knowledge":
             type_score = 10.0
+        else:
+            type_score = 15.0
 
         momentum_score = 20.0 if gap_item["status"] == "partial" else 0.0
         gap_ratio_score = round((gap_item["gap"] / 85.0) * 10.0, 2)
@@ -1781,64 +1945,328 @@ def calculate_career_skill_gaps(
 
 def seed_default_datasets_if_needed(db: Session):
     """
-    Seeds initial dataset tables for assessments, questions, course resources, and practice challenges if missing.
+    Seeds initial dataset tables for assessments, questions, course resources, and practice challenges per-skill if missing.
     """
     try:
-        # 1. Seed Assessments & Questions
-        if db.query(models.EscoAssessment).count() == 0:
-            test_docker = models.EscoAssessment(skill_name="Docker", title="Docker Comprehensive Assessment", description="Verified evaluation of containerization fundamentals, Dockerfiles, and compose.")
-            db.add(test_docker)
-            db.commit()
-            db.refresh(test_docker)
+        # Standard seed dataset definition
+        SEEDS = {
+            "Docker": {
+                "assessment": {
+                    "title": "Docker Comprehensive Assessment",
+                    "description": "Verified evaluation of containerization fundamentals, Dockerfiles, and compose.",
+                    "pass_score": 70,
+                    "questions": [
+                        {
+                            "question_text": "Which Dockerfile directive sets the base image for subsequent instructions?",
+                            "options": {"A": "RUN", "B": "FROM", "C": "EXPOSE", "D": "COPY"},
+                            "correct_option": "B",
+                            "explanation": "FROM initializes a new build stage and sets the Base Image for remaining instructions."
+                        },
+                        {
+                            "question_text": "Which command builds an image from a Dockerfile in the current directory?",
+                            "options": {"A": "docker run .", "B": "docker build -t app .", "C": "docker create .", "D": "docker image new"},
+                            "correct_option": "B",
+                            "explanation": "docker build -t <tag> . builds an image from the local Dockerfile context."
+                        },
+                        {
+                            "question_text": "What is the main benefit of multi-stage Docker builds?",
+                            "options": {"A": "Runs multiple containers concurrently", "B": "Reduces final image size by discarding build tools", "C": "Enables multi-cloud deployment", "D": "Increases build speed by 10x"},
+                            "correct_option": "B",
+                            "explanation": "Multi-stage builds allow copying artifacts from earlier stages, leaving behind unneeded build tools."
+                        }
+                    ]
+                },
+                "courses": [
+                    {"step": 1, "title": "Containerization Basics with Docker", "provider": "SWAYAM / NPTEL", "difficulty": "Beginner", "duration": "30 mins"},
+                    {"step": 2, "title": "Writing Production Dockerfiles", "provider": "SkillSetu Academy", "difficulty": "Intermediate", "duration": "45 mins"},
+                    {"step": 3, "title": "Multi-Container Orchestration with Compose", "provider": "SWAYAM", "difficulty": "Advanced", "duration": "1 hr"}
+                ],
+                "challenge": {
+                    "id": "ch_docker_01",
+                    "title": "Containerize a Production Microservice",
+                    "description": "Write an optimized multi-stage Dockerfile, expose ports, configure volume mounts, and run container healthchecks.",
+                    "difficulty": "Intermediate",
+                    "tags": ["DOCKER", "CONTAINERS", "DEVOPS"],
+                    "total_steps": 3
+                }
+            },
+            "JavaScript": {
+                "assessment": {
+                    "title": "JavaScript Core & Advanced Architecture Assessment",
+                    "description": "Evaluation of ES6+, asynchronous event loop, scoping, closures, and DOM patterns.",
+                    "pass_score": 70,
+                    "questions": [
+                        {
+                            "question_text": "What is the output of `typeof null` in standard JavaScript?",
+                            "options": {"A": "'null'", "B": "'undefined'", "C": "'object'", "D": "'number'"},
+                            "correct_option": "C",
+                            "explanation": "`typeof null` returns 'object' due to a historical legacy artifact in the JS type tag representation."
+                        },
+                        {
+                            "question_text": "Which mechanism handles asynchronous execution in JavaScript's single-threaded runtime?",
+                            "options": {"A": "Multi-threaded worker threads only", "B": "Event Loop and Microtask/Macrotask Queues", "C": "Synchronous blocking IO", "D": "Garbage Collector thread"},
+                            "correct_option": "B",
+                            "explanation": "JavaScript uses the Event Loop with call stack, microtask queue (Promises), and macrotask queue (setTimeout) to handle concurrency."
+                        },
+                        {
+                            "question_text": "What is a closure in JavaScript?",
+                            "options": {"A": "A method that terminates program execution", "B": "A function bundled together with references to its lexical environment", "C": "An encrypted object property", "D": "An anonymous callback without return values"},
+                            "correct_option": "B",
+                            "explanation": "A closure gives you access to an outer function's scope from an inner function even after the outer function has executed."
+                        },
+                        {
+                            "question_text": "How does `===` differ from `==` in JavaScript equality checks?",
+                            "options": {"A": "=== performs type coercion, == does not", "B": "=== checks both value and type without coercion, == performs implicit coercion", "C": "There is no difference", "D": "== is strictly for numbers"},
+                            "correct_option": "B",
+                            "explanation": "Strict equality (===) compares identity and type without performing implicit type coercion."
+                        }
+                    ]
+                },
+                "courses": [
+                    {"step": 1, "title": "Modern JavaScript Essentials & ES6+ Fundamentals", "provider": "freeCodeCamp / YouTube", "difficulty": "Beginner", "duration": "45 mins"},
+                    {"step": 2, "title": "Asynchronous JS, Promises & Event Loop Deep-Dive", "provider": "SkillSetu Academy", "difficulty": "Intermediate", "duration": "1 hr"},
+                    {"step": 3, "title": "Object-Oriented & Functional JS Design Patterns", "provider": "SWAYAM / NPTEL", "difficulty": "Advanced", "duration": "1.5 hrs"}
+                ],
+                "challenge": {
+                    "id": "ch_javascript_01",
+                    "title": "Interactive Asynchronous Task Management Engine",
+                    "description": "Engineer a dynamic task orchestrator in vanilla JS using custom Promise queues, local storage caching, and debounce optimizations.",
+                    "difficulty": "Intermediate",
+                    "tags": ["JAVASCRIPT", "FRONTEND", "ASYNC"],
+                    "total_steps": 3
+                }
+            },
+            "TypeScript": {
+                "assessment": {
+                    "title": "TypeScript Advanced Type Safety Assessment",
+                    "description": "Assessment covering generics, type narrowing, union/intersection types, and interfaces.",
+                    "pass_score": 70,
+                    "questions": [
+                        {
+                            "question_text": "Which TypeScript utility type constructs a type with all properties of T set to optional?",
+                            "options": {"A": "Required<T>", "B": "Partial<T>", "C": "Readonly<T>", "D": "Record<T, any>"},
+                            "correct_option": "B",
+                            "explanation": "Partial<T> returns a type with all properties of T marked as optional."
+                        },
+                        {
+                            "question_text": "What is the purpose of the `unknown` type compared to `any` in TypeScript?",
+                            "options": {"A": "unknown disables all type checking permanently", "B": "unknown is the type-safe counterpart of any, requiring type checking before operations", "C": "unknown cannot be assigned any value", "D": "unknown is only for primitive strings"},
+                            "correct_option": "B",
+                            "explanation": "unknown is type-safe; you must perform type narrowing before performing operations on an unknown value."
+                        }
+                    ]
+                },
+                "courses": [
+                    {"step": 1, "title": "TypeScript Essentials & Type Annotations", "provider": "SWAYAM / NPTEL", "difficulty": "Beginner", "duration": "40 mins"},
+                    {"step": 2, "title": "Generics, Unions & Advanced Type Architecture", "provider": "SkillSetu Academy", "difficulty": "Intermediate", "duration": "1 hr"}
+                ],
+                "challenge": {
+                    "id": "ch_typescript_01",
+                    "title": "Type-Safe Full-Stack API Integration Layer",
+                    "description": "Implement generic repository patterns, Zod schema validation, and discriminated union error handlers in TypeScript.",
+                    "difficulty": "Intermediate",
+                    "tags": ["TYPESCRIPT", "TYPE-SAFE", "GENERIC"],
+                    "total_steps": 3
+                }
+            },
+            "Node.js": {
+                "assessment": {
+                    "title": "Node.js & Express Production Backend Assessment",
+                    "description": "Covers asynchronous IO, middleware pipelines, authentication headers, and database connection pooling.",
+                    "pass_score": 70,
+                    "questions": [
+                        {
+                            "question_text": "Which parameter order is standard for Express.js error-handling middleware functions?",
+                            "options": {"A": "(req, res, next)", "B": "(err, req, res, next)", "C": "(req, res, err)", "D": "(next, err, req, res)"},
+                            "correct_option": "B",
+                            "explanation": "Express error-handling middleware is identified by exactly 4 parameters: (err, req, res, next)."
+                        },
+                        {
+                            "question_text": "Why should password hashing use bcrypt or argon2 instead of plain SHA256 in Node.js?",
+                            "options": {"A": "SHA256 is not supported in Node.js", "B": "bcrypt/argon2 include salting and configurable work factors resistant to brute force and GPU cracking", "C": "SHA256 generates larger strings", "D": "bcrypt operates only in memory"},
+                            "correct_option": "B",
+                            "explanation": "bcrypt incorporates salt generation and tunable cryptographic cost factors to prevent rainbow table and hardware-accelerated attacks."
+                        }
+                    ]
+                },
+                "courses": [
+                    {"step": 1, "title": "Server-side Development with Node.js & Express", "provider": "SWAYAM / NPTEL", "difficulty": "Beginner", "duration": "1 hr"},
+                    {"step": 2, "title": "REST API Architecture, JWT & Middleware Security", "provider": "SkillSetu Academy", "difficulty": "Intermediate", "duration": "1.5 hrs"}
+                ],
+                "challenge": {
+                    "id": "ch_nodejs_01",
+                    "title": "Scalable RESTful Authentication & RBAC Service",
+                    "description": "Build an Express.js backend with JWT authentication, role-based route middleware, refresh token rotation, and rate limiting.",
+                    "difficulty": "Intermediate",
+                    "tags": ["NODE.JS", "EXPRESS", "BACKEND", "SECURITY"],
+                    "total_steps": 3
+                }
+            },
+            "PostgreSQL": {
+                "assessment": {
+                    "title": "PostgreSQL Relational Design & Performance Assessment",
+                    "description": "Covers indexing strategies, transactions, ACID compliance, and foreign key cascades.",
+                    "pass_score": 70,
+                    "questions": [
+                        {
+                            "question_text": "Which PostgreSQL index type is the default and ideal for equality and range queries on ordered data?",
+                            "options": {"A": "GIN", "B": "B-Tree", "C": "GiST", "D": "BRIN"},
+                            "correct_option": "B",
+                            "explanation": "B-Tree is the default PostgreSQL index structure optimized for comparison operators (<, <=, =, >=, >)."
+                        }
+                    ]
+                },
+                "courses": [
+                    {"step": 1, "title": "Relational Database Design & PostgreSQL Essentials", "provider": "SWAYAM / NPTEL", "difficulty": "Beginner", "duration": "1 hr"},
+                    {"step": 2, "title": "Query Optimization, Indexes & Connection Pooling", "provider": "SkillSetu Academy", "difficulty": "Intermediate", "duration": "1.5 hrs"}
+                ],
+                "challenge": {
+                    "id": "ch_postgres_01",
+                    "title": "Design an Optimized Multi-Tenant PostgreSQL Schema",
+                    "description": "Create a normalized relational schema with B-Tree/GIN indexes, foreign keys, transaction isolation, and explain analyze benchmarking.",
+                    "difficulty": "Intermediate",
+                    "tags": ["POSTGRESQL", "DATABASE", "SQL"],
+                    "total_steps": 3
+                }
+            },
+            "HTML & CSS": {
+                "assessment": {
+                    "title": "Modern HTML5 & Responsive CSS3 Assessment",
+                    "description": "Covers semantic HTML tags, Flexbox, Grid layout, media queries, and web accessibility.",
+                    "pass_score": 70,
+                    "questions": [
+                        {
+                            "question_text": "Which CSS property defines a two-dimensional grid-based layout system?",
+                            "options": {"A": "display: flex", "B": "display: grid", "C": "display: block", "D": "display: table"},
+                            "correct_option": "B",
+                            "explanation": "display: grid establishes a 2D layout system handling both columns and rows simultaneously."
+                        }
+                    ]
+                },
+                "courses": [
+                    {"step": 1, "title": "Responsive Web Layouts with Modern CSS Grid & Flexbox", "provider": "SWAYAM / NPTEL", "difficulty": "Beginner", "duration": "45 mins"},
+                    {"step": 2, "title": "Web Accessibility (WCAG), CSS Variables & Design Systems", "provider": "SkillSetu Academy", "difficulty": "Intermediate", "duration": "1 hr"}
+                ],
+                "challenge": {
+                    "id": "ch_htmlcss_01",
+                    "title": "Build a Fully Responsive & Accessible Showcase Portal",
+                    "description": "Develop a semantic, mobile-first responsive web portal with dark mode CSS variables and WCAG 2.1 AA accessibility compliance.",
+                    "difficulty": "Beginner",
+                    "tags": ["HTML", "CSS", "RESPONSIVE", "UI"],
+                    "total_steps": 3
+                }
+            },
+            "SQL": {
+                "assessment": {
+                    "title": "SQL Querying & Data Manipulation Assessment",
+                    "description": "Covers joins, aggregates, subqueries, group by, and data normalization.",
+                    "pass_score": 70,
+                    "questions": [
+                        {
+                            "question_text": "Which SQL clause filters groups created by the GROUP BY clause?",
+                            "options": {"A": "WHERE", "B": "HAVING", "C": "ORDER BY", "D": "LIMIT"},
+                            "correct_option": "B",
+                            "explanation": "HAVING filters aggregated grouped records, whereas WHERE filters individual rows prior to grouping."
+                        }
+                    ]
+                },
+                "courses": [
+                    {"step": 1, "title": "Database Management System (DBMS) & SQL Querying", "provider": "NPTEL / SWAYAM", "difficulty": "Beginner", "duration": "1 hr"}
+                ],
+                "challenge": {
+                    "id": "ch_sql_01",
+                    "title": "Optimize High-Volume Relational Analytical Queries",
+                    "description": "Write complex analytical SQL queries using window functions, CTEs, and aggregation pipelines.",
+                    "difficulty": "Intermediate",
+                    "tags": ["SQL", "QUERIES", "DATABASE"],
+                    "total_steps": 3
+                }
+            },
+            "React": {
+                "assessment": {
+                    "title": "React 18+ Architecture & State Management Assessment",
+                    "description": "Covers hooks, component lifecycle, memoization, Context API, and state immutability.",
+                    "pass_score": 70,
+                    "questions": [
+                        {
+                            "question_text": "Which React hook caches the calculated result of an expensive calculation between re-renders?",
+                            "options": {"A": "useCallback", "B": "useMemo", "C": "useRef", "D": "useEffect"},
+                            "correct_option": "B",
+                            "explanation": "useMemo caches the result of a calculation between renders until dependencies change."
+                        }
+                    ]
+                },
+                "courses": [
+                    {"step": 1, "title": "Modern React & Component Design Architecture", "provider": "SkillSetu Academy", "difficulty": "Beginner", "duration": "1 hr"}
+                ],
+                "challenge": {
+                    "id": "ch_react_01",
+                    "title": "Build a High-Performance Real-Time Dashboard",
+                    "description": "Engineer a modular React dashboard featuring custom data-fetching hooks, Context API state management, and optimized render cycles.",
+                    "difficulty": "Intermediate",
+                    "tags": ["REACT", "FRONTEND", "HOOKS"],
+                    "total_steps": 3
+                }
+            }
+        }
 
-        test_docker = db.query(models.EscoAssessment).filter(models.EscoAssessment.skill_name == "Docker").first()
-        if test_docker and db.query(models.EscoAssessmentQuestion).count() == 0:
-            q1 = models.EscoAssessmentQuestion(
-                assessment_id=test_docker.id,
-                question_text="Which Dockerfile directive sets the base image for subsequent instructions?",
-                options_json=json.dumps({"A": "RUN", "B": "FROM", "C": "EXPOSE", "D": "COPY"}),
-                correct_option="B",
-                explanation="FROM initializes a new build stage and sets the Base Image for remaining instructions."
-            )
-            q2 = models.EscoAssessmentQuestion(
-                assessment_id=test_docker.id,
-                question_text="Which command builds an image from a Dockerfile in the current directory?",
-                options_json=json.dumps({"A": "docker run .", "B": "docker build -t app .", "C": "docker create .", "D": "docker image new"}),
-                correct_option="B",
-                explanation="docker build -t <tag> . builds an image from the local Dockerfile context."
-            )
-            q3 = models.EscoAssessmentQuestion(
-                assessment_id=test_docker.id,
-                question_text="What is the main benefit of multi-stage Docker builds?",
-                options_json=json.dumps({"A": "Runs multiple containers concurrently", "B": "Reduces final image size by discarding build tools", "C": "Enables multi-cloud deployment", "D": "Increases build speed by 10x"}),
-                correct_option="B",
-                explanation="Multi-stage builds allow copying artifacts from earlier stages, leaving behind unneeded build tools."
-            )
-            db.add_all([q1, q2, q3])
-            db.commit()
+        for skill_key, data in SEEDS.items():
+            # 1. Assessment & Questions
+            existing_assess = db.query(models.EscoAssessment).filter(func.lower(models.EscoAssessment.skill_name) == skill_key.lower()).first()
+            if not existing_assess:
+                a_info = data["assessment"]
+                new_assess = models.EscoAssessment(
+                    skill_name=skill_key,
+                    title=a_info["title"],
+                    description=a_info["description"],
+                    pass_score=a_info.get("pass_score", 70)
+                )
+                db.add(new_assess)
+                db.commit()
+                db.refresh(new_assess)
 
+                for q in a_info["questions"]:
+                    db_q = models.EscoAssessmentQuestion(
+                        assessment_id=new_assess.id,
+                        question_text=q["question_text"],
+                        options_json=json.dumps(q["options"]),
+                        correct_option=q["correct_option"],
+                        explanation=q.get("explanation", "")
+                    )
+                    db.add(db_q)
+                db.commit()
 
-        # 2. Seed Course Resources
-        if db.query(models.SkillCourseResource).count() == 0:
-            c1 = models.SkillCourseResource(skill_name="Docker", step_number=1, title="Containerization Basics with Docker", provider="SWAYAM / NPTEL", difficulty="Beginner", duration="30 mins")
-            c2 = models.SkillCourseResource(skill_name="Docker", step_number=2, title="Writing Production Dockerfiles", provider="SkillSetu Academy", difficulty="Intermediate", duration="45 mins")
-            c3 = models.SkillCourseResource(skill_name="Docker", step_number=3, title="Multi-Container Orchestration with Compose", provider="SWAYAM", difficulty="Advanced", duration="1 hr")
-            db.add_all([c1, c2, c3])
+            # 2. Course Resources
+            existing_courses = db.query(models.SkillCourseResource).filter(func.lower(models.SkillCourseResource.skill_name) == skill_key.lower()).all()
+            if not existing_courses:
+                for c_item in data.get("courses", []):
+                    c_rec = models.SkillCourseResource(
+                        skill_name=skill_key,
+                        step_number=c_item["step"],
+                        title=c_item["title"],
+                        provider=c_item["provider"],
+                        difficulty=c_item.get("difficulty", "Intermediate"),
+                        duration=c_item.get("duration", "45 mins")
+                    )
+                    db.add(c_rec)
+                db.commit()
 
-        # 3. Seed Practice Challenges
-        if db.query(models.SkillPracticeChallenge).count() == 0:
-            ch1 = models.SkillPracticeChallenge(
-                id="ch_docker_01",
-                skill_name="Docker",
-                title="Containerize a Production Microservice",
-                description="Write an optimized multi-stage Dockerfile, expose ports, and run healthchecks.",
-                difficulty="Intermediate",
-                tags_json=json.dumps(["DOCKER", "CONTAINERS"]),
-                total_steps=3
-            )
-            db.add(ch1)
+            # 3. Practice Challenge
+            existing_ch = db.query(models.SkillPracticeChallenge).filter(func.lower(models.SkillPracticeChallenge.skill_name) == skill_key.lower()).first()
+            if not existing_ch and "challenge" in data:
+                ch_info = data["challenge"]
+                new_ch = models.SkillPracticeChallenge(
+                    id=ch_info["id"],
+                    skill_name=skill_key,
+                    title=ch_info["title"],
+                    description=ch_info["description"],
+                    difficulty=ch_info.get("difficulty", "Intermediate"),
+                    tags_json=json.dumps(ch_info.get("tags", [skill_key.upper()])),
+                    total_steps=ch_info.get("total_steps", 3)
+                )
+                db.add(new_ch)
+                db.commit()
 
-        db.commit()
     except Exception as e:
         db.rollback()
         print(f"[DATASET SEEDER WARN] {e}")
@@ -1865,7 +2293,8 @@ def evaluate_student_assessment_submission(student_id: int, assessment_id: int, 
             correct_count += 1
 
     score_pct = int(round((correct_count / total_count) * 100)) if total_count > 0 else 0
-    status_str = "VERIFIED" if score_pct >= assessment.pass_score else "NEEDS_WORK"
+    pass_mark = assessment.pass_score or 70
+    status_str = "VERIFIED" if score_pct >= pass_mark else "NEEDS_WORK"
 
     # Record persistent attempt
     attempt = models.StudentAssessmentAttempt(
@@ -1876,22 +2305,18 @@ def evaluate_student_assessment_submission(student_id: int, assessment_id: int, 
         status=status_str
     )
     db.add(attempt)
+    db.commit() # Commit attempt to get attempt ID
 
-    # Persist verified skill ID into student record if passed
-    student = db.query(models.StudentUser).filter(models.StudentUser.id == student_id).first()
-    if student and status_str == "VERIFIED":
-        existing_skills = []
-        if student.skill_ids:
-            try:
-                existing_skills = json.loads(student.skill_ids) if student.skill_ids.startswith('[') else student.skill_ids.split(',')
-            except Exception:
-                existing_skills = [student.skill_ids]
-        new_skill_id = f"sk_{assessment.skill_name.lower().replace(' ', '_')}"
-        if new_skill_id not in existing_skills:
-            existing_skills.append(new_skill_id)
-            student.skill_ids = json.dumps(existing_skills)
-
-    db.commit()
+    # Persist verified skill evidence into StudentSkillEvidence if passed
+    if status_str == "VERIFIED":
+        from app.services import skill_evidence_service
+        skill_evidence_service.record_verified_assessment_evidence(
+            db=db,
+            student_id=student_id,
+            skill_name=assessment.skill_name,
+            score_pct=score_pct,
+            attempt_id=attempt.id
+        )
 
     return {
         "status": "success",
@@ -1907,15 +2332,41 @@ def evaluate_student_assessment_submission(student_id: int, assessment_id: int, 
 def get_personalized_learning_path(career_name: str, gap_skill: str, student_id: Optional[int], db: Session) -> Dict[str, Any]:
     """
     Queries real stored course resources for the gap skill and merges with student progress.
-    Returns empty list if no course resource exists (NO synthetic f-strings).
+    Falls back to real catalog courses if SkillCourseResource has no entries for the skill.
     """
     seed_default_datasets_if_needed(db)
     norm_skill = normalize_skill_name(gap_skill) or ""
+    if not norm_skill:
+        norm_skill = gap_skill.strip() if gap_skill else "Technical Skill"
     
-    # 1. Query stored SkillCourseResource table
+    # 1. Query stored SkillCourseResource table (exact case-insensitive match)
     course_records = db.query(models.SkillCourseResource).filter(
-        models.SkillCourseResource.skill_name.ilike(f"%{norm_skill}%")
+        func.lower(models.SkillCourseResource.skill_name) == norm_skill.lower()
     ).order_by(models.SkillCourseResource.step_number.asc()).all()
+
+    # 2. Fallback: Query real Course & CourseSkill tables if no pre-seeded step resources exist
+    if not course_records:
+        catalog_courses = (
+            db.query(models.Course)
+            .join(models.CourseSkill, models.CourseSkill.course_id == models.Course.id)
+            .filter(models.Course.is_active == True, func.lower(models.CourseSkill.skill_name) == norm_skill.lower())
+            .limit(3)
+            .all()
+        )
+        if catalog_courses:
+            course_records = []
+            for idx, c in enumerate(catalog_courses, 1):
+                p_name = c.provider.name if c.provider else "NPTEL / Online"
+                diff = c.level or ("Beginner" if idx == 1 else ("Intermediate" if idx == 2 else "Advanced"))
+                dur = f"{c.duration} {c.duration_unit or 'weeks'}" if c.duration else f"{30 * idx} mins"
+                course_records.append(models.SkillCourseResource(
+                    skill_name=norm_skill,
+                    step_number=idx,
+                    title=c.title,
+                    provider=p_name,
+                    difficulty=diff,
+                    duration=dur
+                ))
 
     if not course_records:
         return {
@@ -1924,12 +2375,12 @@ def get_personalized_learning_path(career_name: str, gap_skill: str, student_id:
             "modules": []
         }
 
-    # 2. Query persistent StudentLearningProgress if student_id is provided
+    # 3. Query persistent StudentLearningProgress if student_id is provided
     progress_map = {}
     if student_id:
         records = db.query(models.StudentLearningProgress).filter(
             models.StudentLearningProgress.student_id == student_id,
-            models.StudentLearningProgress.skill_name.ilike(norm_skill)
+            func.lower(models.StudentLearningProgress.skill_name) == norm_skill.lower()
         ).all()
         for r in records:
             progress_map[r.step_number] = r.status
@@ -1940,7 +2391,7 @@ def get_personalized_learning_path(career_name: str, gap_skill: str, student_id:
         if step_no in progress_map:
             st = progress_map[step_no]
         else:
-            st = "COMPLETED" if step_no == 1 else ("ACTIVE" if step_no == 2 else "LOCKED")
+            st = "ACTIVE" if step_no == 1 else "LOCKED"
 
         modules.append({
             "step_number": step_no,
@@ -1960,22 +2411,70 @@ def get_personalized_learning_path(career_name: str, gap_skill: str, student_id:
 
 def get_active_practice_challenge(gap_skill: str, student_id: Optional[int], db: Session) -> Optional[Dict[str, Any]]:
     """
-    Retrieves real stored practice challenge for the top gap skill with live attempt progress.
-    Returns None if no stored challenge exists (NO synthetic f-strings).
+    Retrieves real stored practice challenge for the gap skill with live attempt progress.
+    Dynamically generates and persists with Groq if missing, with deterministic fallback.
     """
     seed_default_datasets_if_needed(db)
     norm_skill = normalize_skill_name(gap_skill) or ""
+    if not norm_skill:
+        norm_skill = gap_skill.strip() if gap_skill else "Technical Skill"
     
     challenge = db.query(models.SkillPracticeChallenge).filter(
-        models.SkillPracticeChallenge.skill_name.ilike(f"%{norm_skill}%")
+        func.lower(models.SkillPracticeChallenge.skill_name) == norm_skill.lower()
     ).first()
 
     if not challenge:
-        return None
+        from app.services.groq_service import generate_personalized_project_with_groq
+        
+        generated = generate_personalized_project_with_groq(
+            skill_name=norm_skill,
+            difficulty="intermediate"
+        )
+        
+        if generated:
+            challenge = models.SkillPracticeChallenge(
+                id=f"ch_{norm_skill.lower().replace(' ', '_').replace('.', '')[:12]}_{abs(hash(norm_skill)) % 1000}",
+                skill_name=norm_skill,
+                title=generated.get("title", f"{norm_skill} Practical Project"),
+                description=generated.get("description", f"Hands-on project targeting {norm_skill}."),
+                total_steps=generated.get("total_steps", 3),
+                tags_json=json.dumps(generated.get("tags", [norm_skill.upper()]))
+            )
+        else:
+            # Deterministic fallback template if Groq is offline
+            challenge = models.SkillPracticeChallenge(
+                id=f"ch_{norm_skill.lower().replace(' ', '_').replace('.', '')[:12]}_01",
+                skill_name=norm_skill,
+                title=f"Production-Grade {norm_skill} Implementation Project",
+                description=f"Engineer a modular, real-world service integrating {norm_skill} with automated unit tests and structured error handling.",
+                total_steps=3,
+                tags_json=json.dumps([norm_skill.upper(), "PROJECT", "GITHUB"])
+            )
+            
+        db.add(challenge)
+        db.commit()
+        db.refresh(challenge)
 
     attempt_step = 0
     is_completed = False
     
+    if student_id:
+        attempt = db.query(models.StudentPracticeAttempt).filter(
+            models.StudentPracticeAttempt.student_id == student_id,
+            models.StudentPracticeAttempt.challenge_id == challenge.id
+        ).first()
+        if attempt:
+            attempt_step = attempt.progress_step
+            is_completed = attempt.is_completed
+
+    tags = []
+    if challenge.tags_json:
+        try:
+            tags = json.loads(challenge.tags_json)
+        except Exception:
+            pass
+    attempt_step = 0
+    is_completed = False
     if student_id:
         attempt = db.query(models.StudentPracticeAttempt).filter(
             models.StudentPracticeAttempt.student_id == student_id,
@@ -2096,15 +2595,13 @@ def load_student_evidence_from_db(student_email: str, db: Session):
             try:
                 ev_records = (
                     db.query(models.StudentSkillEvidence)
-                    .join(models.EscoSkill, models.StudentSkillEvidence.esco_skill_id == models.EscoSkill.id)
                     .filter(models.StudentSkillEvidence.student_id == student.id)
                     .all()
                 )
                 for ev in ev_records:
-                    if ev.esco_skill and ev.esco_skill.preferred_label:
-                        lbl = ev.esco_skill.preferred_label
-                        if lbl not in profile_skills:
-                            profile_skills.append(lbl)
+                    lbl = (ev.esco_skill.preferred_label if ev.esco_skill and ev.esco_skill.preferred_label else ev.skill_name)
+                    if lbl and lbl not in profile_skills:
+                        profile_skills.append(lbl)
             except Exception:
                 pass
     return github_skills, resume_parsed, profile_skills

@@ -90,6 +90,7 @@ def get_learning_path_detail_endpoint(
 # 4. Update Learning Path Item Progress
 # ---------------------------------------------------------------------------
 @router.patch("/{path_id}/items/{item_id}", response_model=LearningPathItemResponse, summary="Update course progress in learning path")
+@router.patch("/{path_id}/items/{item_id}/progress", response_model=LearningPathItemResponse, summary="Update course progress in learning path")
 def update_item_progress_endpoint(
     path_id: int,
     item_id: int,

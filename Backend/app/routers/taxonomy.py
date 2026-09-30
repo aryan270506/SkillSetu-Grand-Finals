@@ -478,7 +478,8 @@ def compute_internship_matches(email: str, db: Session = Depends(get_db)):
             "match_score": total_match_score,
             "location": locations_by_id.get(listing.location_id, "Pune"),
             "work_preference": listing.work_preference,
-            "stipend_amount": listing.stipend_amount,
+            "stipend": listing.stipend,
+            "stipend_amount": listing.stipend,
             "duration": listing.duration,
             "breakdown": breakdown,
             "missing_skills": missing_skills

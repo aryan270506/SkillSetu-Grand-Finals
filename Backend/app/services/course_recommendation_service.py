@@ -253,20 +253,25 @@ def deduplicate_candidate_courses(courses: List[Course]) -> Tuple[List[Course], 
 
 
 # ---------------------------------------------------------------------------
-# 5. Diversity Re-ranking
+# 5. Diversity Re-ranking & Soft Saturation Control
 # ---------------------------------------------------------------------------
 def apply_diversity_reranking(
     scored_items: List[Dict[str, Any]],
     limit: int
 ) -> List[Dict[str, Any]]:
     """
-    Apply bounded diversity multiplier to prevent provider or topic monopolization
-    while preserving top skill-gap relevance.
+    Apply bounded soft saturation penalty to prevent any single provider from dominating
+    purely due to catalog size, while ensuring relevance always outranks diversity.
+    Soft multiplier decreases gradually: 1st course: 1.0, 2nd: 0.96, 3rd: 0.92, 4th+: 0.88.
+    Relevance floor: items below minimum score are not artificially promoted.
     """
     provider_counts: Dict[str, int] = {}
     final_items = []
 
-    for item in scored_items:
+    # Sort initially by raw ranking_score (relevance * quality * freshness)
+    sorted_by_relevance = sorted(scored_items, key=lambda x: x["ranking_score"], reverse=True)
+
+    for item in sorted_by_relevance:
         prov = item.get("provider", "unknown")
         count = provider_counts.get(prov, 0)
 
@@ -276,9 +281,10 @@ def apply_diversity_reranking(
         else:
             diversity_multiplier = 1.0
 
+        item["provider_diversity_multiplier"] = diversity_multiplier
         item["diversity_multiplier"] = diversity_multiplier
-        # Adjust final score
         item["recommendation_score"] = round(item["ranking_score"] * diversity_multiplier, 4)
+        item["final_score"] = item["recommendation_score"]
         item["score"] = item["recommendation_score"]
         provider_counts[prov] = count + 1
         final_items.append(item)
@@ -329,7 +335,7 @@ def calculate_skill_coverage(
 
         weighted_total += gap_weight
 
-        # Check if course covers this skill gap (exact name match or substring match)
+        # Check if course covers this skill gap (exact name match, ESCO ID match, or safe token match)
         is_covered = False
         matched_course_skill = None
 
@@ -337,12 +343,31 @@ def calculate_skill_coverage(
             is_covered = True
             matched_course_skill = course_skill_map[norm_g_name]
         else:
-            # Substring check for technical skill variations
-            for cs_norm, cs_obj in course_skill_map.items():
-                if cs_norm in norm_g_name or norm_g_name in cs_norm:
-                    is_covered = True
-                    matched_course_skill = cs_obj
-                    break
+            # Check for ESCO ID match if available
+            g_esco_id = gap.get("esco_skill_id") or gap.get("esco_id") or gap.get("skill_id")
+            if g_esco_id:
+                for cs_obj in course_skills:
+                    if cs_obj.esco_skill_id and str(cs_obj.esco_skill_id) == str(g_esco_id):
+                        is_covered = True
+                        matched_course_skill = cs_obj
+                        break
+            
+            # Safe token-based match (preventing Java/JavaScript, C/C++, R/React collisions)
+            if not is_covered:
+                disallowed_pairs = {
+                    ("java", "javascript"), ("c", "c++"), ("c", "c#"), ("c", "css"),
+                    ("r", "react"), ("r", "ruby"), ("r", "rust"), ("go", "django"),
+                    ("sql", "nosql"), ("net", "network")
+                }
+                for cs_norm, cs_obj in course_skill_map.items():
+                    pair = (cs_norm, norm_g_name)
+                    rev_pair = (norm_g_name, cs_norm)
+                    if pair in disallowed_pairs or rev_pair in disallowed_pairs:
+                        continue
+                    if re.search(r'\b' + re.escape(cs_norm) + r'\b', norm_g_name) or re.search(r'\b' + re.escape(norm_g_name) + r'\b', cs_norm):
+                        is_covered = True
+                        matched_course_skill = cs_obj
+                        break
 
         if is_covered and matched_course_skill:
             weighted_covered += gap_weight
@@ -589,6 +614,12 @@ def get_personalized_course_recommendations(
     except Exception as e:
         logger.warning(f"Semantic candidate retrieval encountered an error: {e}")
 
+    # 4b. Ensure candidate pool includes active courses across all providers if pool is small
+    if len(candidate_course_ids) < 30:
+        all_active_ids = db.query(Course.id).filter(Course.is_active == True).all()
+        for row in all_active_ids:
+            candidate_course_ids.add(row[0])
+
     if not candidate_course_ids:
         fallback_courses = db.query(Course.id).filter(Course.is_active == True).limit(limit * 3).all()
         for row in fallback_courses:
@@ -620,6 +651,7 @@ def get_personalized_course_recommendations(
 
     # 7. Score and Build Candidate Recommendations
     scored_recommendations = []
+    RELEVANCE_FLOOR = 0.20
 
     for course in courses:
         course_skills = course.skills or []
@@ -629,7 +661,7 @@ def get_personalized_course_recommendations(
         skill_coverage_score, covered_gaps = calculate_skill_coverage(course_skills, all_skill_gaps)
 
         # Signal 2: Semantic relevance
-        semantic_score = semantic_scores_map.get(course.id, 0.50)
+        semantic_score = semantic_scores_map.get(course.id, 0.45)
 
         # Signal 3: Career relevance
         career_score = calculate_career_relevance(course_careers, resolved_careers)
@@ -642,6 +674,10 @@ def get_personalized_course_recommendations(
             4
         )
 
+        # Relevance floor check: candidates must have meaningful relevance
+        if base_score < RELEVANCE_FLOOR and skill_coverage_score <= 0.0 and semantic_score < 0.50:
+            continue
+
         # Phase 7 Quality & Freshness
         quality_dossier = calculate_quality_score(course)
         freshness_dossier = calculate_freshness_score(course)
@@ -652,6 +688,27 @@ def get_personalized_course_recommendations(
             base_score * quality_dossier["multiplier"] * freshness_dossier["multiplier"],
             4
         )
+
+        # Primary addressed skill and confidence
+        if covered_gaps:
+            primary_gap_info = covered_gaps[0]
+            addresses_skill = primary_gap_info.get("skill_name", "")
+            req_careers_for_gap = primary_gap_info.get("required_by_careers", resolved_careers)
+            # Find matching skill confidence in course_skills
+            matching_cs = next((cs for cs in course_skills if _normalize_str(cs.skill_name) == _normalize_str(addresses_skill)), None)
+            skill_conf = matching_cs.confidence if (matching_cs and matching_cs.confidence is not None) else 0.90
+        else:
+            addresses_skill = course.title
+            req_careers_for_gap = resolved_careers
+            skill_conf = 0.80
+
+        # Safe gap closure wording based on confidence
+        if skill_conf >= 0.85 and covered_gaps:
+            gap_closure_type = "Closes Gap"
+        elif skill_conf >= 0.70 and covered_gaps:
+            gap_closure_type = "Supports Skill"
+        else:
+            gap_closure_type = "Related Skill"
 
         # Explanation
         reason, category = generate_recommendation_reason(
@@ -702,15 +759,20 @@ def get_personalized_course_recommendations(
             "base_score": base_score,
             "ranking_score": ranking_score,
             "recommendation_score": ranking_score,
+            "final_score": ranking_score,
             "score": ranking_score,
             "category": category,
+            "addresses_skill": addresses_skill,
+            "required_by_careers": req_careers_for_gap,
+            "skill_mapping_confidence": round(float(skill_conf), 2),
+            "gap_closure_type": gap_closure_type,
             "skill_coverage_score": skill_coverage_score,
             "semantic_relevance_score": round(semantic_score, 4),
             "career_relevance_score": round(career_score, 4),
             "covered_skill_gaps": covered_gaps,
             "all_skills": all_course_skills_list,
             "reason": reason,
-            # Phase 7 Extended Schemas
+            # Phase 7 & 9.5 Extended Schemas
             "skill_coverage": {
                 "covered": covered_names,
                 "missing": uncovered_names,
@@ -747,3 +809,58 @@ def get_personalized_course_recommendations(
         "recommendations_count": len(final_recommendations),
         "data": final_recommendations
     }
+
+
+def get_recommendation_coverage_stats(
+    db: Session,
+    student_email: Optional[str] = None,
+    career_override: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Generate provider coverage analytics for course ingestion, skill mappings,
+    vector embeddings, and recommendation candidate eligibility.
+    """
+    # 1. Run personalized recommendation logic to get candidate pool
+    rec_dossier = get_personalized_course_recommendations(
+        db=db,
+        student_email=student_email,
+        career_override=career_override,
+        limit=100
+    )
+    eligible_candidates = rec_dossier.get("data", [])
+
+    candidate_counts_by_provider: Dict[str, int] = {}
+    for c in eligible_candidates:
+        prov = c.get("provider", "unknown")
+        candidate_counts_by_provider[prov] = candidate_counts_by_provider.get(prov, 0) + 1
+
+    # 2. Query PostgreSQL provider stats
+    providers = db.query(Provider).all()
+    provider_stats = {}
+
+    for p in providers:
+        courses_count = db.query(func.count(Course.id)).filter(Course.provider_id == p.id).scalar() or 0
+        active_count = db.query(func.count(Course.id)).filter(Course.provider_id == p.id, Course.is_active == True).scalar() or 0
+        mapped_skills = db.query(func.count(CourseSkill.id)).join(Course).filter(Course.provider_id == p.id).scalar() or 0
+        embedded_courses = db.query(func.count(Course.id)).filter(
+            Course.provider_id == p.id,
+            Course.embedding_status.in_(["indexed", "completed", "synced"])
+        ).scalar() or 0
+
+        provider_stats[p.slug] = {
+            "name": p.name,
+            "courses": courses_count,
+            "active_courses": active_count,
+            "mapped_skills": mapped_skills,
+            "embedded_courses": embedded_courses,
+            "eligible_candidates": candidate_counts_by_provider.get(p.slug, 0)
+        }
+
+    return {
+        "status": "success",
+        "student_email": student_email,
+        "target_careers": rec_dossier.get("target_careers", []),
+        "total_skill_gaps": rec_dossier.get("total_skill_gaps_identified", 0),
+        "providers": provider_stats
+    }
+

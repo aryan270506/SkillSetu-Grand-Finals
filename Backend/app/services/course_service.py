@@ -48,8 +48,16 @@ DEFAULT_PROVIDERS = [
 def seed_default_providers(db: Session) -> List[models.Provider]:
     """
     Safely and idempotently seed default course providers into PostgreSQL.
+    Strict provider scope: NPTEL, YouTube, freeCodeCamp.
     """
     seeded = []
+    allowed_slugs = {p["slug"].lower() for p in DEFAULT_PROVIDERS}
+
+    # Deactivate any legacy providers outside allowed scope
+    db.query(models.Provider).filter(
+        ~func.lower(models.Provider.slug).in_(allowed_slugs)
+    ).update({"is_active": False}, synchronize_session=False)
+
     for prov_data in DEFAULT_PROVIDERS:
         existing = db.query(models.Provider).filter(
             func.lower(models.Provider.slug) == prov_data["slug"].lower()
@@ -68,6 +76,7 @@ def seed_default_providers(db: Session) -> List[models.Provider]:
             seeded.append(provider)
             logger.info(f"Seeded provider: {provider.name} ({provider.slug})")
         else:
+            existing.is_active = prov_data["is_active"]
             seeded.append(existing)
 
     db.commit()

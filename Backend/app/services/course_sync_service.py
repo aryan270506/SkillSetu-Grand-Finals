@@ -263,3 +263,95 @@ async def sync_provider(
     finally:
         if owns_db_session:
             db.close()
+
+
+async def discover_and_persist_for_skill_gap(
+    skill_name: str,
+    target_careers: Optional[List[str]] = None,
+    provider_slug: str = "youtube",
+    min_candidates: int = 2,
+    db: Optional[Session] = None
+) -> List[models.Course]:
+    """
+    Dynamic educational discovery pipeline:
+    When local candidate coverage for a skill gap is weak (< min_candidates),
+    queries external provider, quality filters candidates, persists them into PostgreSQL,
+    maps ESCO skills, generates BGE embeddings, and indexes them into Qdrant.
+    """
+    if not skill_name or not skill_name.strip():
+        return []
+
+    clean_skill = skill_name.strip()
+    norm_slug = provider_slug.strip().lower()
+    if norm_slug not in PROVIDER_REGISTRY:
+        return []
+
+    owns_db = False
+    if db is None:
+        db = SessionLocal()
+        owns_db = True
+
+    try:
+        # 1. Check existing fresh candidates in PostgreSQL
+        provider_record = course_service.get_provider_by_slug(db, norm_slug)
+        if not provider_record:
+            connector_temp = get_course_provider(norm_slug)
+            provider_record = models.Provider(name=connector_temp.provider_name, slug=norm_slug)
+            db.add(provider_record)
+            db.commit()
+            db.refresh(provider_record)
+
+        existing_matches = (
+            db.query(models.Course)
+            .join(models.CourseSkill)
+            .filter(
+                models.Course.provider_id == provider_record.id,
+                models.Course.is_active == True,
+                func.lower(models.CourseSkill.skill_name) == clean_skill.lower()
+            )
+            .all()
+        )
+
+        if len(existing_matches) >= min_candidates:
+            return existing_matches
+
+        # 2. Build targeted educational query
+        career_focus = f" {target_careers[0]}" if target_careers else ""
+        search_query = f"{clean_skill} complete course tutorial{career_focus}".strip()
+
+        # 3. Query provider connector
+        connector = get_course_provider(norm_slug)
+        raw_candidates = await connector.search_courses(query=search_query, limit=5)
+
+        persisted_courses: List[models.Course] = []
+        for norm_c in raw_candidates:
+            try:
+                course_obj, status_str = course_service.upsert_course_with_status(db, norm_c)
+                db.commit()
+                persisted_courses.append(course_obj)
+
+                # Skill extraction + ESCO mapping
+                course_skill_extraction_service.extract_and_store_course_skills(
+                    course=course_obj,
+                    db=db,
+                    force_refresh=False
+                )
+            except Exception as item_err:
+                logger.warning(f"Error persisting dynamic candidate '{norm_c.title}': {item_err}")
+
+        # 4. Sync Qdrant embeddings for new courses
+        if persisted_courses:
+            try:
+                from app.workers.embed_courses import run_course_embedding
+                run_course_embedding(db=db, batch_size=16)
+            except Exception as emb_err:
+                logger.warning(f"Error embedding dynamically discovered courses: {emb_err}")
+
+        return persisted_courses
+    except Exception as e:
+        logger.error(f"Error in dynamic discovery for '{skill_name}' on '{provider_slug}': {e}")
+        return []
+    finally:
+        if owns_db:
+            db.close()
+
