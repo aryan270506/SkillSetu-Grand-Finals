@@ -316,8 +316,19 @@ def test_canonical_skill_parity_between_student_and_recruiter():
             models.InternshipPosting.title.ilike("%Frontend Developer%")
         ).first()
         app_record = db.query(models.InternshipApplication).filter(
-            models.InternshipApplication.student_id == student.id
+            models.InternshipApplication.student_id == student.id,
+            models.InternshipApplication.internship_id == posting.id
         ).first()
+        if not app_record:
+            app_record = models.InternshipApplication(
+                student_id=student.id,
+                internship_id=posting.id,
+                company_id=company.id,
+                status="APPLIED"
+            )
+            db.add(app_record)
+            db.commit()
+            db.refresh(app_record)
 
         # 1. Canonical student evidence
         gh_skills, res_data, prof_skills = esco_service.load_student_evidence_from_db(student.email, db)

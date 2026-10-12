@@ -163,6 +163,26 @@ export default function RecruterDashboard({
         total_applications: 0,
         shortlisted_students: 0,
         interviews: 0,
+        selected_students: 0,
+        avg_match_score: '88%',
+    });
+    const [selectionFunnel, setSelectionFunnel] = useState({
+        total_applications: 0,
+        shortlisted: 0,
+        interviews: 0,
+        selected: 0,
+        shortlisted_percentage: 0,
+        interviews_percentage: 0,
+        selected_percentage: 0,
+        efficiency_rate: '0%',
+        avg_turnaround_days: '2.4',
+    });
+    const [upcomingInterviews, setUpcomingInterviews] = useState([]);
+    const [recommendedStudents, setRecommendedStudents] = useState([]);
+    const [recentActivity, setRecentActivity] = useState([]);
+    const [applicationActivity, setApplicationActivity] = useState({
+        peak_label: 'Activity Synced',
+        total: 0,
     });
     const [loadingData, setLoadingData] = useState(false);
     const [interviewFilter, setInterviewFilter] = useState('Today');
@@ -173,35 +193,107 @@ export default function RecruterDashboard({
     const rawName = user?.name || profileData?.recruiter?.name || 'Recruiter';
     const userName = typeof rawName === 'string' && rawName.trim() ? rawName.trim().split(' ')[0] : 'Recruiter';
 
-    useEffect(() => {
+    const fetchDashboardData = async () => {
         if (!token) return;
-        const fetchDashboardData = async () => {
-            setLoadingData(true);
+        setLoadingData(true);
+        try {
+            // 1. Authoritative Recruiter Dashboard Data
+            const dashRes = await recruiterService.getDashboard(token);
+            if (dashRes && dashRes.data) {
+                const d = dashRes.data;
+                if (d.stats) {
+                    setDashboardMetrics({
+                        active_roles: d.stats.active_jobs ?? 0,
+                        total_applications: d.stats.total_applicants ?? 0,
+                        shortlisted_students: d.stats.shortlisted_students ?? 0,
+                        interviews: d.stats.interviews_scheduled ?? 0,
+                        selected_students: d.stats.selected_students ?? 0,
+                        avg_match_score: d.stats.avg_match_score ?? '88%',
+                    });
+                }
+                if (Array.isArray(d.active_internships)) {
+                    setInternships(d.active_internships);
+                }
+                if (Array.isArray(d.recent_applications)) {
+                    setApplications(d.recent_applications);
+                }
+                if (Array.isArray(d.upcoming_interviews)) {
+                    setUpcomingInterviews(d.upcoming_interviews);
+                }
+                if (Array.isArray(d.recommended_students)) {
+                    setRecommendedStudents(d.recommended_students);
+                }
+                if (Array.isArray(d.recent_activity)) {
+                    setRecentActivity(d.recent_activity);
+                }
+                if (d.selection_funnel) {
+                    setSelectionFunnel(d.selection_funnel);
+                }
+                if (d.application_activity) {
+                    setApplicationActivity(d.application_activity);
+                }
+            }
+
+            // 2. Fallback/Enrichment: fetch full internships list if needed
             try {
                 const intRes = await recruiterService.getInternships(token);
-                if (intRes && intRes.internships) {
+                if (intRes && Array.isArray(intRes.internships) && intRes.internships.length > 0) {
                     setInternships(intRes.internships);
-                    if (intRes.metrics) {
-                        setDashboardMetrics({
-                            active_roles: intRes.metrics.active_roles || 0,
-                            total_applications: intRes.metrics.total_applications || 0,
-                            shortlisted_students: intRes.internships.reduce((acc, curr) => acc + (curr.shortlisted_count || 0), 0),
-                            interviews: intRes.metrics.total_interviews || 0,
-                        });
-                    }
                 }
-                const appRes = await recruiterService.getApplications(token);
-                if (appRes && appRes.applications) {
-                    setApplications(appRes.applications);
-                }
-            } catch (err) {
-                console.warn('Dashboard live data fetch:', err);
-            } finally {
-                setLoadingData(false);
+            } catch (e) {
+                // Ignore if dashboard already populated
             }
-        };
+
+            // 3. Fallback/Enrichment: fetch applications if dashboard didn't include enough
+            try {
+                const appRes = await recruiterService.getApplications(token, { page_size: 10 });
+                if (appRes && Array.isArray(appRes.applications) && appRes.applications.length > 0) {
+                    setApplications((prev) => (prev.length > 0 ? prev : appRes.applications));
+                }
+            } catch (e) {
+                // Ignore if dashboard already populated
+            }
+        } catch (err) {
+            console.warn('Dashboard live data fetch error:', err);
+        } finally {
+            setLoadingData(false);
+        }
+    };
+
+    useEffect(() => {
         fetchDashboardData();
     }, [token]);
+
+    // Funnel calculations derived safely from live metrics
+    const fTotal = selectionFunnel.total_applications ?? dashboardMetrics.total_applications ?? 0;
+    const fShort = selectionFunnel.shortlisted ?? dashboardMetrics.shortlisted_students ?? 0;
+    const fIntv = selectionFunnel.interviews ?? dashboardMetrics.interviews ?? 0;
+    const fSel = selectionFunnel.selected ?? dashboardMetrics.selected_students ?? 0;
+
+    const fShortPct = fTotal > 0 ? Math.min(100, Math.round((fShort / fTotal) * 100)) : 0;
+    const fIntvPct = fTotal > 0 ? Math.min(100, Math.round((fIntv / fTotal) * 100)) : 0;
+    const fSelPct = fTotal > 0 ? Math.min(100, Math.round((fSel / fTotal) * 100)) : 0;
+
+    // Filter upcoming interviews
+    const filteredInterviews = upcomingInterviews.filter((item) => {
+        if (interviewFilter === 'Today') {
+            return !item.filter_day || item.filter_day === 'Today' || (item.day && item.day.includes('TODAY'));
+        }
+        if (interviewFilter === 'Tomorrow') {
+            return item.filter_day === 'Tomorrow' || (item.day && item.day.includes('TOMORROW'));
+        }
+        return true; // 'This Week'
+    });
+
+    const displayRecStudents = recommendedStudents.length > 0 ? recommendedStudents : RECOMMENDED_STUDENTS;
+    const displayActivity = recentActivity.length > 0 ? recentActivity : [
+        {
+            id: 'ACT-INIT-1',
+            icon: '👤',
+            description: `${userName} logged in to ${companyName} Recruiter Portal.`,
+            time: 'Today',
+        },
+    ];
 
     return (
         <ScrollView style={styles.page} contentContainerStyle={styles.container}>
@@ -218,19 +310,30 @@ export default function RecruterDashboard({
                     </Text>
                 </View>
 
-                <View style={[styles.profileProgressCard, isComplete && { borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' }]}>
-                    <Text style={styles.shieldIcon}>{isComplete ? '✅' : '🛡️'}</Text>
-                    <Text style={styles.profileProgressText}>
-                        Company Profile: <Text style={{ fontWeight: '800', color: isComplete ? '#065F46' : COLORS.textDark }}>{completionPct}% {isComplete ? 'Completed' : 'Complete'}</Text>
-                    </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <Pressable
-                        style={[styles.completeProfileBtn, isComplete && { backgroundColor: '#065F46' }]}
-                        onPress={() => onNavigateTab && onNavigateTab('My Profile')}
+                        style={[styles.completeProfileBtn, { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#F1F5F9', borderRadius: 8 }]}
+                        onPress={fetchDashboardData}
                     >
-                        <Text style={styles.completeProfileText}>
-                            {isComplete ? 'View Profile →' : 'Complete Profile →'}
+                        <Text style={[styles.completeProfileText, { color: '#0F172A' }]}>
+                            {loadingData ? '⏳ Syncing...' : '🔄 Refresh Data'}
                         </Text>
                     </Pressable>
+
+                    <View style={[styles.profileProgressCard, isComplete && { borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' }]}>
+                        <Text style={styles.shieldIcon}>{isComplete ? '✅' : '🛡️'}</Text>
+                        <Text style={styles.profileProgressText}>
+                            Company Profile: <Text style={{ fontWeight: '800', color: isComplete ? '#065F46' : COLORS.textDark }}>{completionPct}% {isComplete ? 'Completed' : 'Complete'}</Text>
+                        </Text>
+                        <Pressable
+                            style={[styles.completeProfileBtn, isComplete && { backgroundColor: '#065F46' }]}
+                            onPress={() => onNavigateTab && onNavigateTab('My Profile')}
+                        >
+                            <Text style={styles.completeProfileText}>
+                                {isComplete ? 'View Profile →' : 'Complete Profile →'}
+                            </Text>
+                        </Pressable>
+                    </View>
                 </View>
             </View>
 
@@ -290,13 +393,13 @@ export default function RecruterDashboard({
                 {/* Card 4 */}
                 <HoverCard hoverScale={1.04} style={styles.metricCard}>
                     <View style={styles.metricTopRow}>
-                        <Text style={styles.metricLabel}>INTERVIEWS</Text>
+                        <Text style={styles.metricLabel}>INTERVIEWS & ROUNDS</Text>
                         <View style={styles.metricIconCircle}>
                             <Text style={{ fontSize: 13 }}>📅</Text>
                         </View>
                     </View>
                     <Text style={styles.metricNumber}>{dashboardMetrics.interviews}</Text>
-                    <Text style={styles.metricSub}>Upcoming interviews scheduled</Text>
+                    <Text style={styles.metricSub}>Upcoming interviews & rounds</Text>
                     <View style={[styles.pill, { backgroundColor: COLORS.greenPillBg }]}>
                         <Text style={[styles.pillText, { color: COLORS.greenPillText }]}>
                             Active evaluation
@@ -304,8 +407,6 @@ export default function RecruterDashboard({
                     </View>
                 </HoverCard>
             </View>
-
-           
 
             {/* 4. Internship Overview: Activity Graph & Selection Funnel */}
             <View style={[styles.splitRow, !isDesktop && styles.stackedRow]}>
@@ -319,7 +420,7 @@ export default function RecruterDashboard({
                             </Text>
                         </View>
                         <View style={styles.peakBadge}>
-                            <Text style={styles.peakBadgeText}>Peak: 54 on Sep 12</Text>
+                            <Text style={styles.peakBadgeText}>{applicationActivity.peak_label || `Peak: ${dashboardMetrics.total_applications} applications`}</Text>
                         </View>
                     </View>
 
@@ -327,11 +428,11 @@ export default function RecruterDashboard({
                     <View style={styles.graphLegendRow}>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendDot, { backgroundColor: '#004D40' }]} />
-                            <Text style={styles.legendText}>Applications Received</Text>
+                            <Text style={styles.legendText}>Applications Received ({dashboardMetrics.total_applications})</Text>
                         </View>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
-                            <Text style={styles.legendText}>Students Shortlisted</Text>
+                            <Text style={styles.legendText}>Students Shortlisted ({dashboardMetrics.shortlisted_students})</Text>
                         </View>
                     </View>
 
@@ -345,10 +446,10 @@ export default function RecruterDashboard({
 
                         {/* Timeline X-Axis */}
                         <View style={styles.xAxisRow}>
-                            <Text style={styles.xAxisLabel}>Week 1 (Aug 20 - 27)</Text>
-                            <Text style={styles.xAxisLabel}>Week 2 (Aug 28 - Sep 4)</Text>
-                            <Text style={styles.xAxisLabel}>Week 3 (Sep 5 - 12)</Text>
-                            <Text style={styles.xAxisLabel}>Week 4 (Sep 13 - 20)</Text>
+                            <Text style={styles.xAxisLabel}>Week 1</Text>
+                            <Text style={styles.xAxisLabel}>Week 2</Text>
+                            <Text style={styles.xAxisLabel}>Week 3</Text>
+                            <Text style={styles.xAxisLabel}>Current Week</Text>
                         </View>
                     </View>
                 </View>
@@ -370,7 +471,7 @@ export default function RecruterDashboard({
                         <View style={styles.funnelItem}>
                             <View style={styles.funnelHeader}>
                                 <Text style={styles.funnelLabel}>1. Applications Received</Text>
-                                <Text style={styles.funnelVal}>186 (100%)</Text>
+                                <Text style={styles.funnelVal}>{fTotal} (100%)</Text>
                             </View>
                             <View style={styles.funnelTrack}>
                                 <View style={[styles.funnelFill, { width: '100%', backgroundColor: '#004D40' }]} />
@@ -381,21 +482,21 @@ export default function RecruterDashboard({
                         <View style={styles.funnelItem}>
                             <View style={styles.funnelHeader}>
                                 <Text style={styles.funnelLabel}>2. Shortlisted Students</Text>
-                                <Text style={styles.funnelVal}>32 (17.2%)</Text>
+                                <Text style={styles.funnelVal}>{fShort} ({fShortPct}%)</Text>
                             </View>
                             <View style={styles.funnelTrack}>
-                                <View style={[styles.funnelFill, { width: '40%', backgroundColor: '#0D9488' }]} />
+                                <View style={[styles.funnelFill, { width: `${Math.max(10, fShortPct)}%`, backgroundColor: '#0D9488' }]} />
                             </View>
                         </View>
 
                         {/* Step 3 */}
                         <View style={styles.funnelItem}>
                             <View style={styles.funnelHeader}>
-                                <Text style={styles.funnelLabel}>3. Interviews Scheduled</Text>
-                                <Text style={styles.funnelVal}>12 (6.4%)</Text>
+                                <Text style={styles.funnelLabel}>3. Interviews / Assessments</Text>
+                                <Text style={styles.funnelVal}>{fIntv} ({fIntvPct}%)</Text>
                             </View>
                             <View style={styles.funnelTrack}>
-                                <View style={[styles.funnelFill, { width: '22%', backgroundColor: '#14B8A6' }]} />
+                                <View style={[styles.funnelFill, { width: `${Math.max(8, fIntvPct)}%`, backgroundColor: '#14B8A6' }]} />
                             </View>
                         </View>
 
@@ -403,17 +504,17 @@ export default function RecruterDashboard({
                         <View style={styles.funnelItem}>
                             <View style={styles.funnelHeader}>
                                 <Text style={styles.funnelLabel}>4. Internship Selection</Text>
-                                <Text style={styles.funnelVal}>8 (4.3%)</Text>
+                                <Text style={styles.funnelVal}>{fSel} ({fSelPct}%)</Text>
                             </View>
                             <View style={styles.funnelTrack}>
-                                <View style={[styles.funnelFill, { width: '15%', backgroundColor: '#5EEAD4' }]} />
+                                <View style={[styles.funnelFill, { width: `${Math.max(6, fSelPct)}%`, backgroundColor: '#5EEAD4' }]} />
                             </View>
                         </View>
                     </View>
 
                     <View style={styles.funnelFooter}>
                         <Text style={styles.funnelFooterText}>
-                            ⚡ 4.3% overall selection efficiency • 2.4 days avg turnaround
+                            ⚡ {fSelPct}% overall selection efficiency • {selectionFunnel.avg_turnaround_days || '2.4'} days avg turnaround
                         </Text>
                     </View>
                 </View>
@@ -438,7 +539,7 @@ export default function RecruterDashboard({
                     </View>
                 </View>
 
-                {loadingData ? (
+                {loadingData && internships.length === 0 ? (
                     <View style={{ padding: 40, alignItems: 'center' }}>
                         <ActivityIndicator size="small" color={COLORS.primaryTeal} />
                         <Text style={{ marginTop: 8, color: COLORS.textMuted }}>Loading postings from database...</Text>
@@ -502,7 +603,7 @@ export default function RecruterDashboard({
 
                                 <Pressable
                                     style={styles.viewAppBtn}
-                                    onPress={() => onNavigateTab && onNavigateTab('Internships')}
+                                    onPress={() => onNavigateTab && onNavigateTab('Applications')}
                                 >
                                     <Text style={styles.viewAppBtnText}>
                                         View Applications ({job.applied_count || 0}) →
@@ -522,7 +623,7 @@ export default function RecruterDashboard({
                         <View>
                             <Text style={styles.cardTitle}>Recent Applications</Text>
                             <Text style={styles.cardSubtitle}>
-                                Review newly arrived student applications.
+                                Review newly arrived student applications from verified talent.
                             </Text>
                         </View>
                         <Pressable onPress={() => onNavigateTab && onNavigateTab('Applications')}>
@@ -553,10 +654,16 @@ export default function RecruterDashboard({
                         </View>
                     ) : (
                         applications.slice(0, 6).map((app) => {
-                            const studentName = app.student || app.candidate_name || 'Applicant';
-                            const collegeName = app.college || app.candidate_college || 'University';
-                            const roleName = app.internship || app.internship_title || app.title || 'Internship';
-                            const matchText = app.skillMatch || (app.match_score ? `${Math.round(app.match_score)}%` : '85%');
+                            const studentName = app.name || app.student || app.student_name || app.candidate_name || 'Applicant';
+                            const collegeName = app.university || app.college || app.candidate_college || 'University';
+                            const roleName = app.internship_title || app.internship || app.role || app.title || 'Internship';
+                            
+                            const rawScore = app.match_score_num ?? (
+                                typeof app.match_score === 'number' 
+                                    ? app.match_score 
+                                    : (typeof app.match_score === 'string' && !isNaN(parseFloat(app.match_score)) ? parseFloat(app.match_score) : null)
+                            );
+                            const matchText = app.skillMatch || (rawScore != null ? `${Math.round(rawScore)}%` : (app.matchPct || '85%'));
                             const appliedText = app.appliedTime || (app.applied_at ? new Date(app.applied_at).toLocaleDateString() : 'Recently');
                             const statusVal = app.status || 'Applied';
                             const initials = (studentName || 'ST')
@@ -568,25 +675,25 @@ export default function RecruterDashboard({
                                 .slice(0, 2) || 'ST';
 
                             return (
-                                <View key={app.id} style={styles.tableRow}>
+                                <View key={app.id || app.application_id} style={styles.tableRow}>
                                     <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
                                         <View style={[styles.avatarCircle, { overflow: 'hidden' }]}>
-                                            {(app.profile_image || app.profile_picture) ? (
+                                            {(app.profile_image && typeof app.profile_image === 'string' && app.profile_image.startsWith('http')) ? (
                                                 <Image
-                                                    source={{ uri: app.profile_image || app.profile_picture }}
+                                                    source={{ uri: app.profile_image }}
                                                     style={{ width: 32, height: 32, borderRadius: 16 }}
                                                 />
                                             ) : (
                                                 <Text style={styles.avatarText}>{initials}</Text>
                                             )}
                                         </View>
-                                        <View>
-                                            <Text style={styles.studentName}>{studentName}</Text>
-                                            <Text style={styles.collegeName}>{collegeName}</Text>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.studentName} numberOfLines={1}>{studentName}</Text>
+                                            <Text style={styles.collegeName} numberOfLines={1}>{collegeName}</Text>
                                         </View>
                                     </View>
 
-                                    <Text style={[styles.tdText, { flex: 1.5 }]}>{roleName}</Text>
+                                    <Text style={[styles.tdText, { flex: 1.5 }]} numberOfLines={1}>{roleName}</Text>
 
                                     <View style={[styles.td, { flex: 1 }]}>
                                         <View style={styles.skillMatchBadge}>
@@ -608,7 +715,7 @@ export default function RecruterDashboard({
                                         onPress={() => onNavigateTab && onNavigateTab('Applications')}
                                         style={[styles.td, { flex: 1, alignItems: 'flex-end' }]}
                                     >
-                                        <Text style={styles.reviewLink}>Review</Text>
+                                        <Text style={styles.reviewLink}>Review →</Text>
                                     </Pressable>
                                 </View>
                             );
@@ -631,7 +738,7 @@ export default function RecruterDashboard({
                         <View>
                             <Text style={styles.cardTitle}>Recommended Students</Text>
                             <Text style={styles.cardSubtitle}>
-                                Students whose verified skills closely match your internship requirements.
+                                Verified talent matched to your company requirements.
                             </Text>
                         </View>
                         <View style={styles.aiBadge}>
@@ -640,19 +747,24 @@ export default function RecruterDashboard({
                     </View>
 
                     <View style={styles.recommendedList}>
-                        {RECOMMENDED_STUDENTS.map((rec) => (
+                        {displayRecStudents.map((rec) => (
                             <HoverCard key={rec.id} hoverScale={1.02} style={styles.recCard}>
                                 <View style={styles.recCardTop}>
-                                    <Text style={styles.recName}>
-                                        {rec.name} <Text style={styles.recDegree}>• {rec.degree}</Text>
-                                    </Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.recName} numberOfLines={1}>
+                                            {rec.name} <Text style={styles.recDegree}>• {rec.degree}</Text>
+                                        </Text>
+                                        {rec.college ? (
+                                            <Text style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>{rec.college}</Text>
+                                        ) : null}
+                                    </View>
                                     <View style={styles.matchGreenPill}>
-                                        <Text style={styles.matchGreenPillText}>{rec.match}</Text>
+                                        <Text style={styles.matchGreenPillText}>{rec.match || '90% Match'}</Text>
                                     </View>
                                 </View>
 
                                 <View style={styles.skillTagsRow}>
-                                    {rec.skills.map((s, i) => (
+                                    {(rec.skills || ['React ✓', 'Python ✓', 'SQL ✓']).map((s, i) => (
                                         <View key={i} style={styles.skillTag}>
                                             <Text style={styles.skillTagText}>{s}</Text>
                                         </View>
@@ -660,12 +772,18 @@ export default function RecruterDashboard({
                                 </View>
 
                                 <View style={styles.recActionsRow}>
-                                    <Pressable style={styles.viewProfileOutlineBtn}>
+                                    <Pressable
+                                        style={styles.viewProfileOutlineBtn}
+                                        onPress={() => onNavigateTab && onNavigateTab('Students')}
+                                    >
                                         <Text style={styles.viewProfileOutlineText}>View Profile</Text>
                                     </Pressable>
-                                    <Pressable style={styles.shortlistTealBtn}>
+                                    <Pressable
+                                        style={styles.shortlistTealBtn}
+                                        onPress={() => onNavigateTab && onNavigateTab('Applications')}
+                                    >
                                         <Text style={styles.shortlistTealText}>
-                                            Shortlist for Interview
+                                            Shortlist Candidate
                                         </Text>
                                     </Pressable>
                                 </View>
@@ -673,8 +791,8 @@ export default function RecruterDashboard({
                         ))}
                     </View>
 
-                    <Pressable style={{ marginTop: 14 }}>
-                        <Text style={styles.linkText}>Explore 45+ Verified Student Profiles →</Text>
+                    <Pressable style={{ marginTop: 14 }} onPress={() => onNavigateTab && onNavigateTab('Students')}>
+                        <Text style={styles.linkText}>Explore All Verified Student Profiles →</Text>
                     </Pressable>
                 </View>
             </View>
@@ -685,9 +803,9 @@ export default function RecruterDashboard({
                 <View style={[styles.card, { flex: 1 }]}>
                     <View style={styles.cardHeader}>
                         <View>
-                            <Text style={styles.cardTitle}>Upcoming Interviews</Text>
+                            <Text style={styles.cardTitle}>Upcoming Interviews & Rounds</Text>
                             <Text style={styles.cardSubtitle}>
-                                Scheduled rounds with shortlisted students.
+                                Active assessment sessions and rounds with students.
                             </Text>
                         </View>
 
@@ -715,71 +833,57 @@ export default function RecruterDashboard({
                     </View>
 
                     <View style={styles.interviewList}>
-                        {/* Item 1 */}
-                        <HoverCard hoverScale={1.02} style={styles.interviewCard}>
-                            <View style={styles.interviewTimeCol}>
-                                <Text style={styles.interviewTime}>10:30</Text>
-                                <Text style={styles.interviewDay}>AM • TODAY</Text>
-                            </View>
-                            <View style={styles.interviewInfo}>
-                                <Text style={styles.interviewStudent}>Rahul Sharma</Text>
-                                <Text style={styles.interviewRound}>
-                                    Backend Dev Intern • Round 2: Technical & Architecture
+                        {filteredInterviews.length === 0 ? (
+                            <View style={{ padding: 28, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 24, marginBottom: 6 }}>📅</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.textDark, marginBottom: 2 }}>
+                                    No interviews scheduled for {interviewFilter.toLowerCase()}
                                 </Text>
-                                <Text style={styles.interviewSubText}>
-                                    📹 Google Meet Integration Active
+                                <Text style={{ fontSize: 11, color: COLORS.textMuted, textAlign: 'center' }}>
+                                    Students progressing through assessment rounds will appear here.
                                 </Text>
                             </View>
-                            <Pressable style={styles.joinSandboxBtn}>
-                                <Text style={styles.joinSandboxText}>Join Live Sandbox</Text>
-                            </Pressable>
-                        </HoverCard>
+                        ) : (
+                            filteredInterviews.map((intv) => {
+                                const cName = intv.candidate_name || intv.student || 'Candidate';
+                                const rText = intv.round || `${intv.role || 'Intern'} • ${intv.round_name || 'Round 1'}`;
+                                const timeStr = intv.time || '10:30';
+                                const dayStr = intv.day || 'AM • TODAY';
+                                const modeStr = intv.mode || '📹 Live Sandbox Active';
 
-                        {/* Item 2 */}
-                        <HoverCard hoverScale={1.02} style={styles.interviewCard}>
-                            <View style={styles.interviewTimeCol}>
-                                <Text style={styles.interviewTime}>02:00</Text>
-                                <Text style={styles.interviewDay}>PM • TODAY</Text>
-                            </View>
-                            <View style={styles.interviewInfo}>
-                                <Text style={styles.interviewStudent}>Priya Patil</Text>
-                                <Text style={styles.interviewRound}>
-                                    Frontend Dev Intern • Round 1: React & UI Systems
-                                </Text>
-                                <Text style={styles.interviewSubText}>
-                                    💻 Code Sandbox Ready
-                                </Text>
-                            </View>
-                            <Pressable style={styles.detailsOutlineBtn}>
-                                <Text style={styles.detailsOutlineText}>View Details</Text>
-                            </Pressable>
-                        </HoverCard>
-
-                        {/* Item 3 */}
-                        <HoverCard hoverScale={1.02} style={styles.interviewCard}>
-                            <View style={styles.interviewTimeCol}>
-                                <Text style={styles.interviewTime}>11:00</Text>
-                                <Text style={styles.interviewDay}>AM • TOMORROW</Text>
-                            </View>
-                            <View style={styles.interviewInfo}>
-                                <Text style={styles.interviewStudent}>Aditya Singh</Text>
-                                <Text style={styles.interviewRound}>
-                                    Backend Dev Intern • Round 1: System Design & APIs
-                                </Text>
-                                <Text style={styles.interviewSubText}>
-                                    ⏰ Automated Reminder Sent
-                                </Text>
-                            </View>
-                            <Pressable style={styles.detailsOutlineBtn}>
-                                <Text style={styles.detailsOutlineText}>View Details</Text>
-                            </Pressable>
-                        </HoverCard>
+                                return (
+                                    <HoverCard key={intv.id} hoverScale={1.02} style={styles.interviewCard}>
+                                        <View style={styles.interviewTimeCol}>
+                                            <Text style={styles.interviewTime}>{timeStr}</Text>
+                                            <Text style={styles.interviewDay}>{dayStr}</Text>
+                                        </View>
+                                        <View style={styles.interviewInfo}>
+                                            <Text style={styles.interviewStudent}>{cName}</Text>
+                                            <Text style={styles.interviewRound}>
+                                                {rText}
+                                            </Text>
+                                            <Text style={styles.interviewSubText}>
+                                                {modeStr}
+                                            </Text>
+                                        </View>
+                                        <Pressable
+                                            style={styles.joinSandboxBtn}
+                                            onPress={() => onNavigateTab && onNavigateTab('Assessments')}
+                                        >
+                                            <Text style={styles.joinSandboxText}>{intv.action_label || 'View Round'}</Text>
+                                        </Pressable>
+                                    </HoverCard>
+                                );
+                            })
+                        )}
                     </View>
 
                     <View style={styles.cardFooterRow}>
-                        <Text style={styles.linkText}>View All Interviews →</Text>
+                        <Pressable onPress={() => onNavigateTab && onNavigateTab('Assessments')}>
+                            <Text style={styles.linkText}>View All Assessment Rounds →</Text>
+                        </Pressable>
                         <Text style={styles.footerNoteText}>
-                            All time slots synced with Google Calendar
+                            Synced live with AI Assessment Engine
                         </Text>
                     </View>
                 </View>
@@ -794,79 +898,25 @@ export default function RecruterDashboard({
                     </View>
 
                     <View style={styles.activityList}>
-                        <View style={styles.activityRow}>
-                            <View style={styles.activityIconCircle}>
-                                <Text style={{ fontSize: 11 }}>👤</Text>
-                            </View>
-                            <View style={styles.activityBody}>
-                                <Text style={styles.activityText}>
-                                    <Text style={{ fontWeight: '700' }}>Rahul Sharma</Text> applied for{' '}
-                                    <Text style={{ color: COLORS.primaryTeal, fontWeight: '700' }}>
-                                        Backend Development Intern
+                        {displayActivity.map((act) => (
+                            <View key={act.id} style={styles.activityRow}>
+                                <View style={styles.activityIconCircle}>
+                                    <Text style={{ fontSize: 11 }}>{act.icon || '👤'}</Text>
+                                </View>
+                                <View style={styles.activityBody}>
+                                    <Text style={styles.activityText}>
+                                        {act.description || `${act.student_name} applied for ${act.internship_title}`}
                                     </Text>
-                                </Text>
-                                <Text style={styles.activityTime}>10 mins ago</Text>
+                                    <Text style={styles.activityTime}>{act.time || 'Recently'}</Text>
+                                </View>
                             </View>
-                        </View>
-
-                        <View style={styles.activityRow}>
-                            <View style={styles.activityIconCircle}>
-                                <Text style={{ fontSize: 11 }}>📄</Text>
-                            </View>
-                            <View style={styles.activityBody}>
-                                <Text style={styles.activityText}>
-                                    <Text style={{ fontWeight: '700' }}>Priya Patil</Text> was shortlisted for{' '}
-                                    <Text style={{ color: COLORS.primaryTeal, fontWeight: '700' }}>
-                                        Frontend Development Intern
-                                    </Text>
-                                </Text>
-                                <Text style={styles.activityTime}>1 hour ago</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.activityRow}>
-                            <View style={styles.activityIconCircle}>
-                                <Text style={{ fontSize: 11 }}>📅</Text>
-                            </View>
-                            <View style={styles.activityBody}>
-                                <Text style={styles.activityText}>
-                                    Interview scheduled with{' '}
-                                    <Text style={{ fontWeight: '700' }}>Aditya Singh</Text>
-                                </Text>
-                                <Text style={styles.activityTime}>3 hours ago</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.activityRow}>
-                            <View style={styles.activityIconCircle}>
-                                <Text style={{ fontSize: 11 }}>👥</Text>
-                            </View>
-                            <View style={styles.activityBody}>
-                                <Text style={styles.activityText}>
-                                    <Text style={{ fontWeight: '700' }}>8 new student applications</Text>{' '}
-                                    received across AI/ML Intern
-                                </Text>
-                                <Text style={styles.activityTime}>Yesterday</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.activityRow}>
-                            <View style={styles.activityIconCircle}>
-                                <Text style={{ fontSize: 11 }}>📊</Text>
-                            </View>
-                            <View style={styles.activityBody}>
-                                <Text style={styles.activityText}>
-                                    Assessment completed by{' '}
-                                    <Text style={{ fontWeight: '700' }}>Tanvi Deshmukh</Text> with{' '}
-                                    <Text style={{ color: '#15803D', fontWeight: '700' }}>92% score</Text>
-                                </Text>
-                                <Text style={styles.activityTime}>Yesterday</Text>
-                            </View>
-                        </View>
+                        ))}
                     </View>
 
                     <View style={styles.cardFooterRow}>
-                        <Text style={styles.linkText}>View Full Audit Log →</Text>
+                        <Pressable onPress={() => onNavigateTab && onNavigateTab('Applications')}>
+                            <Text style={styles.linkText}>View Full Applicant Audit Log →</Text>
+                        </Pressable>
                     </View>
                 </View>
             </View>
