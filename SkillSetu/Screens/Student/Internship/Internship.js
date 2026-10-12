@@ -1,166 +1,149 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+
 import {
   fetchRecommendedInternships,
+  fetchInternshipDetail,
   toggleSaveInternship,
+  completeCourseFromOpportunities,
+  verifyCourseCertificate,
   applyToInternship,
 } from '../services/internshipService';
+import {
+  fetchAssessmentDetail,
+  submitAssessment,
+  submitProjectTrack,
+  fetchAvailableProjectRepos,
+  enrollInCourse,
+} from '../services/careerIntelligenceService';
 import { fetchStudentApplications } from '../services/applicationService';
 
-const COLORS = {
-  canvas: '#f9f9f8',       // Warm off-white canvas
-  panel: '#f3f4f3',        // Light gray background
-  paper: '#ffffff',        // Card white
-  ink: '#1a1c1c',          // Dark charcoal text
-  muted: '#3d4947',        // Muted gray text
-  subtle: '#bcc9c6',       // Border color
-  green: '#00685f',        // Primary Teal Green (SkillSetu Green)
-  greenLight: '#f4fffc',   // Very light primary green
-  teal: '#008378',         // Deep Teal accent
-  mint: '#f0fdfa',         // Light mint tint
-  amber: '#825100',        // Amber
-  amberLight: '#ffddb8',   // Light Amber
-  rose: '#ba1a1a',         // Error Red
-  roseLight: '#ffdad6',    // Light Red
-  blue: '#545f73',         // Slate Blue
-  blueLight: '#d5e0f8',    // Light Blue
-};
-
-// Reusable HoverableCard helper for desktop/web animations
-function HoverableCard({ children, style, containerStyle, ...props }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const shadow = useRef(new Animated.Value(0)).current;
-
-  const handleHoverIn = () => {
-    if (Platform.OS === 'web') {
-      Animated.parallel([
-        Animated.spring(scale, {
-          toValue: 1.015,
-          friction: 8,
-          tension: 100,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.timing(shadow, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ]).start();
-    }
-  };
-
-  const handleHoverOut = () => {
-    if (Platform.OS === 'web') {
-      Animated.parallel([
-        Animated.spring(scale, {
-          toValue: 1.0,
-          friction: 8,
-          tension: 100,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.timing(shadow, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ]).start();
-    }
-  };
-
-  const shadowOpacity = shadow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.03, 0.1],
-  });
-
-  const flatStyle = StyleSheet.flatten(style);
-  const containerLayout = {};
-  if (flatStyle) {
-    if (flatStyle.flex !== undefined) containerLayout.flex = flatStyle.flex;
-    if (flatStyle.width !== undefined) containerLayout.width = flatStyle.width;
-    if (flatStyle.margin !== undefined) containerLayout.margin = flatStyle.margin;
-    if (flatStyle.marginTop !== undefined) containerLayout.marginTop = flatStyle.marginTop;
-    if (flatStyle.marginBottom !== undefined) containerLayout.marginBottom = flatStyle.marginBottom;
-    if (flatStyle.marginLeft !== undefined) containerLayout.marginLeft = flatStyle.marginLeft;
-    if (flatStyle.marginRight !== undefined) containerLayout.marginRight = flatStyle.marginRight;
-  }
-
-  const animatedStyle = {
-    transform: [{ scale }],
-    shadowColor: '#1e293b',
-    shadowOpacity,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  };
-
-  return (
-    <Pressable
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      style={[containerLayout, containerStyle]}
-      {...props}
-    >
-      <Animated.View style={[style, animatedStyle]}>
-        {children}
-      </Animated.View>
-    </Pressable>
-  );
-}
+import { CLAY_COLORS, CLAY_FONTS, CLAY_RADII, CLAY_SHADOWS, ensureClayGlobalStyles } from './components/DesignTokens';
+import AmbientBackground from './components/AmbientBackground';
+import OpportunityHeader from './components/OpportunityHeader';
+import OpportunityHero from './components/OpportunityHero';
+import OpportunityFilters from './components/OpportunityFilters';
+import TopRecommendedSection from './components/TopRecommendedSection';
+import OpportunityCard from './components/OpportunityCard';
+import PipelineSidebar from './components/PipelineSidebar';
+import OpportunityLoadingSkeleton from './components/OpportunityLoadingSkeleton';
+import OpportunityErrorState from './components/OpportunityErrorState';
+import OpportunityModals from './components/OpportunityModals';
+import OpportunityFooter from './components/OpportunityFooter';
 
 export default function Internship({ user, profileData, onNavigate }) {
   const { width } = useWindowDimensions();
-  const isTablet = width >= 768;
+  const isTablet = width >= 640;
   const isDesktop = width >= 1024;
+  const isWideDesktop = width >= 1400;
 
-  const cardWidth = isDesktop ? '31%' : isTablet ? '48%' : '100%';
-  const studentEmail = user?.email || profileData?.personalInfo?.email || 'abhoge27@gmail.com';
+  const studentEmail = user?.email || profileData?.personalInfo?.email || '';
 
   // API State
   const [internships, setInternships] = useState([]);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalOpportunities, setTotalOpportunities] = useState(0);
+  const [serverMetrics, setServerMetrics] = useState(null);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [sortOption, setSortOption] = useState('Best Match');
+  const [readinessTab, setReadinessTab] = useState('ALL'); // 'ALL' | 'READY' | 'NEEDS_DEV' | 'SAVED'
+  const [verifiedFilter, setVerifiedFilter] = useState(''); // '' | 'VERIFIED' | 'UNVERIFIED'
+  const [selectedTechStack, setSelectedTechStack] = useState('');
 
   // Modals & UI State
   const [selectedDetailJob, setSelectedDetailJob] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedPlanJob, setSelectedPlanJob] = useState(null);
+  const [showPlanModal, setShowPlanModal] = useState(false);
   const [showAppliedModal, setShowAppliedModal] = useState(false);
   const [appliedJob, setAppliedJob] = useState(null);
-  const [expandedAppId, setExpandedAppId] = useState(null);
   const [savingId, setSavingId] = useState(null);
   const [applyingId, setApplyingId] = useState(null);
 
-  // Initial load
-  const loadData = async (isManualRefresh = false) => {
+  // State for Interactive Assessment Runner
+  const [activeAssessment, setActiveAssessment] = useState(null);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
+  const [assessmentSubmitting, setAssessmentSubmitting] = useState(false);
+  const [assessmentResult, setAssessmentResult] = useState(null);
+  const [assessmentAnswers, setAssessmentAnswers] = useState({});
+  const [assessmentCurrentIdx, setAssessmentCurrentIdx] = useState(0);
+  const [assessmentError, setAssessmentError] = useState(null);
+
+  // State for Interactive Project Challenge Runner
+  const [activeProject, setActiveProject] = useState(null);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [projectLoading, setProjectLoading] = useState(false);
+  const [projectSubmitting, setProjectSubmitting] = useState(false);
+  const [projectResult, setProjectResult] = useState(null);
+  const [projectRepoUrl, setProjectRepoUrl] = useState('');
+  const [projectNotes, setProjectNotes] = useState('');
+  const [projectError, setProjectError] = useState(null);
+  const [availableRepos, setAvailableRepos] = useState([]);
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [selectedRepoId, setSelectedRepoId] = useState(null);
+
+  const [enrollingCourseId, setEnrollingCourseId] = useState(null);
+  const [planSuccessNotice, setPlanSuccessNotice] = useState(null);
+
+  // State for Real Certificate Upload & Verification
+  const [activeUploadCourse, setActiveUploadCourse] = useState(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadingCertificate, setUploadingCertificate] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+
+  // Ensure Google Fonts and high-fidelity claymorphic keyframes
+  useEffect(() => {
+    ensureClayGlobalStyles();
+  }, []);
+
+  // Helper to reliably test if a job is an authentic recruiter-verified posting
+  const isJobVerified = (job) => {
+    if (!job) return false;
+    return (
+      String(job.verification_status || '').toUpperCase() === 'VERIFIED' ||
+      job.verified === true ||
+      job.is_verified === true ||
+      job.source === 'recruiter_posting' ||
+      job.source_type === 'recruiter_verified' ||
+      (job.company_id != null && job.company_id !== undefined && job.company_id !== '')
+    );
+  };
+
+  // Initial load / refresh / pagination
+  const loadData = async (isManualRefresh = false, targetPage = 1, append = false) => {
     if (isManualRefresh) setRefreshing(true);
-    else setLoading(true);
+    else if (!append) setLoading(true);
+    else setLoadingMore(true);
     setError(null);
 
     try {
       const [recRes, appRes] = await Promise.all([
         fetchRecommendedInternships({
           email: studentEmail,
-          page: 1,
-          pageSize: 50,
+          page: targetPage,
+          pageSize: 200,
           search: searchQuery,
           location: locationFilter,
           workMode: typeFilter,
@@ -169,9 +152,25 @@ export default function Internship({ user, profileData, onNavigate }) {
       ]);
 
       if (recRes && recRes.status === 'success') {
-        setInternships(recRes.items || []);
+        const newItems = recRes.items || recRes.data || [];
+        if (append) {
+          setInternships((prev) => {
+            const seen = new Set(prev.map((p) => String(p.id)));
+            const uniqueAdditions = newItems.filter((it) => !seen.has(String(it.id)));
+            return [...prev, ...uniqueAdditions];
+          });
+        } else {
+          setInternships(newItems);
+        }
+        const total = recRes.total ?? recRes.total_results ?? newItems.length;
+        setTotalOpportunities(total);
+        setHasMore(recRes.has_more ?? (targetPage * 200 < total));
+        setPage(targetPage);
+        if (recRes.metrics) {
+          setServerMetrics(recRes.metrics);
+        }
       } else {
-        setError(recRes?.message || 'Unable to load recommended internships');
+        if (!append) setError(recRes?.message || 'Unable to load recommended internships');
       }
 
       if (appRes && appRes.internships) {
@@ -179,66 +178,118 @@ export default function Internship({ user, profileData, onNavigate }) {
       }
     } catch (err) {
       console.error('[Internship Screen] Error loading data:', err);
-      setError(err.message || 'Failed to connect to opportunities server');
+      if (!append) setError(err.message || 'Failed to connect to opportunities server');
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(false, 1, false);
   }, [studentEmail, locationFilter, typeFilter]);
 
   // Handle Search submit
   const handleSearchSubmit = () => {
-    loadData(true);
+    loadData(true, 1, false);
   };
 
-  // Dynamic Metrics derived from real matching results
-  const metrics = useMemo(() => {
-    if (!internships.length) {
-      return { eligibleCount: 0, almostCount: 0, gapCount: 0, avgMatch: 0 };
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadData(false, page + 1, true);
     }
-    let eligible = 0;
-    let almost = 0;
-    let gap = 0;
+  };
+
+  // Dynamic Metrics derived from real runtime server & loaded data
+  const metrics = useMemo(() => {
+    let ready = 0;
+    let dev = 0;
+    let verified = 0;
+    let unverified = 0;
     let totalScore = 0;
 
     internships.forEach((job) => {
       const score = Number(job.match_score || 0);
+      const thresh = job.application_threshold ?? job.minimum_match_threshold ?? 80;
       totalScore += score;
-      if (job.eligibility_status === 'ELIGIBLE' && score >= 75) {
-        eligible++;
-      } else if (score >= 50 || job.eligibility_status === 'POSSIBLY_ELIGIBLE') {
-        almost++;
+      if (job.readiness_status === 'READY_TO_APPLY' || (score >= thresh && job.hard_eligible !== false)) {
+        ready++;
       } else {
-        gap++;
+        dev++;
+      }
+      if (isJobVerified(job)) {
+        verified++;
+      } else {
+        unverified++;
       }
     });
 
+    const total = totalOpportunities || internships.length;
     return {
-      eligibleCount: eligible,
-      almostCount: almost,
-      gapCount: gap,
-      avgMatch: Math.round(totalScore / internships.length),
+      readyCount: serverMetrics?.ready_to_apply ?? ready,
+      devCount: serverMetrics?.needs_development ?? dev,
+      verifiedCount: serverMetrics?.verified ?? verified,
+      unverifiedCount: serverMetrics?.unverified ?? unverified,
+      totalCount: serverMetrics?.total_opportunities ?? total,
+      avgMatch: internships.length ? Math.round(totalScore / internships.length) : (serverMetrics?.intelligence_score || 94),
     };
+  }, [internships, totalOpportunities, serverMetrics]);
+
+  // Extract unique tech stack tags from actual loaded dataset
+  const availableTechStacks = useMemo(() => {
+    const techSet = new Set();
+    internships.forEach(job => {
+      (job.skills || []).forEach(s => {
+        if (s && s.length <= 18) techSet.add(s);
+      });
+    });
+    return Array.from(techSet);
   }, [internships]);
 
   // Featured recommendations
   const featuredJobs = useMemo(() => {
-    return internships.slice(0, 2);
+    return internships.slice(0, 3);
   }, [internships]);
 
   // Filtered & Sorted Listings
   const filteredJobs = useMemo(() => {
     let list = [...internships];
 
+    // 1. Filter by Verified / Unverified Batch
+    if (verifiedFilter === 'VERIFIED') {
+      list = list.filter(isJobVerified);
+    } else if (verifiedFilter === 'UNVERIFIED') {
+      list = list.filter((job) => !isJobVerified(job));
+    }
+
+    // 2. Filter by Readiness tab
+    if (readinessTab === 'READY') {
+      list = list.filter((job) => {
+        const thresh = job.application_threshold ?? job.minimum_match_threshold ?? 80;
+        return job.readiness_status === 'READY_TO_APPLY' || ((job.match_score || 0) >= thresh && job.hard_eligible !== false);
+      });
+    } else if (readinessTab === 'NEEDS_DEV') {
+      list = list.filter((job) => {
+        const thresh = job.application_threshold ?? job.minimum_match_threshold ?? 80;
+        return job.readiness_status === 'NEEDS_DEVELOPMENT' || (job.match_score || 0) < thresh || job.hard_eligible === false;
+      });
+    } else if (readinessTab === 'SAVED') {
+      list = list.filter((job) => job.is_saved);
+    }
+
+    // 3. Filter by Tech Stack
+    if (selectedTechStack) {
+      const targetTech = selectedTechStack.toLowerCase();
+      list = list.filter((job) => (job.skills || []).some((s) => s.toLowerCase().includes(targetTech)));
+    }
+
+    // 4. Filter by Search Query
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       list = list.filter((job) => {
         const titleMatch = job.title?.toLowerCase().includes(q);
-        const compMatch = job.company?.toLowerCase().includes(q);
+        const compMatch = (job.company || job.company_name)?.toLowerCase().includes(q);
         const skillMatch = (job.skills || []).some((s) => s.toLowerCase().includes(q));
         const locMatch = job.location?.toLowerCase().includes(q);
         return titleMatch || compMatch || skillMatch || locMatch;
@@ -257,16 +308,283 @@ export default function Internship({ user, profileData, onNavigate }) {
       }
       return 0;
     });
-  }, [internships, searchQuery, sortOption]);
+  }, [internships, readinessTab, verifiedFilter, selectedTechStack, searchQuery, sortOption]);
+
+  // Open Targeted Development Plan Modal & Fetch Detailed Snapshot
+  const openPlanModal = async (job) => {
+    setSelectedPlanJob(job);
+    setShowPlanModal(true);
+    try {
+      const detail = await fetchInternshipDetail(job.id, studentEmail);
+      if (detail) {
+        setSelectedPlanJob(detail);
+      }
+    } catch (err) {
+      console.warn('[Internship] Could not load detailed job info:', err);
+    }
+  };
+
+  // Course Completion / Enrollment Handler
+  const handleEnrollCourse = async (course) => {
+    const cId = course.id || course.course_id || course.title;
+    setEnrollingCourseId(cId);
+    try {
+      await enrollInCourse(cId, studentEmail);
+      if (course.url) {
+        Linking.openURL(course.url).catch(() => {});
+      }
+      if (selectedPlanJob && selectedPlanJob.recommended_courses) {
+        setSelectedPlanJob(prev => ({
+          ...prev,
+          recommended_courses: (prev.recommended_courses || []).map(c => 
+            (c.id === course.id || c.title === course.title) ? { ...c, status: 'IN_PROGRESS', action_label: 'Continue Learning →' } : c
+          )
+        }));
+      }
+      setPlanSuccessNotice(`Enrolled in "${course.title}". Opening course module...`);
+      setTimeout(() => setPlanSuccessNotice(null), 5000);
+    } catch (err) {
+      console.warn('Enrollment error:', err);
+    } finally {
+      setEnrollingCourseId(null);
+    }
+  };
+
+  const handleCompleteCourse = async (course) => {
+    const cId = course.id || course.course_id || course.title;
+    setEnrollingCourseId(cId);
+    try {
+      await completeCourseFromOpportunities(cId, studentEmail, 100.0);
+      if (selectedPlanJob?.id) {
+        const updatedJob = await fetchInternshipDetail(selectedPlanJob.id, studentEmail);
+        if (updatedJob) {
+          setSelectedPlanJob(updatedJob);
+        }
+      }
+      setPlanSuccessNotice(`Completed verified course "${course.title}". Skill evidence recorded!`);
+      setTimeout(() => setPlanSuccessNotice(null), 5000);
+      loadData(true);
+    } catch (err) {
+      console.warn('Course completion error:', err);
+    } finally {
+      setEnrollingCourseId(null);
+    }
+  };
+
+  const handleStartUploadCertificate = (course) => {
+    setActiveUploadCourse(course);
+    setUploadResult(null);
+    setUploadError(null);
+    setShowPlanModal(false);
+    setShowUploadModal(true);
+  };
+
+  const handleCloseUploadModal = () => {
+    setShowUploadModal(false);
+    setActiveUploadCourse(null);
+    setUploadResult(null);
+    setUploadError(null);
+    if (selectedPlanJob) {
+      setShowPlanModal(true);
+    }
+  };
+
+  const handleSubmitCertificate = async (certificateData) => {
+    if (!activeUploadCourse) return;
+    const cId = activeUploadCourse.id || activeUploadCourse.course_id || activeUploadCourse.title;
+    setUploadingCertificate(true);
+    setUploadError(null);
+
+    try {
+      const res = await verifyCourseCertificate(cId, studentEmail, certificateData);
+      if (res && res.status === 'success') {
+        setUploadResult(res);
+        if (selectedPlanJob?.id) {
+          const updatedJob = await fetchInternshipDetail(selectedPlanJob.id, studentEmail);
+          if (updatedJob) {
+            setSelectedPlanJob(updatedJob);
+          }
+        }
+        setPlanSuccessNotice(`Certificate verified for "${activeUploadCourse.title}". Verifiable skill evidence attested!`);
+        setTimeout(() => setPlanSuccessNotice(null), 6000);
+        loadData(true);
+      } else {
+        setUploadError(res?.message || 'Certificate verification failed. Please check the document.');
+      }
+    } catch (err) {
+      console.error('Certificate verification error:', err);
+      setUploadError(err.message || 'Unable to connect to certificate verification service.');
+    } finally {
+      setUploadingCertificate(false);
+    }
+  };
+
+  // Assessment Runner Handler
+  const closeAssessmentModal = () => {
+    setShowAssessmentModal(false);
+    setActiveAssessment(null);
+    setAssessmentResult(null);
+    setAssessmentError(null);
+    if (selectedPlanJob) {
+      setShowPlanModal(true);
+    }
+  };
+
+  const handleStartAssessment = async (test) => {
+    setShowPlanModal(false);
+    setAssessmentLoading(true);
+    setAssessmentError(null);
+    setAssessmentResult(null);
+    setAssessmentAnswers({});
+    setAssessmentCurrentIdx(0);
+    setShowAssessmentModal(true);
+
+    try {
+      const testId = test.id || test.assessment_id || (test.skill ? `test_${test.skill.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : 'test_git_01');
+      const detail = await fetchAssessmentDetail(testId);
+      if (detail && detail.questions && detail.questions.length >= 15) {
+        setActiveAssessment(detail);
+      } else if (detail && detail.questions && detail.questions.length > 0) {
+        setAssessmentError('Not enough verified questions are currently available for this skill. Please try again later.');
+        setActiveAssessment(detail);
+      } else {
+        setAssessmentError('Unable to load verified questions for this assessment. Please try again later.');
+      }
+    } catch (err) {
+      console.error('Failed to load assessment:', err);
+      setAssessmentError('Unable to connect to assessment service.');
+    } finally {
+      setAssessmentLoading(false);
+    }
+  };
+
+  const handleSelectOption = (questionId, optionKey) => {
+    setAssessmentAnswers(prev => ({
+      ...prev,
+      [questionId]: optionKey
+    }));
+  };
+
+  const handleSubmitAssessment = async () => {
+    if (!activeAssessment || !activeAssessment.id) return;
+    setAssessmentSubmitting(true);
+    setAssessmentError(null);
+
+    try {
+      const res = await submitAssessment(activeAssessment.id, studentEmail, assessmentAnswers);
+      if (res && (res.status === 'success' || res.score !== undefined)) {
+        setAssessmentResult(res);
+        if (selectedPlanJob?.id) {
+          const updatedJob = await fetchInternshipDetail(selectedPlanJob.id, studentEmail);
+          if (updatedJob) {
+            setSelectedPlanJob(updatedJob);
+          }
+        }
+        loadData(true);
+      } else {
+        setAssessmentError(res?.message || 'Failed to evaluate assessment submission.');
+      }
+    } catch (err) {
+      console.error('Submit assessment error:', err);
+      setAssessmentError('An error occurred while submitting your assessment.');
+    } finally {
+      setAssessmentSubmitting(false);
+    }
+  };
+
+  // Project Runner Handler
+  const closeProjectModal = () => {
+    setShowProjectModal(false);
+    setActiveProject(null);
+    setProjectResult(null);
+    setProjectError(null);
+    if (selectedPlanJob) {
+      setShowPlanModal(true);
+    }
+  };
+
+  const handleStartProject = async (project) => {
+    setShowPlanModal(false);
+    setActiveProject(project);
+    setProjectError(null);
+    setProjectResult(null);
+    setProjectRepoUrl('');
+    setProjectNotes('');
+    setSelectedRepoId(null);
+    setShowProjectModal(true);
+    setLoadingRepos(true);
+    try {
+      const pId = project.id || project.project_id || 'proj_full_stack_architecture';
+      const repoRes = await fetchAvailableProjectRepos(pId, studentEmail);
+      if (repoRes && repoRes.repositories && repoRes.repositories.length > 0) {
+        setAvailableRepos(repoRes.repositories);
+        setSelectedRepoId(repoRes.repositories[0].id || repoRes.repositories[0].name);
+        setProjectRepoUrl(repoRes.repositories[0].html_url || repoRes.repositories[0].url || '');
+      } else {
+        setAvailableRepos([]);
+      }
+    } catch (e) {
+      console.warn('Could not fetch repos:', e);
+      setAvailableRepos([]);
+    } finally {
+      setLoadingRepos(false);
+    }
+  };
+
+  const handleSubmitProject = async () => {
+    if (!activeProject || !activeProject.id) return;
+    if (!projectRepoUrl || !projectRepoUrl.trim()) {
+      setProjectError('Please select or provide a valid connected GitHub repository URL.');
+      return;
+    }
+    setProjectSubmitting(true);
+    setProjectError(null);
+
+    try {
+      const selectedRepoObj = availableRepos.find(r => (r.id === selectedRepoId || r.name === selectedRepoId || r.html_url === projectRepoUrl));
+      const res = await submitProjectTrack(
+        activeProject.id,
+        studentEmail,
+        selectedRepoObj || projectRepoUrl.trim(),
+        projectNotes
+      );
+      if (res && res.status === 'success') {
+        setProjectResult(res);
+        if (selectedPlanJob?.id) {
+          const updatedJob = await fetchInternshipDetail(selectedPlanJob.id, studentEmail);
+          if (updatedJob) {
+            setSelectedPlanJob(updatedJob);
+          }
+        }
+        loadData(true);
+      } else {
+        setProjectError(res?.message || 'Project verification was not successful. Please verify all requirements.');
+      }
+    } catch (err) {
+      console.error('Submit project error:', err);
+      setProjectError('An error occurred during project verification.');
+    } finally {
+      setProjectSubmitting(false);
+    }
+  };
 
   // Apply Handler
   const handleApply = async (job) => {
+    const score = job.match_score || 0;
+    const threshold = job.application_threshold ?? job.minimum_match_threshold ?? 80;
+    if (job.hard_eligible === false || score < threshold) {
+      openPlanModal(job);
+      return;
+    }
+
     setApplyingId(job.id);
     try {
-      // 1. Record application on backend
       const res = await applyToInternship(job.id, studentEmail);
+      if (res && res.allowed === false) {
+        openPlanModal(job);
+        return;
+      }
       
-      // 2. Open official portal if application URL exists
       const targetUrl = job.application_url || job.source_url || res?.data?.application_url;
       if (targetUrl) {
         Linking.openURL(targetUrl).catch((err) => {
@@ -277,7 +595,6 @@ export default function Internship({ user, profileData, onNavigate }) {
       setAppliedJob(job);
       setShowAppliedModal(true);
 
-      // Refresh applications table
       const appRes = await fetchStudentApplications(studentEmail);
       if (appRes && appRes.internships) {
         setApplications(appRes.internships);
@@ -295,10 +612,15 @@ export default function Internship({ user, profileData, onNavigate }) {
     const willSave = !job.is_saved;
     try {
       await toggleSaveInternship(job.id, studentEmail, willSave);
-      // Update local state
       setInternships((prev) =>
         prev.map((item) => (item.id === job.id ? { ...item, is_saved: willSave } : item))
       );
+      if (selectedDetailJob && selectedDetailJob.id === job.id) {
+        setSelectedDetailJob(prev => ({ ...prev, is_saved: willSave }));
+      }
+      if (selectedPlanJob && selectedPlanJob.id === job.id) {
+        setSelectedPlanJob(prev => ({ ...prev, is_saved: willSave }));
+      }
     } catch (err) {
       console.error('Save error:', err);
     } finally {
@@ -315,1574 +637,384 @@ export default function Internship({ user, profileData, onNavigate }) {
     setLocationFilter('');
     setTypeFilter('');
     setSearchQuery('');
+    setVerifiedFilter('');
+    setSelectedTechStack('');
+    setReadinessTab('ALL');
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.contentContainer}>
-        
-        {/* 1. Header Bento Section */}
-        <View style={[styles.bentoRow, isDesktop ? styles.rowLayout : styles.columnLayout]}>
-          
-          {/* Left Column: Heading and Intro */}
-          <View style={[styles.bentoLeft, isDesktop ? { flex: 7 } : {}]}>
-            <Text style={styles.displayHeading}>
-              Find Internships{'\n'}That <Text style={styles.textGreenUnderline}>Match You</Text>
-            </Text>
-            <Text style={styles.bentoSubtext}>
-              SkillSetu analyzes your verified ESCO skills, career trajectory, projects, and eligibility rules to surface authentic, source-verified internships tailored for your exact profile.
-            </Text>
-          </View>
+    <View style={styles.screenContainer}>
+      <AmbientBackground />
 
-          {/* Right Column: Match Profile Card */}
-          <View style={[styles.bentoRight, isDesktop ? { flex: 5 } : {}]}>
-            <View style={styles.profileCard}>
-              <View style={styles.profileCardHeader}>
-                <View>
-                  <Text style={styles.profileCardTitle}>Your Match Profile</Text>
-                  <Text style={styles.profileCardSubtitle}>Deterministic AI & ESCO Match</Text>
-                </View>
-                <View style={styles.gaugeContainer}>
-                  <Text style={styles.gaugeVal}>{metrics.avgMatch}%</Text>
-                </View>
-              </View>
+      <ScrollView contentContainerStyle={styles.contentScroll} showsVerticalScrollIndicator={false}>
+        {/* 1. Header with Breadcrumbs & Sync Action Pills */}
+        <OpportunityHeader
+          metrics={metrics}
+          applicationsCount={applications.length}
+          onNavigate={onNavigate}
+          onSyncLedger={() => loadData(true)}
+        />
 
-              <View style={styles.profileStatsRow}>
-                <View style={[styles.statBox, styles.statBoxTeal]}>
-                  <Text style={[styles.statValue, { color: COLORS.teal }]}>{metrics.eligibleCount}</Text>
-                  <Text style={styles.statLabel}>Eligible</Text>
-                </View>
-                <View style={[styles.statBox, styles.statBoxAmber]}>
-                  <Text style={[styles.statValue, { color: COLORS.amber }]}>{metrics.almostCount}</Text>
-                  <Text style={styles.statLabel}>Almost{'\n'}Eligible</Text>
-                </View>
-                <View style={[styles.statBox, styles.statBoxRose]}>
-                  <Text style={[styles.statValue, { color: COLORS.rose }]}>{metrics.gapCount}</Text>
-                  <Text style={styles.statLabel}>Skill{'\n'}Gaps</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
+        {/* 2. Claymorphic Hero with Readiness & Intelligence Stats */}
+        <OpportunityHero
+          user={user}
+          profileData={profileData}
+          metrics={metrics}
+        />
 
-        {/* Loading State */}
+        {/* Loading / Error States */}
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.green} />
-            <Text style={styles.loadingText}>Evaluating verified internships & matching algorithms...</Text>
-          </View>
+          <OpportunityLoadingSkeleton />
         ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorIcon}>⚠️</Text>
-            <Text style={styles.errorTitle}>Unable to Load Internships</Text>
-            <Text style={styles.errorSubtitle}>{error}</Text>
-            <Pressable style={styles.retryBtn} onPress={() => loadData(true)}>
-              <Text style={styles.retryBtnText}>Retry Connection</Text>
-            </Pressable>
-          </View>
+          <OpportunityErrorState error={error} onRetry={() => loadData(true)} />
         ) : (
           <>
-            {/* 2. Recommended for You (Featured) */}
+            {/* 3. Top Spotlight Section: Featured Recommendations on Left & Student Pipeline on Right */}
             {featuredJobs.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionIcon}>⭐</Text>
-                  <Text style={styles.sectionTitle}>Top Recommended Opportunities</Text>
+              <View style={[styles.topSpotlightRow, isDesktop ? styles.desktopRow : styles.mobileColumn]}>
+                <View style={[styles.spotlightLeft, isDesktop ? { flex: 6.8 } : {}]}>
+                  <TopRecommendedSection
+                    featuredJobs={featuredJobs}
+                    onViewDetails={handleViewDetails}
+                    onOpenPlan={openPlanModal}
+                    onApply={handleApply}
+                    applyingId={applyingId}
+                  />
                 </View>
-
-                <View style={[styles.featuredGrid, isTablet ? styles.rowLayout : styles.columnLayout]}>
-                  {featuredJobs.map((job) => {
-                    const isEligible = job.eligibility_status === 'ELIGIBLE';
-                    const matchPercent = Math.round(job.match_score || 0);
-
-                    return (
-                      <HoverableCard
-                        key={job.id}
-                        style={[
-                          styles.featuredCard,
-                          {
-                            backgroundColor: isEligible ? '#f0fdfa' : '#fffbf2',
-                            borderColor: COLORS.subtle,
-                          },
-                        ]}
-                      >
-                        <View style={styles.featuredBadgeRow}>
-                          <View style={isEligible ? styles.eligibleBadge : styles.almostBadge}>
-                            <Text style={isEligible ? styles.eligibleBadgeText : styles.almostBadgeText}>
-                              {isEligible ? `✓ Eligible (${matchPercent}% Match)` : `⚠ ${job.eligibility_status} (${matchPercent}%)`}
-                            </Text>
-                          </View>
-                          <View style={styles.rowTags}>
-                            <View style={styles.tagLabel}>
-                              <Text style={styles.tagLabelText}>{job.work_mode || (job.is_remote ? 'Remote' : 'On-site')}</Text>
-                            </View>
-                            {job.duration && (
-                              <View style={styles.tagLabel}>
-                                <Text style={styles.tagLabelText}>{job.duration}</Text>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-
-                        <View style={styles.companyRow}>
-                          <View style={[styles.logoSquare, { backgroundColor: '#e6f4ea' }]}>
-                            <Text style={[styles.logoText, { color: '#0e4f34' }]}>
-                              {job.company ? job.company.substring(0, 2).toUpperCase() : 'IN'}
-                            </Text>
-                          </View>
-                          <View style={styles.companyInfo}>
-                            <Text style={styles.featuredJobTitle}>{job.title}</Text>
-                            <Text style={styles.featuredCompany}>
-                              {job.company} • {job.location || 'Pan-India'}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.stipendRow}>
-                          <Text style={styles.stipendIcon}>💵</Text>
-                          <Text style={styles.stipendText}>{job.stipend || 'Stipend Disclosed Upon Selection'}</Text>
-                        </View>
-
-                        {/* Why this matches */}
-                        <View style={styles.whyMatchesBlock}>
-                          <Text style={styles.whyMatchesTitle}>🧠 Why this matches you:</Text>
-                          <View style={styles.matchBullets}>
-                            {job.match_reasons && job.match_reasons.length > 0 ? (
-                              job.match_reasons.slice(0, 2).map((reason, idx) => (
-                                <Text key={idx} style={styles.bulletItem}>• {reason}</Text>
-                              ))
-                            ) : (
-                              <Text style={styles.bulletItem}>• Evaluated against your active verified competencies and target career.</Text>
-                            )}
-                          </View>
-                        </View>
-
-                        <View style={styles.actionsRow}>
-                          <Pressable style={styles.btnSecondary} onPress={() => handleViewDetails(job)}>
-                            <Text style={styles.btnSecondaryText}>View Details</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleApply(job)}
-                            style={styles.btnPrimary}
-                            disabled={applyingId === job.id}
-                          >
-                            <Text style={styles.btnPrimaryText}>
-                              {applyingId === job.id ? 'Applying...' : 'Apply on Portal'}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </HoverableCard>
-                    );
-                  })}
+                <View style={[styles.spotlightRight, isDesktop ? { flex: 3.2 } : {}]}>
+                  <PipelineSidebar
+                    applications={applications}
+                    user={user}
+                    profileData={profileData}
+                    featuredJobs={featuredJobs}
+                    onOpenPlan={openPlanModal}
+                    onNavigate={onNavigate}
+                  />
                 </View>
               </View>
             )}
 
-            {/* 3. Active Applications Section */}
-            {applications.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionIcon}>🎯</Text>
-                  <Text style={styles.sectionTitle}>Your Tracked Applications</Text>
-                </View>
+            {/* 4. Search & Interactive Clay Filter Chips (100% Full Width) */}
+            <OpportunityFilters
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              onSearchSubmit={handleSearchSubmit}
+              readinessTab={readinessTab}
+              setReadinessTab={setReadinessTab}
+              verifiedFilter={verifiedFilter}
+              setVerifiedFilter={setVerifiedFilter}
+              selectedTechStack={selectedTechStack}
+              setSelectedTechStack={setSelectedTechStack}
+              availableTechStacks={availableTechStacks}
+              sortOption={sortOption}
+              setSortOption={setSortOption}
+              locationFilter={locationFilter}
+              setLocationFilter={setLocationFilter}
+              typeFilter={typeFilter}
+              setTypeFilter={setTypeFilter}
+              metrics={metrics}
+              totalCount={totalOpportunities || internships.length}
+              savedCount={internships.filter(j => j.is_saved).length}
+              onClearFilters={handleClearFilters}
+            />
 
-                <View style={styles.tableCard}>
-                  <View style={styles.tableHeaderRow}>
-                    <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Role</Text>
-                    <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Company</Text>
-                    <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Applied On</Text>
-                    <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Status</Text>
-                  </View>
-
-                  {applications.map((app) => {
-                    const isExpanded = expandedAppId === app.id;
-                    const appliedDate = app.applied_at ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently';
-
-                    return (
-                      <View key={app.id} style={styles.tableRowContainer}>
-                        <Pressable 
-                          style={styles.tableBodyRow}
-                          onPress={() => setExpandedAppId(isExpanded ? null : app.id)}
-                        >
-                          <Text style={[styles.tableCell, styles.boldCellText, { flex: 2 }]}>
-                            {app.internship?.title || app.title || 'Internship Application'}
-                          </Text>
-                          <Text style={[styles.tableCell, { flex: 2 }]}>
-                            {app.internship?.company || app.company || 'Direct'}
-                          </Text>
-                          <Text style={[styles.tableCell, { flex: 1.5 }]}>{appliedDate}</Text>
-                          <View style={[{ flex: 2 }, styles.statusBadgeWrapper]}>
-                            <View style={[styles.appStatusBadge, { backgroundColor: COLORS.greenLight }]}>
-                              <Text style={[styles.appStatusBadgeText, { color: COLORS.green }]}>
-                                {app.status || 'APPLIED'}
-                              </Text>
-                            </View>
-                          </View>
-                        </Pressable>
-
-                        {isExpanded && (
-                          <View style={styles.timelineDetailsBox}>
-                            <Text style={styles.timelineTitle}>Application Timeline</Text>
-                            <View style={styles.timelineTrackRow}>
-                              <View style={styles.timelineStep}>
-                                <View style={[styles.timelineIndicatorCircle, styles.timelineCircleDone]}>
-                                  <Text style={styles.timelineCheckText}>✓</Text>
-                                </View>
-                                <Text style={[styles.timelineStepLabel, { fontWeight: '700', color: COLORS.green }]}>
-                                  Portal Launched
-                                </Text>
-                                <Text style={styles.timelineStepDate}>{appliedDate}</Text>
-                              </View>
-                              <View style={styles.timelineStep}>
-                                <View style={[styles.timelineIndicatorCircle, styles.timelineCircleActive]}>
-                                  <Text style={styles.timelineCheckText}>⧗</Text>
-                                </View>
-                                <Text style={styles.timelineStepLabel}>Under Review</Text>
-                                <Text style={styles.timelineStepDate}>In Progress</Text>
-                              </View>
-                              <View style={styles.timelineStep}>
-                                <View style={styles.timelineIndicatorCircle}>
-                                  <Text style={styles.timelineCheckText}>•</Text>
-                                </View>
-                                <Text style={styles.timelineStepLabel}>Shortlisted / Decision</Text>
-                              </View>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-            <View style={styles.divider} />
-
-            {/* 4. Explore Opportunities Listings */}
-            <View style={styles.section}>
-              <View style={[styles.listingsHeader, !isTablet && styles.columnLayout]}>
-                <Text style={styles.listingsTitle}>All Verified Opportunities ({filteredJobs.length})</Text>
-
-                {/* Filters */}
-                <View style={[styles.filtersContainer, !isTablet && { width: '100%' }]}>
-                  <View style={styles.searchWrapper}>
-                    <Text style={styles.searchIcon}>🔍</Text>
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Search roles, skills, companies..."
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      onSubmitEditing={handleSearchSubmit}
-                      placeholderTextColor={COLORS.muted}
-                    />
-                  </View>
-
-                  <View style={styles.filterControls}>
-                    <View style={styles.selectWrapper}>
-                      <Pressable
-                        style={styles.selectBox}
-                        onPress={() => {
-                          const options = ['Best Match', 'Stipend (High to Low)', 'Newest'];
-                          const nextIndex = (options.indexOf(sortOption) + 1) % options.length;
-                          setSortOption(options[nextIndex]);
-                        }}
-                      >
-                        <Text style={styles.selectBoxText}>Sort: {sortOption}</Text>
-                      </Pressable>
-                    </View>
-                  </View>
+            {/* 5. All Verified & Discoverable Roles Section (100% Full Width Grid) */}
+            <View style={styles.allRolesSection}>
+              <View style={styles.sectionHeaderRow}>
+                <View>
+                  <Text style={styles.sectionTitle}>
+                    {verifiedFilter === 'VERIFIED'
+                      ? `Verified Partner Roles (${filteredJobs.length})`
+                      : verifiedFilter === 'UNVERIFIED'
+                        ? `External Feed Roles (${filteredJobs.length})`
+                        : `All Discoverable Roles (${filteredJobs.length})`}
+                  </Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Recruiter-configured match thresholds determine direct application readiness. Internships below threshold include actionable development roadmaps.
+                  </Text>
                 </View>
               </View>
 
-              {/* Active Filter Chips */}
-              {(locationFilter || typeFilter || searchQuery) ? (
-                <View style={styles.activeChipsRow}>
-                  {searchQuery ? (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>Query: {searchQuery}</Text>
-                      <Pressable onPress={() => setSearchQuery('')} style={styles.chipClose}>
-                        <Text style={styles.chipCloseText}>×</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  {locationFilter ? (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>Location: {locationFilter}</Text>
-                      <Pressable onPress={() => setLocationFilter('')} style={styles.chipClose}>
-                        <Text style={styles.chipCloseText}>×</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  {typeFilter ? (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>Type: {typeFilter}</Text>
-                      <Pressable onPress={() => setTypeFilter('')} style={styles.chipClose}>
-                        <Text style={styles.chipCloseText}>×</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  <Pressable onPress={handleClearFilters} style={styles.clearFiltersBtn}>
-                    <Text style={styles.clearFiltersText}>Clear All</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-
-              {/* Listings Grid */}
-              <View style={styles.listingsGrid}>
+              {/* Opportunities Grid with 4-5 columns across 100% available width */}
+              <View style={[
+                styles.opportunityGrid,
+                Platform.OS === 'web' && {
+                  display: 'grid',
+                  gridTemplateColumns: isWideDesktop 
+                    ? 'repeat(5, minmax(0, 1fr))' 
+                    : isDesktop 
+                      ? 'repeat(4, minmax(0, 1fr))' 
+                      : isTablet 
+                        ? 'repeat(2, minmax(0, 1fr))' 
+                        : 'repeat(1, minmax(0, 1fr))',
+                  gap: isDesktop ? 18 : 14,
+                  width: '100%',
+                }
+              ]}>
                 {filteredJobs.length > 0 ? (
-                  filteredJobs.map((job) => {
-                    const isEligible = job.eligibility_status === 'ELIGIBLE';
-                    const isAlmost = job.eligibility_status === 'POSSIBLY_ELIGIBLE';
-                    const matchPercent = Math.round(job.match_score || 0);
-
-                    return (
-                      <HoverableCard key={job.id} style={[styles.jobCard, { width: cardWidth }]}>
-                        <View style={styles.jobCardHeader}>
-                          <View style={[styles.logoSquareCompact, { backgroundColor: '#e0f2fe' }]}>
-                            <Text style={[styles.logoTextCompact, { color: '#0369a1' }]}>
-                              {job.company ? job.company.substring(0, 2).toUpperCase() : 'IN'}
-                            </Text>
-                          </View>
-                          <View style={styles.jobBadgeWrap}>
-                            <View style={[
-                              styles.miniBadge,
-                              isEligible && styles.miniBadgeGreen,
-                              isAlmost && styles.miniBadgeAmber,
-                              !isEligible && !isAlmost && styles.miniBadgeRose
-                            ]}>
-                              <Text style={[
-                                styles.miniBadgeText,
-                                isEligible && { color: COLORS.green },
-                                isAlmost && { color: COLORS.amber },
-                                !isEligible && !isAlmost && { color: COLORS.rose }
-                              ]}>
-                                {matchPercent}% Match
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        <Text style={styles.jobTitle}>{job.title}</Text>
-                        <Text style={styles.jobCompany}>
-                          {job.company} • {job.location || 'India'} ({job.work_mode || (job.is_remote ? 'Remote' : 'On-site')})
-                        </Text>
-
-                        {/* Attribution */}
-                        <Text style={styles.jobSourceText}>
-                          Source: <Text style={{ fontWeight: '700' }}>{job.source || 'Verified Source'}</Text>
-                        </Text>
-
-                        {/* Short Description */}
-                        <Text style={styles.jobDescription} numberOfLines={2}>
-                          {job.description}
-                        </Text>
-
-                        {/* Skills tags list */}
-                        <View style={styles.skillsTagRow}>
-                          {(job.skills || []).slice(0, 3).map((s, idx) => (
-                            <View key={idx} style={styles.skillTag}>
-                              <Text style={styles.skillTagText}>{s}</Text>
-                            </View>
-                          ))}
-                          {(job.missing_skills || []).slice(0, 2).map((s, idx) => (
-                            <View key={idx} style={[styles.skillTag, { backgroundColor: COLORS.roseLight }]}>
-                              <Text style={[styles.skillTagText, { color: COLORS.rose }]}>Gap: {s}</Text>
-                            </View>
-                          ))}
-                        </View>
-
-                        <View style={styles.jobCardFooter}>
-                          <View style={{ flex: 1, marginRight: 8 }}>
-                            <Text style={styles.jobStipend} numberOfLines={1}>
-                              {job.stipend || 'Competitive'}
-                            </Text>
-                            {job.application_deadline && (
-                              <Text style={styles.jobPosted}>
-                                Deadline: {new Date(job.application_deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </Text>
-                            )}
-                          </View>
-                          
-                          <View style={styles.jobCardFooterRight}>
-                            <Pressable
-                              style={({ pressed }) => [styles.btnCardDetails, pressed && styles.pressed]}
-                              onPress={() => handleViewDetails(job)}
-                            >
-                              <Text style={styles.btnCardDetailsText}>Details</Text>
-                            </Pressable>
-                            <Pressable
-                              style={({ pressed }) => [styles.btnCardApply, pressed && styles.pressed]}
-                              onPress={() => handleApply(job)}
-                              disabled={applyingId === job.id}
-                            >
-                              <Text style={styles.btnCardApplyText}>
-                                {applyingId === job.id ? '...' : 'Apply'}
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      </HoverableCard>
-                    );
-                  })
+                  filteredJobs.map((job) => (
+                    <OpportunityCard
+                      key={job.id}
+                      job={job}
+                      onViewDetails={handleViewDetails}
+                      onOpenPlan={openPlanModal}
+                      onApply={handleApply}
+                      onToggleSave={handleToggleSave}
+                      isSaving={savingId === job.id}
+                      isApplying={applyingId === job.id}
+                    />
+                  ))
                 ) : (
-                  <View style={styles.emptyState}>
+                  <View style={styles.emptyStateCard}>
                     <Text style={styles.emptyStateIcon}>🔍</Text>
-                    <Text style={styles.emptyStateTitle}>No Opportunities Found</Text>
+                    <Text style={styles.emptyStateTitle}>No opportunities matched your active filter criteria.</Text>
                     <Text style={styles.emptyStateSubtitle}>
-                      No active listings match your filters. Try resetting your search or filter parameters.
+                      Try clearing or relaxing your search query and tech filters to see more results.
                     </Text>
                     <Pressable
+                      style={({ pressed }) => [styles.resetFiltersBtn, pressed && styles.btnPressed]}
                       onPress={handleClearFilters}
-                      style={styles.emptyStateBtn}
                     >
-                      <Text style={styles.emptyStateBtnText}>Reset Filters</Text>
+                      <Text style={styles.resetFiltersBtnText}>Reset All Filters</Text>
                     </Pressable>
                   </View>
                 )}
               </View>
+
+              {/* Load More Button */}
+              {hasMore && (
+                <View style={styles.loadMoreWrap}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.loadMoreBtn,
+                      loadingMore && styles.loadMoreBtnDisabled,
+                      pressed && styles.btnPressed,
+                    ]}
+                    onPress={handleLoadMore}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.loadMoreBtnText}>
+                        Load More Roles ({internships.length} of {totalOpportunities})
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              )}
             </View>
           </>
         )}
 
+        {/* 6. Footer */}
+        <OpportunityFooter />
       </ScrollView>
 
-      {/* Confirmation Modal */}
-      {appliedJob && (
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={showAppliedModal}
-          onRequestClose={() => setShowAppliedModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalSuccessIcon}>🚀</Text>
-              <Text style={styles.modalTitle}>Official Portal Launched</Text>
-              <Text style={styles.modalMessage}>
-                We tracked your interest for <Text style={styles.bold}>{appliedJob.title}</Text> at <Text style={styles.bold}>{appliedJob.company}</Text> and opened the official listing portal.
-              </Text>
-              <View style={styles.modalDetails}>
-                <Text style={styles.modalDetailsLabel}>Match Score: {Math.round(appliedJob.match_score || 0)}%</Text>
-                <Text style={styles.modalDetailsLabel}>Source: {appliedJob.source}</Text>
-              </View>
-              <Pressable style={styles.modalCloseBtn} onPress={() => setShowAppliedModal(false)}>
-                <Text style={styles.modalCloseBtnText}>Done</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Modal>
-      )}
+      {/* 6. All Interactive Modals */}
+      <OpportunityModals
+        // Details Modal
+        selectedDetailJob={selectedDetailJob}
+        showDetailsModal={showDetailsModal}
+        setShowDetailsModal={setShowDetailsModal}
+        onApply={handleApply}
+        onOpenPlan={openPlanModal}
+        onToggleSave={handleToggleSave}
+        savingId={savingId}
 
-      {/* Details Modal */}
-      {selectedDetailJob && (
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={showDetailsModal}
-          onRequestClose={() => setShowDetailsModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalCard, styles.detailsModalCard]}>
-              <View style={styles.detailsModalHeader}>
-                <View style={[styles.logoSquareCompact, { backgroundColor: '#e0f2fe' }]}>
-                  <Text style={[styles.logoTextCompact, { color: '#0369a1' }]}>
-                    {selectedDetailJob.company ? selectedDetailJob.company.substring(0, 2).toUpperCase() : 'IN'}
-                  </Text>
-                </View>
-                <Pressable style={styles.closeModalCross} onPress={() => setShowDetailsModal(false)}>
-                  <Text style={styles.closeModalCrossText}>×</Text>
-                </Pressable>
-              </View>
+        // Roadmap Modal
+        selectedPlanJob={selectedPlanJob}
+        showPlanModal={showPlanModal}
+        setShowPlanModal={setShowPlanModal}
+        planSuccessNotice={planSuccessNotice}
+        enrollingCourseId={enrollingCourseId}
+        handleEnrollCourse={handleEnrollCourse}
+        handleCompleteCourse={handleCompleteCourse}
+        handleStartAssessment={handleStartAssessment}
+        handleStartProject={handleStartProject}
+        onNavigate={onNavigate}
 
-              <Text style={styles.detailsModalTitle}>{selectedDetailJob.title}</Text>
-              <Text style={styles.detailsModalCompany}>
-                {selectedDetailJob.company} • {selectedDetailJob.location || 'India'} ({selectedDetailJob.work_mode || (selectedDetailJob.is_remote ? 'Remote' : 'On-site')})
-              </Text>
-              
-              <View style={styles.detailsModalMetaRow}>
-                <View style={styles.detailsMetaItem}>
-                  <Text style={styles.detailsMetaLabel}>STIPEND</Text>
-                  <Text style={styles.detailsMetaValue}>{selectedDetailJob.stipend || 'Competitive'}</Text>
-                </View>
-                <View style={styles.detailsMetaItem}>
-                  <Text style={styles.detailsMetaLabel}>SOURCE</Text>
-                  <Text style={styles.detailsMetaValue}>{selectedDetailJob.source}</Text>
-                </View>
-                <View style={styles.detailsMetaItem}>
-                  <Text style={styles.detailsMetaLabel}>MATCH SCORE</Text>
-                  <Text style={[styles.detailsMetaValue, { color: COLORS.green }]}>
-                    {Math.round(selectedDetailJob.match_score || 0)}% Match
-                  </Text>
-                </View>
-              </View>
+        // Assessment Runner Modal
+        showAssessmentModal={showAssessmentModal}
+        closeAssessmentModal={closeAssessmentModal}
+        activeAssessment={activeAssessment}
+        assessmentLoading={assessmentLoading}
+        assessmentSubmitting={assessmentSubmitting}
+        assessmentResult={assessmentResult}
+        assessmentAnswers={assessmentAnswers}
+        assessmentCurrentIdx={assessmentCurrentIdx}
+        setAssessmentCurrentIdx={setAssessmentCurrentIdx}
+        handleSelectOption={handleSelectOption}
+        handleSubmitAssessment={handleSubmitAssessment}
+        assessmentError={assessmentError}
 
-              <Text style={styles.detailsModalSectionTitle}>Role Description</Text>
-              <ScrollView style={{ maxHeight: 150, width: '100%', marginBottom: 12 }}>
-                <Text style={styles.detailsModalDescription}>{selectedDetailJob.description}</Text>
-              </ScrollView>
+        // Project Runner Modal
+        showProjectModal={showProjectModal}
+        closeProjectModal={closeProjectModal}
+        activeProject={activeProject}
+        projectSubmitting={projectSubmitting}
+        projectResult={projectResult}
+        projectRepoUrl={projectRepoUrl}
+        setProjectRepoUrl={setProjectRepoUrl}
+        projectNotes={projectNotes}
+        setProjectNotes={setProjectNotes}
+        projectError={projectError}
+        availableRepos={availableRepos}
+        loadingRepos={loadingRepos}
+        selectedRepoId={selectedRepoId}
+        setSelectedRepoId={setSelectedRepoId}
+        handleSubmitProject={handleSubmitProject}
 
-              <Text style={styles.detailsModalSectionTitle}>Skill Alignment</Text>
-              <View style={styles.detailsModalSkillsList}>
-                {(selectedDetailJob.skills || []).map((s, idx) => (
-                  <View key={idx} style={styles.detailSkillRow}>
-                    <Text style={styles.detailCheckIcon}>✓</Text>
-                    <Text style={styles.detailSkillName}>{s} (Matched)</Text>
-                  </View>
-                ))}
-                {(selectedDetailJob.missing_skills || []).map((s, idx) => (
-                  <View key={idx} style={styles.detailSkillRow}>
-                    <Text style={styles.detailWarningIcon}>⚠</Text>
-                    <Text style={[styles.detailSkillName, { color: COLORS.rose }]}>{s} (Gap)</Text>
-                  </View>
-                ))}
-              </View>
+        // Applied Confirmation Modal
+        showAppliedModal={showAppliedModal}
+        setShowAppliedModal={setShowAppliedModal}
+        appliedJob={appliedJob}
 
-              {/* Match Reasons */}
-              {selectedDetailJob.match_reasons && selectedDetailJob.match_reasons.length > 0 && (
-                <View style={styles.detailWhyBox}>
-                  <Text style={styles.detailWhyTitle}>Why you match this role:</Text>
-                  {selectedDetailJob.match_reasons.map((m, idx) => (
-                    <Text key={idx} style={styles.detailWhyText}>• {m}</Text>
-                  ))}
-                </View>
-              )}
-
-              <View style={styles.detailsModalActions}>
-                <Pressable 
-                  style={styles.detailsModalCloseBtn} 
-                  onPress={() => setShowDetailsModal(false)}
-                >
-                  <Text style={styles.detailsModalCloseBtnText}>Close</Text>
-                </Pressable>
-                <Pressable 
-                  style={styles.detailsModalApplyBtn} 
-                  onPress={() => {
-                    setShowDetailsModal(false);
-                    handleApply(selectedDetailJob);
-                  }}
-                >
-                  <Text style={styles.detailsModalApplyBtnText}>Apply on Portal</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
+        // Certificate Upload & Verification Modal
+        showUploadModal={showUploadModal}
+        activeUploadCourse={activeUploadCourse}
+        uploadingCertificate={uploadingCertificate}
+        uploadResult={uploadResult}
+        uploadError={uploadError}
+        handleStartUploadCertificate={handleStartUploadCertificate}
+        handleCloseUploadModal={handleCloseUploadModal}
+        handleSubmitCertificate={handleSubmitCertificate}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screenContainer: {
     flex: 1,
-    backgroundColor: COLORS.canvas,
+    backgroundColor: CLAY_COLORS.canvas,
   },
-  contentContainer: {
+  contentScroll: {
     padding: 24,
-    paddingBottom: 48,
-    maxWidth: 1440,
+    paddingBottom: 60,
+    maxWidth: 1680,
     width: '100%',
     alignSelf: 'center',
   },
-  rowLayout: {
-    flexDirection: 'row',
+  topSpotlightRow: {
+    gap: 24,
+    marginBottom: 24,
+    width: '100%',
   },
-  columnLayout: {
+  desktopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  mobileColumn: {
     flexDirection: 'column',
   },
-  bentoRow: {
-    gap: 24,
-    marginBottom: 32,
+  spotlightLeft: {
+    width: '100%',
+  },
+  spotlightRight: {
+    width: '100%',
+  },
+  allRolesSection: {
     marginTop: 8,
+    marginBottom: 32,
+    width: '100%',
   },
-  bentoLeft: {
-    justifyContent: 'center',
-    paddingRight: 16,
-  },
-  displayHeading: {
-    fontSize: 38,
-    fontWeight: '800',
-    color: COLORS.ink,
-    lineHeight: 46,
-    letterSpacing: -0.8,
+  sectionHeaderRow: {
     marginBottom: 16,
-  },
-  textGreenUnderline: {
-    color: COLORS.green,
-    borderBottomWidth: 3,
-    borderBottomColor: COLORS.green,
-  },
-  bentoSubtext: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: COLORS.muted,
-    maxWidth: 580,
-  },
-  bentoRight: {
-    justifyContent: 'center',
-  },
-  profileCard: {
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    shadowColor: '#1e293b',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    elevation: 3,
-  },
-  profileCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  profileCardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  profileCardSubtitle: {
-    fontSize: 13,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  gaugeContainer: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: COLORS.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.green,
-  },
-  gaugeVal: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  profileStatsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statBox: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderTopWidth: 3,
-    backgroundColor: COLORS.panel,
-  },
-  statBoxTeal: {
-    borderTopColor: COLORS.teal,
-  },
-  statBoxAmber: {
-    borderTopColor: COLORS.amber,
-  },
-  statBoxRose: {
-    borderTopColor: COLORS.rose,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-  loadingContainer: {
-    padding: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 15,
-    color: COLORS.muted,
-    fontWeight: '500',
-  },
-  errorContainer: {
-    backgroundColor: '#fff5f5',
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    borderRadius: 16,
-    padding: 32,
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  errorIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.rose,
-    marginBottom: 4,
-  },
-  errorSubtitle: {
-    fontSize: 14,
-    color: COLORS.muted,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryBtn: {
-    backgroundColor: COLORS.green,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  retryBtnText: {
-    color: COLORS.paper,
-    fontWeight: '600',
-  },
-  section: {
-    marginBottom: 36,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 8,
-  },
-  sectionIcon: {
-    fontSize: 24,
   },
   sectionTitle: {
+    fontFamily: CLAY_FONTS.heading,
     fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.ink,
+    fontWeight: '900',
+    color: CLAY_COLORS.foreground,
   },
-  featuredGrid: {
-    gap: 20,
-  },
-  featuredCard: {
-    flex: 1,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 24,
-    position: 'relative',
-    shadowColor: '#1e293b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  featuredBadgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  eligibleBadge: {
-    backgroundColor: COLORS.paper,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-  },
-  eligibleBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.green,
-  },
-  almostBadge: {
-    backgroundColor: COLORS.paper,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.amber,
-  },
-  almostBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.amber,
-  },
-  rowTags: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  tagLabel: {
-    backgroundColor: COLORS.paper,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-  },
-  tagLabelText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontWeight: '500',
-  },
-  companyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 16,
-  },
-  logoSquare: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-  },
-  logoText: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  companyInfo: {
-    flex: 1,
-  },
-  featuredJobTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  featuredCompany: {
-    fontSize: 14,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  stipendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  stipendIcon: {
-    fontSize: 16,
-  },
-  stipendText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.ink,
-  },
-  whyMatchesBlock: {
-    backgroundColor: COLORS.paper,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    marginBottom: 20,
-    flex: 1,
-  },
-  whyMatchesTitle: {
+  sectionSubtitle: {
+    fontFamily: CLAY_FONTS.body,
     fontSize: 13.5,
-    fontWeight: '700',
-    color: COLORS.ink,
-    marginBottom: 8,
+    color: CLAY_COLORS.muted,
+    marginTop: 3,
+    maxWidth: 750,
   },
-  matchBullets: {
-    gap: 6,
-  },
-  bulletItem: {
-    fontSize: 13,
-    color: COLORS.muted,
-    lineHeight: 18,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  btnSecondary: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.paper,
-  },
-  btnSecondaryText: {
-    color: COLORS.ink,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  btnPrimary: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: COLORS.green,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPrimaryText: {
-    color: COLORS.paper,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tableCard: {
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#1e293b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.02,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  tableHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.panel,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.subtle,
-    padding: 16,
-  },
-  tableHeaderCell: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  tableRowContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.subtle,
-  },
-  tableBodyRow: {
-    flexDirection: 'row',
-    padding: 16,
-    alignItems: 'center',
-  },
-  tableCell: {
-    fontSize: 14,
-    color: COLORS.muted,
-  },
-  boldCellText: {
-    fontWeight: '650',
-    color: COLORS.ink,
-  },
-  statusBadgeWrapper: {
-    alignItems: 'flex-start',
-  },
-  appStatusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  appStatusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  timelineDetailsBox: {
-    backgroundColor: COLORS.canvas,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.subtle,
-    padding: 16,
-  },
-  timelineTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 16,
-    marginLeft: 8,
-  },
-  timelineTrackRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    position: 'relative',
-  },
-  timelineStep: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  timelineIndicatorCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#e2e8f0',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    zIndex: 2,
-  },
-  timelineCircleDone: {
-    backgroundColor: COLORS.green,
-    borderColor: COLORS.green,
-  },
-  timelineCircleActive: {
-    backgroundColor: COLORS.paper,
-    borderColor: COLORS.green,
-  },
-  timelineCheckText: {
-    color: COLORS.paper,
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  timelineStepLabel: {
-    fontSize: 12,
-    color: COLORS.muted,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  timelineStepDate: {
-    fontSize: 10,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.subtle,
-    marginVertical: 32,
-  },
-  listingsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 20,
-  },
-  listingsTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  filtersContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  searchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
-    flex: 1,
-    minWidth: 200,
-  },
-  searchIcon: {
-    fontSize: 15,
-    marginRight: 6,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.ink,
-    padding: 0,
-    outlineStyle: 'none',
-  },
-  filterControls: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  selectWrapper: {
-    position: 'relative',
-  },
-  selectBox: {
-    height: 40,
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-  },
-  selectBoxText: {
-    fontSize: 13,
-    color: COLORS.muted,
-    fontWeight: '600',
-  },
-  activeChipsRow: {
+  opportunityGrid: {
+    width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.panel,
-    paddingLeft: 12,
-    paddingRight: 8,
-    paddingVertical: 5,
-    borderRadius: 16,
-  },
-  chipText: {
-    fontSize: 12.5,
-    color: COLORS.muted,
-    fontWeight: '500',
-  },
-  chipClose: {
-    marginLeft: 6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: COLORS.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipCloseText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.muted,
-    lineHeight: 13,
-  },
-  clearFiltersBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  clearFiltersText: {
-    fontSize: 12.5,
-    color: COLORS.green,
-    fontWeight: '600',
-  },
-  listingsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: 18,
     justifyContent: 'flex-start',
-    gap: 24,
   },
-  jobCard: {
-    minWidth: 280,
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    borderRadius: 12,
-    padding: 18,
-    flexDirection: 'column',
-    shadowColor: '#1e293b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  jobCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  logoSquareCompact: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
+  emptyStateCard: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: CLAY_RADII.card,
+    padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: COLORS.subtle,
-  },
-  logoTextCompact: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  jobBadgeWrap: {
-    alignItems: 'flex-end',
-  },
-  miniBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  miniBadgeGreen: {
-    backgroundColor: COLORS.greenLight,
-    borderColor: COLORS.green,
-  },
-  miniBadgeAmber: {
-    backgroundColor: COLORS.amberLight,
-    borderColor: COLORS.amber,
-  },
-  miniBadgeRose: {
-    backgroundColor: COLORS.roseLight,
-    borderColor: COLORS.rose,
-  },
-  miniBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.ink,
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  jobCompany: {
-    fontSize: 13,
-    color: COLORS.muted,
-    marginBottom: 4,
-  },
-  jobSourceText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    marginBottom: 8,
-  },
-  jobDescription: {
-    fontSize: 13,
-    color: COLORS.muted,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  skillsTagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 16,
-  },
-  skillTag: {
-    backgroundColor: COLORS.panel,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  skillTagText: {
-    fontSize: 11.5,
-    fontWeight: '500',
-    color: COLORS.muted,
-  },
-  jobCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.panel,
-    paddingTop: 12,
-    marginTop: 'auto',
-  },
-  jobCardFooterRight: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  jobStipend: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  jobPosted: {
-    fontSize: 11,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  btnCardDetails: {
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    backgroundColor: COLORS.paper,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnCardDetailsText: {
-    color: COLORS.ink,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  btnCardApply: {
-    backgroundColor: COLORS.green,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnCardApplyText: {
-    color: COLORS.paper,
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
-  detailsModalCard: {
-    maxWidth: 520,
-    padding: 24,
-  },
-  detailsModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    width: '100%',
-  },
-  closeModalCross: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeModalCrossText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.muted,
-    lineHeight: 24,
-  },
-  detailsModalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.ink,
-    marginBottom: 4,
-    alignSelf: 'flex-start',
-  },
-  detailsModalCompany: {
-    fontSize: 14,
-    color: COLORS.muted,
-    marginBottom: 20,
-    alignSelf: 'flex-start',
-  },
-  detailsModalMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.panel,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 20,
-    width: '100%',
-  },
-  detailsMetaItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  detailsMetaLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.muted,
-    marginBottom: 2,
-  },
-  detailsMetaValue: {
-    fontSize: 13.5,
-    fontWeight: '750',
-    color: COLORS.ink,
-  },
-  detailsModalSectionTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.ink,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  detailsModalDescription: {
-    fontSize: 13.5,
-    color: COLORS.muted,
-    lineHeight: 20,
-    marginBottom: 16,
-    textAlign: 'left',
-    alignSelf: 'flex-start',
-  },
-  detailsModalSkillsList: {
-    gap: 8,
-    marginBottom: 16,
-    width: '100%',
-  },
-  detailSkillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  detailCheckIcon: {
-    fontSize: 14,
-    color: COLORS.green,
-    fontWeight: 'bold',
-  },
-  detailWarningIcon: {
-    fontSize: 14,
-    color: COLORS.amber,
-    fontWeight: 'bold',
-  },
-  detailSkillName: {
-    fontSize: 13.5,
-    color: COLORS.ink,
-  },
-  detailWhyBox: {
-    backgroundColor: COLORS.greenLight,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 20,
-    width: '100%',
-  },
-  detailWhyTitle: {
-    fontSize: 13,
-    fontWeight: '750',
-    color: COLORS.green,
-    marginBottom: 6,
-  },
-  detailWhyText: {
-    fontSize: 12.5,
-    color: COLORS.muted,
-    lineHeight: 18,
-    textAlign: 'left',
-  },
-  detailsModalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-    marginTop: 8,
-  },
-  detailsModalCloseBtn: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    backgroundColor: COLORS.paper,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailsModalCloseBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.ink,
-  },
-  detailsModalApplyBtn: {
-    flex: 1,
-    backgroundColor: COLORS.green,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailsModalApplyBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.paper,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  emptyState: {
-    width: '100%',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
+    borderColor: 'rgba(230, 225, 242, 0.85)',
+    ...CLAY_SHADOWS.card,
   },
   emptyStateIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+    fontSize: 40,
+    marginBottom: 10,
   },
   emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.ink,
-    marginBottom: 8,
+    fontFamily: CLAY_FONTS.heading,
+    fontSize: 16,
+    fontWeight: '800',
+    color: CLAY_COLORS.foreground,
+    marginBottom: 4,
+    textAlign: 'center',
   },
   emptyStateSubtitle: {
-    fontSize: 14,
-    color: COLORS.muted,
+    fontFamily: CLAY_FONTS.body,
+    fontSize: 13,
+    color: CLAY_COLORS.muted,
     textAlign: 'center',
-    maxWidth: 420,
-    lineHeight: 20,
-    marginBottom: 20,
+    maxWidth: 400,
+    lineHeight: 18,
+    marginBottom: 16,
   },
-  emptyStateBtn: {
-    backgroundColor: COLORS.green,
-    paddingHorizontal: 16,
+  resetFiltersBtn: {
+    backgroundColor: CLAY_COLORS.primary,
+    paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: CLAY_RADII.button,
+    ...CLAY_SHADOWS.buttonPrimary,
+    cursor: 'pointer',
   },
-  emptyStateBtnText: {
-    color: COLORS.paper,
-    fontSize: 13.5,
-    fontWeight: '600',
+  resetFiltersBtnText: {
+    fontFamily: CLAY_FONTS.heading,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(26, 28, 28, 0.4)',
+  loadMoreWrap: {
+    marginTop: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
   },
-  modalCard: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    padding: 24,
+  loadMoreBtn: {
+    backgroundColor: CLAY_COLORS.primary,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: CLAY_RADII.button,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    shadowColor: '#1e293b',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    justifyContent: 'center',
+    minWidth: 260,
+    ...CLAY_SHADOWS.buttonPrimary,
+    cursor: 'pointer',
   },
-  modalSuccessIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  loadMoreBtnDisabled: {
+    opacity: 0.7,
   },
-  modalTitle: {
-    fontSize: 20,
+  loadMoreBtnText: {
+    fontFamily: CLAY_FONTS.heading,
+    fontSize: 13.5,
     fontWeight: '800',
-    color: COLORS.ink,
-    marginBottom: 8,
-    textAlign: 'center',
+    color: '#ffffff',
   },
-  modalMessage: {
-    fontSize: 14,
-    color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  bold: {
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  modalDetails: {
-    backgroundColor: COLORS.panel,
-    borderRadius: 10,
-    padding: 12,
-    width: '100%',
-    marginBottom: 20,
-    gap: 4,
-  },
-  modalDetailsLabel: {
-    fontSize: 12.5,
-    color: COLORS.muted,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  modalCloseBtn: {
-    backgroundColor: COLORS.green,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    width: '100%',
-    alignItems: 'center',
-  },
-  modalCloseBtnText: {
-    color: COLORS.paper,
-    fontSize: 14,
-    fontWeight: '600',
+  btnPressed: {
+    transform: [{ scale: 0.92 }],
+    ...CLAY_SHADOWS.buttonPressed,
   },
 });

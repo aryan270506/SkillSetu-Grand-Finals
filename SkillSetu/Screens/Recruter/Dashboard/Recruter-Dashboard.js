@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Animated,
+    Image,
     Platform,
     Pressable,
     ScrollView,
@@ -9,6 +11,7 @@ import {
     useWindowDimensions,
     View,
 } from 'react-native';
+import { recruiterService } from '../services/recruiterService';
 
 function HoverCard({ children, style, hoverScale = 1.03, onPress }) {
     const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -142,6 +145,8 @@ const RECOMMENDED_STUDENTS = [
 
 export default function RecruterDashboard({
     user,
+    profileData,
+    completion,
     activeTab,
     onNavigateTab,
     onOpenPostModal,
@@ -150,8 +155,53 @@ export default function RecruterDashboard({
     const isDesktop = width >= 1024;
     const isTablet = width >= 768;
 
-    const [applications, setApplications] = useState(INITIAL_APPLICATIONS);
+    const token = user?.token || user?.access_token || '';
+    const [applications, setApplications] = useState([]);
+    const [internships, setInternships] = useState([]);
+    const [dashboardMetrics, setDashboardMetrics] = useState({
+        active_roles: 0,
+        total_applications: 0,
+        shortlisted_students: 0,
+        interviews: 0,
+    });
+    const [loadingData, setLoadingData] = useState(false);
     const [interviewFilter, setInterviewFilter] = useState('Today');
+
+    const isComplete = completion?.is_complete || false;
+    const completionPct = completion?.percentage || 0;
+    const companyName = profileData?.company?.name || user?.companyName || user?.company_name || 'Organization';
+    const rawName = user?.name || profileData?.recruiter?.name || 'Recruiter';
+    const userName = typeof rawName === 'string' && rawName.trim() ? rawName.trim().split(' ')[0] : 'Recruiter';
+
+    useEffect(() => {
+        if (!token) return;
+        const fetchDashboardData = async () => {
+            setLoadingData(true);
+            try {
+                const intRes = await recruiterService.getInternships(token);
+                if (intRes && intRes.internships) {
+                    setInternships(intRes.internships);
+                    if (intRes.metrics) {
+                        setDashboardMetrics({
+                            active_roles: intRes.metrics.active_roles || 0,
+                            total_applications: intRes.metrics.total_applications || 0,
+                            shortlisted_students: intRes.internships.reduce((acc, curr) => acc + (curr.shortlisted_count || 0), 0),
+                            interviews: intRes.metrics.total_interviews || 0,
+                        });
+                    }
+                }
+                const appRes = await recruiterService.getApplications(token);
+                if (appRes && appRes.applications) {
+                    setApplications(appRes.applications);
+                }
+            } catch (err) {
+                console.warn('Dashboard live data fetch:', err);
+            } finally {
+                setLoadingData(false);
+            }
+        };
+        fetchDashboardData();
+    }, [token]);
 
     return (
         <ScrollView style={styles.page} contentContainerStyle={styles.container}>
@@ -159,20 +209,27 @@ export default function RecruterDashboard({
             <View style={styles.welcomeRow}>
                 <View style={styles.welcomeTextGroup}>
                     <Text style={styles.welcomeHeading}>
-                        Welcome back, {user?.name ? user.name.split(' ')[0] : 'Neha'} 👋
+                        Welcome back, {userName} 👋
                     </Text>
                     <Text style={styles.welcomeSubheading}>
-                        Here is a snapshot of your internship activities today.
+                        {isComplete
+                            ? `Here is a live snapshot of ${companyName}'s internship activities today.`
+                            : `Before you start hiring, complete your company profile to unlock all features.`}
                     </Text>
                 </View>
 
-                <View style={styles.profileProgressCard}>
-                    <Text style={styles.shieldIcon}>🛡️</Text>
+                <View style={[styles.profileProgressCard, isComplete && { borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' }]}>
+                    <Text style={styles.shieldIcon}>{isComplete ? '✅' : '🛡️'}</Text>
                     <Text style={styles.profileProgressText}>
-                        Company Profile: <Text style={{ fontWeight: '700' }}>85% Completed</Text>
+                        Company Profile: <Text style={{ fontWeight: '800', color: isComplete ? '#065F46' : COLORS.textDark }}>{completionPct}% {isComplete ? 'Completed' : 'Complete'}</Text>
                     </Text>
-                    <Pressable style={styles.completeProfileBtn}>
-                        <Text style={styles.completeProfileText}>Complete Profile →</Text>
+                    <Pressable
+                        style={[styles.completeProfileBtn, isComplete && { backgroundColor: '#065F46' }]}
+                        onPress={() => onNavigateTab && onNavigateTab('My Profile')}
+                    >
+                        <Text style={styles.completeProfileText}>
+                            {isComplete ? 'View Profile →' : 'Complete Profile →'}
+                        </Text>
                     </Pressable>
                 </View>
             </View>
@@ -187,11 +244,11 @@ export default function RecruterDashboard({
                             <Text style={{ fontSize: 13 }}>📋</Text>
                         </View>
                     </View>
-                    <Text style={styles.metricNumber}>5</Text>
+                    <Text style={styles.metricNumber}>{dashboardMetrics.active_roles}</Text>
                     <Text style={styles.metricSub}>Currently accepting applications</Text>
                     <View style={[styles.pill, { backgroundColor: COLORS.orangePillBg }]}>
                         <Text style={[styles.pillText, { color: COLORS.orangePillText }]}>
-                            ⏰ 2 Closing Soon
+                            {dashboardMetrics.active_roles > 0 ? `● ${dashboardMetrics.active_roles} Active Roles` : 'No active postings'}
                         </Text>
                     </View>
                 </HoverCard>
@@ -204,11 +261,11 @@ export default function RecruterDashboard({
                             <Text style={{ fontSize: 13 }}>👥</Text>
                         </View>
                     </View>
-                    <Text style={styles.metricNumber}>186</Text>
-                    <Text style={styles.metricSub}>Across all active internships</Text>
+                    <Text style={styles.metricNumber}>{dashboardMetrics.total_applications}</Text>
+                    <Text style={styles.metricSub}>Across all company postings</Text>
                     <View style={[styles.pill, { backgroundColor: COLORS.greenPillBg }]}>
                         <Text style={[styles.pillText, { color: COLORS.greenPillText }]}>
-                            📈 +24% this week
+                            Verified submissions
                         </Text>
                     </View>
                 </HoverCard>
@@ -221,11 +278,11 @@ export default function RecruterDashboard({
                             <Text style={{ fontSize: 13 }}>🎓</Text>
                         </View>
                     </View>
-                    <Text style={styles.metricNumber}>32</Text>
+                    <Text style={styles.metricNumber}>{dashboardMetrics.shortlisted_students}</Text>
                     <Text style={styles.metricSub}>Ready for evaluation & tests</Text>
                     <View style={[styles.pill, { backgroundColor: COLORS.bluePillBg }]}>
                         <Text style={[styles.pillText, { color: COLORS.bluePillText }]}>
-                            📊 17% Conversion rate
+                            Active shortlists
                         </Text>
                     </View>
                 </HoverCard>
@@ -238,39 +295,17 @@ export default function RecruterDashboard({
                             <Text style={{ fontSize: 13 }}>📅</Text>
                         </View>
                     </View>
-                    <Text style={styles.metricNumber}>12</Text>
+                    <Text style={styles.metricNumber}>{dashboardMetrics.interviews}</Text>
                     <Text style={styles.metricSub}>Upcoming interviews scheduled</Text>
                     <View style={[styles.pill, { backgroundColor: COLORS.greenPillBg }]}>
                         <Text style={[styles.pillText, { color: COLORS.greenPillText }]}>
-                            📷 3 Scheduled today
+                            Active evaluation
                         </Text>
                     </View>
                 </HoverCard>
             </View>
 
-            {/* 3. Quick Action Buttons Row */}
-            <View style={styles.actionButtonsRow}>
-                <HoverCard hoverScale={1.05} onPress={onOpenPostModal} style={styles.primaryActionBtn}>
-                    <Text style={styles.primaryActionText}>+ Post New Internship</Text>
-                </HoverCard>
-
-                <HoverCard hoverScale={1.05} style={styles.secondaryActionBtn}>
-                    <Text style={styles.secondaryActionIcon}>👤</Text>
-                    <Text style={styles.secondaryActionText}>Find Verified Students</Text>
-                </HoverCard>
-
-                <HoverCard hoverScale={1.05} style={styles.secondaryActionBtn}>
-                    <Text style={styles.secondaryActionIcon}>📄</Text>
-                    <Text style={styles.secondaryActionText}>Review Applications</Text>
-                </HoverCard>
-
-                <HoverCard hoverScale={1.05} style={styles.secondaryActionBtn}>
-                    <Text style={styles.secondaryActionIcon}>📅</Text>
-                    <Text style={styles.secondaryActionText}>
-                        Schedule Interview Round
-                    </Text>
-                </HoverCard>
-            </View>
+           
 
             {/* 4. Internship Overview: Activity Graph & Selection Funnel */}
             <View style={[styles.splitRow, !isDesktop && styles.stackedRow]}>
@@ -394,7 +429,7 @@ export default function RecruterDashboard({
                         </Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <Pressable>
+                        <Pressable onPress={() => onNavigateTab && onNavigateTab('Internships')}>
                             <Text style={styles.linkText}>View All Internships →</Text>
                         </Pressable>
                         <Pressable onPress={onOpenPostModal} style={styles.postSmallBtn}>
@@ -403,137 +438,80 @@ export default function RecruterDashboard({
                     </View>
                 </View>
 
-                <View style={styles.internshipsGrid}>
-                    {/* Internship 1 */}
-                    <HoverCard hoverScale={1.03} style={styles.internshipCard}>
-                        <View style={styles.internshipTagRow}>
-                            <View style={styles.activeDotBadge}>
-                                <View style={styles.greenDot} />
-                                <Text style={styles.activeDotText}>Active</Text>
-                            </View>
-                            <View style={styles.deadlinePillWarning}>
-                                <Text style={styles.deadlinePillWarningText}>
-                                    Deadline: 20 Sep (5 days left)
-                                </Text>
-                            </View>
-                        </View>
-
-                        <Text style={styles.internshipTitle}>
-                            Backend Development Intern
+                {loadingData ? (
+                    <View style={{ padding: 40, alignItems: 'center' }}>
+                        <ActivityIndicator size="small" color={COLORS.primaryTeal} />
+                        <Text style={{ marginTop: 8, color: COLORS.textMuted }}>Loading postings from database...</Text>
+                    </View>
+                ) : internships.length === 0 ? (
+                    <View style={[styles.card, { padding: 36, alignItems: 'center', justifyContent: 'center' }]}>
+                        <Text style={{ fontSize: 28, marginBottom: 8 }}>📋</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textDark }}>
+                            No active internships created yet
                         </Text>
-                        <Text style={styles.internshipMeta}>
-                            TechNova Engineering • Bengaluru (Hybrid)
+                        <Text style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 4, marginBottom: 16, textAlign: 'center', maxWidth: 400 }}>
+                            Create your first internship posting to begin accepting applications from verified student candidates.
                         </Text>
-                        <Text style={styles.stipendText}>Stipend: ₹35,000/mo</Text>
-
-                        <View style={styles.internshipStatsRow}>
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>86</Text>
-                                <Text style={styles.statLbl}>Applied</Text>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>15</Text>
-                                <Text style={styles.statLbl}>Shortlisted</Text>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>4</Text>
-                                <Text style={styles.statLbl}>Interview</Text>
-                            </View>
-                        </View>
-
-                        <Pressable style={styles.viewAppBtn}>
-                            <Text style={styles.viewAppBtnText}>View Applications →</Text>
+                        <Pressable onPress={onOpenPostModal} style={styles.postSmallBtn}>
+                            <Text style={styles.postSmallBtnText}>+ Post First Internship</Text>
                         </Pressable>
-                    </HoverCard>
+                    </View>
+                ) : (
+                    <View style={styles.internshipsGrid}>
+                        {internships.slice(0, 6).map((job) => (
+                            <HoverCard
+                                key={job.id}
+                                hoverScale={1.03}
+                                style={styles.internshipCard}
+                                onPress={() => onNavigateTab && onNavigateTab('Internships')}
+                            >
+                                <View style={styles.internshipTagRow}>
+                                    <View style={styles.activeDotBadge}>
+                                        <View style={styles.greenDot} />
+                                        <Text style={styles.activeDotText}>{job.status || 'Active'}</Text>
+                                    </View>
+                                    <View style={styles.deadlinePillNormal}>
+                                        <Text style={styles.deadlinePillNormalText}>
+                                            Match Cutoff: {job.application_threshold ?? 80}%
+                                        </Text>
+                                    </View>
+                                </View>
 
-                    {/* Internship 2 */}
-                    <HoverCard hoverScale={1.03} style={styles.internshipCard}>
-                        <View style={styles.internshipTagRow}>
-                            <View style={styles.activeDotBadge}>
-                                <View style={styles.greenDot} />
-                                <Text style={styles.activeDotText}>Active</Text>
-                            </View>
-                            <View style={styles.deadlinePillNormal}>
-                                <Text style={styles.deadlinePillNormalText}>
-                                    Deadline: 28 Sep (13 days left)
+                                <Text style={styles.internshipTitle}>{job.title}</Text>
+                                <Text style={styles.internshipMeta}>
+                                    {job.company_name || companyName} • {job.location || 'Hybrid'}
                                 </Text>
-                            </View>
-                        </View>
+                                <Text style={styles.stipendText}>Stipend: {job.stipend || '₹35,000/mo'}</Text>
 
-                        <Text style={styles.internshipTitle}>
-                            AI / Machine Learning Intern
-                        </Text>
-                        <Text style={styles.internshipMeta}>TechNova Labs • Remote</Text>
-                        <Text style={styles.stipendText}>Stipend: ₹40,000/mo</Text>
+                                <View style={styles.internshipStatsRow}>
+                                    <View style={styles.statCol}>
+                                        <Text style={styles.statVal}>{job.applied_count || 0}</Text>
+                                        <Text style={styles.statLbl}>Applied</Text>
+                                    </View>
+                                    <View style={styles.statDivider} />
+                                    <View style={styles.statCol}>
+                                        <Text style={styles.statVal}>{job.shortlisted_count || 0}</Text>
+                                        <Text style={styles.statLbl}>Shortlisted</Text>
+                                    </View>
+                                    <View style={styles.statDivider} />
+                                    <View style={styles.statCol}>
+                                        <Text style={styles.statVal}>{job.interview_count || 0}</Text>
+                                        <Text style={styles.statLbl}>Interview</Text>
+                                    </View>
+                                </View>
 
-                        <View style={styles.internshipStatsRow}>
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>64</Text>
-                                <Text style={styles.statLbl}>Applied</Text>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>11</Text>
-                                <Text style={styles.statLbl}>Shortlisted</Text>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>5</Text>
-                                <Text style={styles.statLbl}>Interview</Text>
-                            </View>
-                        </View>
-
-                        <Pressable style={styles.viewAppBtn}>
-                            <Text style={styles.viewAppBtnText}>View Applications →</Text>
-                        </Pressable>
-                    </HoverCard>
-
-                    {/* Internship 3 */}
-                    <HoverCard hoverScale={1.03} style={styles.internshipCard}>
-                        <View style={styles.internshipTagRow}>
-                            <View style={styles.activeDotBadge}>
-                                <View style={styles.greenDot} />
-                                <Text style={styles.activeDotText}>Active</Text>
-                            </View>
-                            <View style={styles.deadlinePillNormal}>
-                                <Text style={styles.deadlinePillNormalText}>
-                                    Deadline: 05 Oct (20 days left)
-                                </Text>
-                            </View>
-                        </View>
-
-                        <Text style={styles.internshipTitle}>
-                            Frontend Development Intern
-                        </Text>
-                        <Text style={styles.internshipMeta}>
-                            TechNova Product • Bengaluru (On-site)
-                        </Text>
-                        <Text style={styles.stipendText}>Stipend: ₹30,000/mo</Text>
-
-                        <View style={styles.internshipStatsRow}>
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>36</Text>
-                                <Text style={styles.statLbl}>Applied</Text>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>6</Text>
-                                <Text style={styles.statLbl}>Shortlisted</Text>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statCol}>
-                                <Text style={styles.statVal}>3</Text>
-                                <Text style={styles.statLbl}>Interview</Text>
-                            </View>
-                        </View>
-
-                        <Pressable style={styles.viewAppBtn}>
-                            <Text style={styles.viewAppBtnText}>View Applications →</Text>
-                        </Pressable>
-                    </HoverCard>
-                </View>
+                                <Pressable
+                                    style={styles.viewAppBtn}
+                                    onPress={() => onNavigateTab && onNavigateTab('Internships')}
+                                >
+                                    <Text style={styles.viewAppBtnText}>
+                                        View Applications ({job.applied_count || 0}) →
+                                    </Text>
+                                </Pressable>
+                            </HoverCard>
+                        ))}
+                    </View>
+                )}
             </View>
 
             {/* 6. Recent Applications & Recommended Students Row */}
@@ -547,7 +525,7 @@ export default function RecruterDashboard({
                                 Review newly arrived student applications.
                             </Text>
                         </View>
-                        <Pressable>
+                        <Pressable onPress={() => onNavigateTab && onNavigateTab('Applications')}>
                             <Text style={styles.linkText}>View All →</Text>
                         </Pressable>
                     </View>
@@ -563,49 +541,85 @@ export default function RecruterDashboard({
                     </View>
 
                     {/* Rows */}
-                    {applications.map((app) => (
-                        <View key={app.id} style={styles.tableRow}>
-                            <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
-                                <View style={styles.avatarCircle}>
-                                    <Text style={styles.avatarText}>
-                                        {app.student.split(' ').map((n) => n[0]).join('')}
-                                    </Text>
-                                </View>
-                                <View>
-                                    <Text style={styles.studentName}>{app.student}</Text>
-                                    <Text style={styles.collegeName}>{app.college}</Text>
-                                </View>
-                            </View>
-
-                            <Text style={[styles.tdText, { flex: 1.5 }]}>{app.internship}</Text>
-
-                            <View style={[styles.td, { flex: 1 }]}>
-                                <View style={styles.skillMatchBadge}>
-                                    <Text style={styles.skillMatchText}>{app.skillMatch}</Text>
-                                </View>
-                            </View>
-
-                            <Text style={[styles.tdMuted, { flex: 1.5 }]}>{app.appliedTime}</Text>
-
-                            <View style={[styles.td, { flex: 1.2 }]}>
-                                <View style={[styles.statusPill, { backgroundColor: app.statusBg }]}>
-                                    <Text style={[styles.statusPillText, { color: app.statusText }]}>
-                                        {app.status}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <Pressable style={[styles.td, { flex: 1, alignItems: 'flex-end' }]}>
-                                <Text style={styles.reviewLink}>Review</Text>
-                            </Pressable>
+                    {applications.length === 0 ? (
+                        <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 28, marginBottom: 8 }}>👥</Text>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.textDark, marginBottom: 4 }}>
+                                No applications yet
+                            </Text>
+                            <Text style={{ fontSize: 12, color: COLORS.textMuted, textAlign: 'center' }}>
+                                Verified candidates applying to your active postings will appear here in real-time.
+                            </Text>
                         </View>
-                    ))}
+                    ) : (
+                        applications.slice(0, 6).map((app) => {
+                            const studentName = app.student || app.candidate_name || 'Applicant';
+                            const collegeName = app.college || app.candidate_college || 'University';
+                            const roleName = app.internship || app.internship_title || app.title || 'Internship';
+                            const matchText = app.skillMatch || (app.match_score ? `${Math.round(app.match_score)}%` : '85%');
+                            const appliedText = app.appliedTime || (app.applied_at ? new Date(app.applied_at).toLocaleDateString() : 'Recently');
+                            const statusVal = app.status || 'Applied';
+                            const initials = (studentName || 'ST')
+                                .split(' ')
+                                .filter(Boolean)
+                                .map((n) => n[0] || '')
+                                .join('')
+                                .toUpperCase()
+                                .slice(0, 2) || 'ST';
+
+                            return (
+                                <View key={app.id} style={styles.tableRow}>
+                                    <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                                        <View style={[styles.avatarCircle, { overflow: 'hidden' }]}>
+                                            {(app.profile_image || app.profile_picture) ? (
+                                                <Image
+                                                    source={{ uri: app.profile_image || app.profile_picture }}
+                                                    style={{ width: 32, height: 32, borderRadius: 16 }}
+                                                />
+                                            ) : (
+                                                <Text style={styles.avatarText}>{initials}</Text>
+                                            )}
+                                        </View>
+                                        <View>
+                                            <Text style={styles.studentName}>{studentName}</Text>
+                                            <Text style={styles.collegeName}>{collegeName}</Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={[styles.tdText, { flex: 1.5 }]}>{roleName}</Text>
+
+                                    <View style={[styles.td, { flex: 1 }]}>
+                                        <View style={styles.skillMatchBadge}>
+                                            <Text style={styles.skillMatchText}>{matchText}</Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={[styles.tdMuted, { flex: 1.5 }]}>{appliedText}</Text>
+
+                                    <View style={[styles.td, { flex: 1.2 }]}>
+                                        <View style={[styles.statusPill, { backgroundColor: app.statusBg || '#DCFCE7' }]}>
+                                            <Text style={[styles.statusPillText, { color: app.statusText || '#15803D' }]}>
+                                                {statusVal}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <Pressable
+                                        onPress={() => onNavigateTab && onNavigateTab('Applications')}
+                                        style={[styles.td, { flex: 1, alignItems: 'flex-end' }]}
+                                    >
+                                        <Text style={styles.reviewLink}>Review</Text>
+                                    </Pressable>
+                                </View>
+                            );
+                        })
+                    )}
 
                     <View style={styles.tableFooter}>
                         <Text style={styles.tableFooterText}>
-                            Showing 4 of 186 recent student applications
+                            Showing {Math.min(applications.length, 6)} of {applications.length} student applications
                         </Text>
-                        <Pressable>
+                        <Pressable onPress={() => onNavigateTab && onNavigateTab('Applications')}>
                             <Text style={styles.linkText}>Go to Application Tracker →</Text>
                         </Pressable>
                     </View>

@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkillSetu — Live AI Assessment</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <!-- Compact Assessment Header -->
+  <header class="top-header">
+    <div class="top-header-inner">
+      <div class="header-left">
+        <div class="brand-badge">
+          <div class="brand-logo-icon">S</div>
+          <span>SkillSetu</span>
+        </div>
+        <div class="header-divider"></div>
+        <div class="header-round-info">
+          <span class="round-title" id="headerRoundTitle">Aptitude Assessment</span>
+          <span class="round-meta-sub" id="headerSubTitle">SkillSetu Monitored Evaluation</span>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div class="progress-label-row">
+          <span id="headerQuestionProgress">Question 1 of 6</span>
+          <span id="headerPercentProgress">16% Completed</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="headerProgressBar" style="width: 16%;"></div>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="timer-pill" id="timerPill">
+          <span class="timer-dot"></span>
+          <span id="timer">00:00</span>
+        </div>
+        <div class="candidate-pill">
+          <span>Candidate:</span>
+          <strong id="candidateNameDisplay">Candidate</strong>
+        </div>
+        <span class="mode-badge practice" id="modeBadge">PRACTICE</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Network Interruption Banner (Shown only when connection interrupted) -->
+  <div class="network-banner hidden" id="networkNotice">
+    <span>⚠️ Connection interrupted. Reconnecting to assessment servers…</span>
+  </div>
+
+  <!-- Multi-Round Stepper Bar -->
+  <div class="pipeline-bar" id="pipelineBar"></div>
+
+  <!-- Main 70% / 30% Two-Column Assessment Layout -->
+  <main class="assessment-layout">
+    <!-- LEFT COLUMN: Primary Assessment Workspace (70%) -->
+    <section class="assessment-main">
+      <!-- Question & Round Card -->
+      <div class="card" id="roundCard">
+        <!-- Question Loading Skeleton -->
+        <div id="questionLoadingState" class="hidden question-loader-box">
+          <div class="question-spinner"></div>
+          <div>
+            <h3 class="question-loader-title" id="questionLoadingTitle">Preparing your next question…</h3>
+            <p class="question-loader-sub" id="questionLoadingSub">AI is tailoring questions based on your profile and round context.</p>
+          </div>
+        </div>
+
+        <!-- Question Error & Retry State -->
+        <div id="questionErrorState" class="hidden question-error-box">
+          <div style="font-size: 28px;">⚠️</div>
+          <h3 class="question-loader-title" id="questionErrorTitle">Unable to load the next question</h3>
+          <p class="question-loader-sub" id="questionErrorSub">Something went wrong while preparing your question. Please try again.</p>
+          <button class="btn secondary" id="questionRetryBtn" type="button">↻ Try Again</button>
+        </div>
+
+        <!-- 1. Aptitude Round Panel -->
+        <div id="aptitudePanel" class="aptitude-box">
+          <!-- Section Switcher Tabs -->
+          <div class="sub-tab-row">
+            <button class="sub-tab active" id="aptTabMcq" type="button">Section A: MCQs (<span id="aptMcqBadge">0</span>)</button>
+            <button class="sub-tab" id="aptTabTheory" type="button">Section B: Written Theory (<span id="aptTheoryBadge">0</span>)</button>
+            <button class="sub-tab" id="aptTabCoding" type="button">Section C: Coding Sandbox (<span id="aptCodingBadge">1</span>)</button>
+          </div>
+
+          <!-- Section A: Objective MCQs -->
+          <div id="aptSubMcq">
+            <div class="question-header">
+              <div class="question-meta-group">
+                <span class="question-pill" id="aptQuestionNumBadge">Question 1</span>
+                <span class="meta-sub-tag" id="aptCategory">Quantitative Aptitude</span>
+                <span class="meta-sub-tag">Multiple Choice</span>
+              </div>
+              <span class="question-points">2 Points</span>
+            </div>
+
+            <h2 class="question-title" id="aptQuestionText">Loading question prompt…</h2>
+
+            <div class="options-grid" id="aptOptionsGrid"></div>
+          </div>
+
+          <!-- Section B: Written Theory -->
+          <div id="aptSubTheory" class="hidden">
+            <div class="question-header">
+              <div class="question-meta-group">
+                <span class="question-pill" id="aptTheoryCounter">Theory 1 of 2</span>
+                <span class="meta-sub-tag" id="aptTheorySkill">Technical Concept</span>
+              </div>
+              <span class="question-points" id="aptTheoryMaxScore">Max Score: 10</span>
+            </div>
+
+            <h2 class="question-title" id="aptTheoryQuestionText">Loading theory prompt…</h2>
+
+            <div class="theory-input-wrap">
+              <label style="font-size:13px; color:var(--text-secondary); margin-bottom:8px; display:block;">Your Engineering Explanation:</label>
+              <textarea class="theory-textarea" id="aptTheoryAnswer" placeholder="Write your structured response here. Focus on architecture, logic, and trade-offs..."></textarea>
+            </div>
+          </div>
+
+          <!-- Section C: Aptitude Coding Sandbox -->
+          <div id="aptSubCoding" class="hidden code-sandbox-wrap">
+            <div class="question-header">
+              <div class="question-meta-group">
+                <span class="question-pill">Section C: Problem</span>
+                <span class="meta-sub-tag" id="aptCodingDifficulty">Intermediate</span>
+              </div>
+              <span class="question-points">20 Points</span>
+            </div>
+
+            <div class="problem-desc-box" id="aptCodingProblemStatement">Loading problem statement…</div>
+
+            <div>
+              <label style="font-size:12px; color:var(--text-secondary); margin-bottom:6px; display:block;">Candidate Solution Editor</label>
+              <textarea class="code-editor" id="aptCodeEditor" spellcheck="false" placeholder="# Write your solution here..."></textarea>
+            </div>
+
+            <div style="display:flex; gap:12px; align-items:center;">
+              <button class="btn secondary" id="aptRunCodeBtn" type="button">▶ Run Visible Tests</button>
+              <span id="aptRunStatusText" style="font-size:13px; color:var(--text-secondary);"></span>
+            </div>
+
+            <div class="terminal-view hidden" id="aptTerminalOutput"></div>
+          </div>
+        </div>
+
+        <!-- 2. Technical Coding Round Panel -->
+        <div id="codingPanel" class="hidden code-sandbox-wrap">
+          <div class="question-header">
+            <div class="question-meta-group">
+              <span class="question-pill">Coding Challenge</span>
+              <span class="meta-sub-tag" id="codingDifficulty">Problem: Intermediate</span>
+            </div>
+            <span class="question-points">100 Points</span>
+          </div>
+
+          <div class="problem-desc-box" id="problemStatement">Loading challenge statement…</div>
+
+          <div>
+            <label style="font-size:12px; color:var(--text-secondary); margin-bottom:6px; display:block;">Candidate Solution Editor</label>
+            <textarea class="code-editor" id="codeEditor" spellcheck="false" placeholder="# Write your algorithmic solution here..."></textarea>
+          </div>
+
+          <div style="display:flex; gap:12px; align-items:center;">
+            <button class="btn secondary" id="runCodeBtn" type="button">▶ Run Visible Tests</button>
+            <span id="runStatusText" style="font-size:13px; color:var(--text-secondary);"></span>
+          </div>
+
+          <div class="terminal-view hidden" id="terminalOutput"></div>
+        </div>
+
+        <!-- 3. AI Voice Interview Panel -->
+        <div id="aiVoicePanel" class="hidden ai-voice-card">
+          <div class="ai-avatar-row">
+            <div class="ai-avatar" id="avatar">D</div>
+            <div class="ai-meta">
+              <span class="ai-status-label" id="status">Waiting for camera &amp; microphone…</span>
+              <div class="ai-spoken-question" id="question">Allow camera and microphone access to begin your conversation.</div>
+            </div>
+          </div>
+          <div class="live-caption-box" id="caption">Spoken captions will appear here in real-time as you converse with Dora.</div>
+        </div>
+
+        <!-- 4. Group Discussion Panel -->
+        <div id="gdPanel" class="hidden" style="display:flex; flex-direction:column; gap:16px;">
+          <div class="card" style="padding:16px;">
+            <span class="question-pill">Group Discussion Topic</span>
+            <h2 style="font-size:18px; margin:8px 0 4px;" id="gdTopicTitle">Loading topic…</h2>
+            <p style="font-size:13px; color:var(--text-secondary); margin:0;" id="gdTopicContext"></p>
+          </div>
+          <div class="gd-participants-grid" id="gdParticipantsGrid">
+            <div class="gd-card self" id="p1Card">
+              <strong style="color:#FFFFFF;">Candidate (You)</strong>
+              <small style="color:var(--good);">Microphone Active</small>
+            </div>
+            <div class="gd-card" id="p2Card">
+              <strong>Priya P.</strong>
+              <small style="color:var(--text-secondary);">Participant</small>
+            </div>
+            <div class="gd-card" id="p3Card">
+              <strong>Rohan V.</strong>
+              <small style="color:var(--text-secondary);">Participant</small>
+            </div>
+            <div class="gd-card" id="p4Card">
+              <strong>Neha S.</strong>
+              <small style="color:var(--text-secondary);">Participant</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Question Navigator Bar -->
+      <div class="navigator-card" id="questionNavigatorCard">
+        <div class="navigator-header">
+          <span class="navigator-title">Question Navigator</span>
+          <div class="navigator-legend">
+            <div class="legend-item"><span class="legend-dot current"></span> Current</div>
+            <div class="legend-item"><span class="legend-dot answered"></span> Answered</div>
+            <div class="legend-item"><span class="legend-dot review"></span> Review</div>
+            <div class="legend-item"><span class="legend-dot unvisited"></span> Unvisited</div>
+          </div>
+        </div>
+        <div class="nav-grid" id="questionNavGrid"></div>
+      </div>
+
+      <!-- Sticky Bottom Action Bar -->
+      <div class="bottom-action-bar">
+        <button class="btn ghost" id="markReviewBtn" type="button">⚐ Mark for Review</button>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn secondary" id="prevQuestionBtn" type="button" disabled>← Previous</button>
+          <button class="btn" id="nextQuestionBtn" type="button">Save &amp; Next →</button>
+          <button class="btn" id="startBtn" disabled>Start Round</button>
+          <button class="btn secondary hidden" id="submitRoundBtn" type="button">Submit Assessment →</button>
+          <button class="btn danger hidden" id="endBtn" type="button">End Interview</button>
+        </div>
+      </div>
+      <div class="error" id="error"></div>
+    </section>
+
+    <!-- RIGHT COLUMN: Camera, Security & Assessment Status (30%) -->
+    <aside class="assessment-sidebar">
+      <!-- Section 1: Candidate Camera -->
+      <div class="camera-card">
+        <div class="camera-card-header">
+          <span class="sidebar-heading">Candidate Feed</span>
+          <span class="camera-overlay-badge rec hidden" id="recBadge"><span class="timer-dot" style="background:#EF4444;"></span> REC</span>
+        </div>
+        <div class="camera-preview-wrap">
+          <video id="preview" autoplay muted playsinline></video>
+          <div id="visionDebugOverlay" class="vision-debug-overlay hidden">
+            <div class="vision-debug-title">VISION DIAGNOSTICS</div>
+            <div id="visionDebugContent" class="vision-debug-content"></div>
+          </div>
+        </div>
+        <div class="camera-status-row">
+          <div class="device-status-pill" id="cameraStatusPill">
+            <span class="status-dot"></span>
+            <span id="cameraStatusText">Initializing Camera…</span>
+          </div>
+          <div class="device-status-pill" id="micStatusPill">
+            <span class="status-dot"></span>
+            <span id="micStatusText">Initializing Mic…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Assessment Security Card -->
+      <div class="security-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="sidebar-heading">Security Status</span>
+          <span class="security-status-badge" id="overallSecurityBadge">Checking…</span>
+        </div>
+        <div class="security-checklist">
+          <div class="security-item">
+            <span>Camera Stream</span>
+            <span class="security-item-status" id="secCameraStatus">Checking…</span>
+          </div>
+          <div class="security-item">
+            <span>Microphone Feed</span>
+            <span class="security-item-status" id="secMicStatus">Checking…</span>
+          </div>
+          <div class="security-item">
+            <span>Session Recording</span>
+            <span class="security-item-status" id="secRecStatus">Pending…</span>
+          </div>
+          <div class="security-item">
+            <span>Encrypted Tunnel</span>
+            <span class="security-item-status" id="secNetStatus">✓ Secure</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Integrity Monitoring -->
+      <div class="integrity-info-card">
+        <div class="integrity-header">
+          <span class="sidebar-heading">Academic Integrity</span>
+          <span class="integrity-active-pill">● Monitored</span>
+        </div>
+        <p class="integrity-info-text">
+          Your video, audio, and browser window focus are continuously verified to uphold assessment fairness and standard certification.
+        </p>
+      </div>
+
+      <!-- Section 4: Live Transcript (Active in AI Interview & GD rounds) -->
+      <div class="card hidden" id="transcriptSidebarCard" style="padding:16px;">
+        <span class="sidebar-heading" style="display:block; margin-bottom:10px;">Live Conversation</span>
+        <div class="transcript-box" id="transcript"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Integrity Warning & Candidate Explanation Modal -->
+  <div class="modal-backdrop hidden" id="integrityModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title" id="integrityModalTitle" style="color:var(--warn);">⚠️ Integrity Warning</h2>
+        <span class="security-status-badge warning" id="integrityWarningBadge">Warning 1 of 2</span>
+      </div>
+      <p class="modal-desc" id="integrityModalMsg"></p>
+      
+      <div id="integrityExplanationForm">
+        <label style="font-size:13px; color:var(--text); margin:10px 0 6px; display:block;">Why did this happen?</label>
+        <select id="integrityReasonCategory" style="margin-bottom:12px; padding:10px; width:100%; background:var(--surface-elevated); border:1px solid var(--border); color:var(--text); border-radius:8px;">
+          <option value="I accidentally switched windows / clicked outside">I accidentally switched windows / clicked outside</option>
+          <option value="My device / browser had an unexpected notification">My device / browser had an unexpected notification</option>
+          <option value="Temporary network or hardware glitch">Temporary network or hardware glitch</option>
+          <option value="Camera or microphone connection issue">Camera or microphone connection issue</option>
+          <option value="Other">Other explanation</option>
+        </select>
+        
+        <label style="font-size:13px; color:var(--text); margin:10px 0 6px; display:block;">Please provide brief details:</label>
+        <textarea id="integrityExplanationText" rows="3" style="width:100%; background:var(--surface-elevated); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px;" placeholder="Explain briefly what happened so our integrity review team can verify..."></textarea>
+        
+        <div style="margin-top:16px; display:flex; justify-content:flex-end;">
+          <button class="btn" id="integritySubmitExplanationBtn" type="button">Submit Explanation &amp; Resume</button>
+        </div>
+      </div>
+
+      <div id="integrityTerminatedView" class="hidden" style="margin-top:14px;">
+        <p style="color:var(--bad); font-weight:700; margin:0 0 14px;">This round has been permanently stopped due to confirmed integrity violations.</p>
+        <button class="btn danger" id="integrityExitBtn" type="button">Return to Rounds Summary</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit Confirmation Modal -->
+  <div class="modal-backdrop hidden" id="submitConfirmModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Submit Assessment</h2>
+      </div>
+      <p class="modal-desc" id="submitConfirmSummary">Are you sure you want to submit your assessment? Once submitted, your answers will be evaluated by our AI agent panel.</p>
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn secondary" id="cancelSubmitModalBtn" type="button">Cancel</button>
+        <button class="btn" id="confirmSubmitModalBtn" type="button">Yes, Submit Round →</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/livekit-client.js"></script>
+  <script src="/js/interview.js?v=3"></script>
+</body>
+</html>

@@ -48,6 +48,7 @@ class StudentUser(Base):
 
     # Relationships
     saved_internships = relationship("SavedInternship", back_populates="student", cascade="all, delete-orphan")
+    internship_applications = relationship("InternshipApplication", back_populates="student", cascade="all, delete-orphan")
     saved_scholarships = relationship("SavedScholarship", back_populates="student", cascade="all, delete-orphan")
     scholarship_applications = relationship("ScholarshipApplication", back_populates="student", cascade="all, delete-orphan")
 
@@ -64,10 +65,81 @@ class AdminUser(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class Company(Base):
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, nullable=False)
+    logo_url = Column(String, nullable=True)
+    industry = Column(String, nullable=True)
+    company_type = Column(String, default="Private Ltd")
+    company_size = Column(String, default="500-1,000 employees")
+    founded_year = Column(String, default="2015")
+    website = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    headquarters = Column(String, default="Pune, Maharashtra")
+    description = Column(Text, nullable=True)
+    mission = Column(Text, nullable=True)
+    vision = Column(Text, nullable=True)
+    culture_tags = Column(Text, nullable=True)  # JSON array string
+    perks = Column(Text, nullable=True)  # JSON array string
+    preferred_domains = Column(Text, nullable=True)  # JSON array string
+    preferred_skills = Column(Text, nullable=True)  # JSON array string
+    preferred_work_mode = Column(String, default="Hybrid")
+    preferred_duration = Column(String, default="3-6 Months")
+    social_links = Column(Text, nullable=True)  # JSON dict string
+    is_email_verified = Column(Boolean, default=True)
+    is_website_verified = Column(Boolean, default=True)
+    is_business_verified = Column(Boolean, default=True)
+    is_recruiter_verified = Column(Boolean, default=True)
+    profile_completed = Column(Boolean, default=False, index=True)
+    completion_percentage = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    locations = relationship("CompanyLocation", back_populates="company", cascade="all, delete-orphan")
+    hiring_stages = relationship("CompanyHiringStage", back_populates="company", cascade="all, delete-orphan", order_by="CompanyHiringStage.order")
+    recruiters = relationship("RecruiterUser", back_populates="company")
+    postings = relationship("InternshipPosting", back_populates="company", cascade="all, delete-orphan")
+    interviews = relationship("RecruiterInterview", back_populates="company", cascade="all, delete-orphan")
+
+
+class CompanyLocation(Base):
+    __tablename__ = "company_locations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=False)  # e.g. "Pune, Maharashtra"
+    sub = Column(String, nullable=True)  # e.g. "Hinjawadi Phase 3, Tech Park"
+    badge = Column(String, default="Branch")  # "HQ", "R&D Center", "Branch"
+    is_primary = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    company = relationship("Company", back_populates="locations")
+
+
+class CompanyHiringStage(Base):
+    __tablename__ = "company_hiring_stages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    order = Column(Integer, default=1)
+    stage_id = Column(String, nullable=True)  # e.g. "01", "02"
+    title = Column(String, nullable=False)  # e.g. "Application", "Technical Interview"
+    desc = Column(String, nullable=True)  # e.g. "Via platform", "System design & live coding"
+    stage_type = Column(String, default="interview")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    company = relationship("Company", back_populates="hiring_stages")
+
+
 class RecruiterUser(Base):
     __tablename__ = "recruiters"
 
     id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
@@ -85,6 +157,32 @@ class RecruiterUser(Base):
     rejected_by = Column(Integer, ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
     rejection_reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    company = relationship("Company", back_populates="recruiters")
+
+
+class RecruiterInterview(Base):
+    __tablename__ = "recruiter_interviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    recruiter_id = Column(Integer, ForeignKey("recruiters.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="SET NULL"), nullable=True, index=True)
+    application_id = Column(Integer, ForeignKey("internship_applications.id", ondelete="SET NULL"), nullable=True, index=True)
+    candidate_name = Column(String, nullable=False)
+    candidate_college = Column(String, nullable=True)
+    role_title = Column(String, nullable=False)
+    department = Column(String, nullable=True)
+    round_name = Column(String, default="Technical Interview")
+    interview_date = Column(DateTime(timezone=True), nullable=True)
+    interview_time = Column(String, nullable=True)  # e.g. "10:30 AM"
+    mode = Column(String, default="📹 Meet + Sandbox")
+    status = Column(String, default="Scheduled")  # Scheduled, Completed, Cancelled
+    match_pct = Column(String, default="90%")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    company = relationship("Company", back_populates="interviews")
+    recruiter = relationship("RecruiterUser")
 
 
 class StudentGithubConnection(Base):
@@ -235,6 +333,8 @@ class StudentAssessmentAttempt(Base):
     test_title = Column(String, nullable=False)
     score = Column(Integer, nullable=False)
     status = Column(String, nullable=False)  # 'VERIFIED' or 'NEEDS_WORK'
+    used_question_ids = Column(Text, nullable=True)  # JSON list of question IDs used in attempt
+    answers_json = Column(Text, nullable=True)  # JSON map of user answers
     completed_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ProjectSubmission(Base):
@@ -310,6 +410,7 @@ class EscoAssessmentQuestion(Base):
     options_json = Column(Text, nullable=False)  # JSON string {"A": "...", "B": "...", "C": "...", "D": "..."}
     correct_option = Column(String, nullable=False)  # e.g. "A"
     explanation = Column(Text, nullable=True)
+    question_fingerprint = Column(String, nullable=True, index=True)
 
 
 class SkillCourseResource(Base):
@@ -336,6 +437,84 @@ class SkillPracticeChallenge(Base):
     difficulty = Column(String, default="Intermediate")
     tags_json = Column(Text, nullable=True)  # JSON list ["DOCKER", "DEV-OPS"]
     total_steps = Column(Integer, default=3)
+
+
+class AdaptiveCodingChallenge(Base):
+    __tablename__ = "adaptive_coding_challenges"
+
+    id = Column(String, primary_key=True, index=True)  # e.g. 'ch_sql_opt_9482'
+    skill_name = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    difficulty = Column(String, default="intermediate")  # 'beginner', 'intermediate', 'advanced'
+    language = Column(String, default="python")  # 'sql', 'python', 'javascript', 'go', 'java'
+    concepts_json = Column(Text, nullable=True)  # JSON list ["Indexing", "JOINs"]
+    why_this_challenge = Column(Text, nullable=True)
+    description = Column(Text, nullable=False)
+    constraints_json = Column(Text, nullable=True)  # JSON list
+    examples_json = Column(Text, nullable=True)  # JSON list of {input, output, explanation}
+    starter_code = Column(Text, nullable=False)
+    test_cases_json = Column(Text, nullable=False)  # JSON list of {input, expected_output, is_hidden, description}
+    schema_sql = Column(Text, nullable=True)  # SQL schema fixture for database questions
+    hints_json = Column(Text, nullable=True)  # JSON list of progressive hints
+    xp_reward = Column(Integer, default=30)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AdaptiveCodingAttempt(Base):
+    __tablename__ = "adaptive_coding_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    challenge_id = Column(String, nullable=False, index=True)
+    skill_name = Column(String, nullable=False, index=True)
+    language = Column(String, default="python")
+    code_submitted = Column(Text, nullable=False)
+    passed = Column(Boolean, default=False)
+    passed_tests = Column(Integer, default=0)
+    total_tests = Column(Integer, default=0)
+    test_results_json = Column(Text, nullable=True)
+    compile_error = Column(Text, nullable=True)
+    runtime_error = Column(Text, nullable=True)
+    execution_time_ms = Column(Float, default=0.0)
+    attempt_number = Column(Integer, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AdaptiveCodingProgress(Base):
+    __tablename__ = "adaptive_coding_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False, unique=True, index=True)
+    current_challenge_id = Column(String, nullable=True)
+    current_skill_name = Column(String, nullable=True)
+    current_difficulty = Column(String, default="intermediate")
+    completed_challenges_count = Column(Integer, default=0)
+    completed_challenge_ids_json = Column(Text, default="[]")
+    failed_challenge_ids_json = Column(Text, default="[]")
+    weak_concepts_json = Column(Text, default="[]")
+    mastered_concepts_json = Column(Text, default="[]")
+    consecutive_successes = Column(Integer, default=0)
+    consecutive_failures = Column(Integer, default=0)
+    total_xp_earned = Column(Integer, default=0)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class CareerBenchmark(Base):
+    __tablename__ = "career_benchmarks"
+
+    id = Column(String, primary_key=True, index=True)  # e.g. 'bm_full_stack_developer'
+    career_id = Column(String, nullable=False, index=True)  # e.g. 'car_full_stack_developer'
+    career_name = Column(String, nullable=False, index=True)  # e.g. 'Full Stack Developer'
+    name = Column(String, nullable=False)  # e.g. 'Tier-1 Production Benchmark: Full Stack Systems'
+    tier = Column(String, default="Tier-1")  # 'Tier-1', 'Tier-2', 'Industry Standard'
+    description = Column(Text, nullable=False)  # Role-specific calibration description
+    threshold = Column(Integer, default=80)  # e.g. 80, 85, 75
+    baseline_score = Column(Integer, default=58)  # Average entry/market baseline
+    qualification_standard = Column(String, default="NSQF Level 7 (Software Engineer)")
+    is_nsqf_compliant = Column(Boolean, default=True)
+    domains_config_json = Column(Text, nullable=True)  # Domain definitions & skill mappings
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class CareerOccupationMapping(Base):
@@ -617,6 +796,31 @@ class StudentSkillEvidence(Base):
 # ==========================================
 # 8. INTERNSHIP, SCHOLARSHIP & OPPORTUNITY MODELS
 # ==========================================
+class InternshipPosting(Base):
+    __tablename__ = "internship_postings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True)
+    recruiter_id = Column(Integer, ForeignKey("recruiters.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    department = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    required_skills = Column(String, nullable=True)  # JSON or comma-separated
+    location = Column(String, nullable=True)
+    work_mode = Column(String, default="Remote") # Remote, Hybrid, On-site
+    stipend = Column(String, nullable=True)
+    duration = Column(String, default="6 Months")
+    openings = Column(Integer, default=1)
+    application_threshold = Column(Integer, default=80, nullable=False)  # Configurable minimum match % to apply directly (50-100)
+    deadline = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String, default="Active") # Active, Draft, Closed, Paused
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    company = relationship("Company", back_populates="postings")
+    recruiter = relationship("RecruiterUser")
+
+
 class InternshipListing(Base):
     __tablename__ = "internship_listings"
 
@@ -641,6 +845,7 @@ class InternshipListing(Base):
     work_preference = Column(String, default="remote")  # remote, hybrid, on-site
     min_cgpa = Column(Float, default=0.0)
     openings = Column(Integer, default=1)
+    application_threshold = Column(Integer, default=80, nullable=False)  # Configurable minimum match % to apply directly (50-100)
     batch_eligible = Column(String, nullable=True)
     education_requirements = Column(String, nullable=True)
     branch_requirements = Column(String, nullable=True)
@@ -663,8 +868,6 @@ class InternshipListing(Base):
     # Relationships
     career = relationship("SkillSetuCareer")
     required_skills = relationship("InternshipRequiredSkill", back_populates="internship", cascade="all, delete-orphan")
-    applications = relationship("InternshipApplication", back_populates="internship", cascade="all, delete-orphan")
-    saved_by_students = relationship("SavedInternship", back_populates="internship", cascade="all, delete-orphan")
 
 
 class InternshipRequiredSkill(Base):
@@ -687,16 +890,21 @@ class SavedInternship(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
-    internship_id = Column(Integer, ForeignKey("internship_listings.id", ondelete="CASCADE"), nullable=False, index=True)
+    source = Column(String, default="external", nullable=False, index=True)
+    source_id = Column(String, nullable=False, index=True)
+    title_snapshot = Column(String, nullable=True)
+    organization_snapshot = Column(String, nullable=True)
+    source_url = Column(String, nullable=True)
+    application_url = Column(String, nullable=True)
+    internship_id = Column(Integer, nullable=True, index=True)
     saved_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        UniqueConstraint("student_id", "internship_id", name="uq_student_saved_internship"),
+        UniqueConstraint("student_id", "source", "source_id", name="uq_student_saved_internship_ext"),
     )
 
     # Relationships
     student = relationship("StudentUser", back_populates="saved_internships")
-    internship = relationship("InternshipListing", back_populates="saved_by_students")
 
 
 class InternshipApplication(Base):
@@ -704,20 +912,75 @@ class InternshipApplication(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
-    internship_id = Column(Integer, ForeignKey("internship_listings.id", ondelete="CASCADE"), nullable=False, index=True)
-    status = Column(String, default="APPLIED", index=True)  # APPLIED, UNDER_REVIEW, SHORTLISTED, INTERVIEW_SCHEDULED, OFFERED, REJECTED, WITHDRAWN
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True)
+    source = Column(String, default="external", nullable=False, index=True)
+    source_id = Column(String, nullable=False, index=True)
+    title_snapshot = Column(String, nullable=True)
+    company_snapshot = Column(String, nullable=True)
+    source_url_snapshot = Column(String, nullable=True)
+    application_url_snapshot = Column(String, nullable=True)
     match_score_at_apply = Column(Float, nullable=True)
+    application_threshold_at_apply = Column(Integer, default=80, nullable=True)
+    eligibility_snapshot = Column(String, nullable=True)
+    status = Column(String, default="APPLIED", index=True)  # APPLIED, UNDER_REVIEW, SHORTLISTED, INTERVIEW_SCHEDULED, OFFERED, REJECTED, WITHDRAWN
     applied_at = Column(DateTime(timezone=True), server_default=func.now())
     feedback = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
+    internship_id = Column(Integer, nullable=True, index=True)
 
     __table_args__ = (
-        UniqueConstraint("student_id", "internship_id", name="uq_student_internship_app"),
+        UniqueConstraint("student_id", "source", "source_id", name="uq_student_internship_app_ext"),
     )
 
     # Relationships
+    student = relationship("StudentUser", back_populates="internship_applications")
+
+
+class InternshipAssessmentConfig(Base):
+    __tablename__ = "internship_assessment_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    internship_id = Column(Integer, ForeignKey("internship_postings.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    recruiter_id = Column(Integer, ForeignKey("recruiters.id", ondelete="CASCADE"), nullable=False, index=True)
+    is_active = Column(Boolean, default=True)
+    pipeline_config = Column(Text, nullable=False)  # JSON string: rounds, question counts, durations, difficulty, coding languages, etc.
+    scoring_weights = Column(Text, nullable=True)  # JSON string: aptitude, technical, interview, gd weights, passing threshold
+    integrity_config = Column(Text, nullable=True)  # JSON string: proctoring settings (camera, mic, recording, telemetry)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    internship = relationship("InternshipPosting")
+    company = relationship("Company")
+    recruiter = relationship("RecruiterUser")
+
+
+class CandidateAssessmentSession(Base):
+    __tablename__ = "candidate_assessment_sessions"
+
+    id = Column(String, primary_key=True, index=True)  # UUID string
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    application_id = Column(Integer, ForeignKey("internship_applications.id", ondelete="CASCADE"), nullable=True, index=True)
+    internship_id = Column(Integer, ForeignKey("internship_postings.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String, default="CREATED", index=True)  # CREATED, IN_PROGRESS, COMPLETED, FLAGGED, TERMINATED, EXPIRED
+    current_round = Column(String, default="aptitude")
+    overall_score = Column(Float, nullable=True)
+    integrity_status = Column(String, default="VERIFIED", index=True)  # VERIFIED, WARNING_ISSUED, FLAGGED, HIGH_RISK, FAILED
+    warning_count = Column(Integer, default=0)
+    round_results = Column(Text, nullable=True)  # JSON string of all round results (aptitude, technical, interview, gd, integrity)
+    evaluation = Column(Text, nullable=True)  # JSON string of synthesized final evaluation dossier
+    assessment_url = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
     student = relationship("StudentUser")
-    internship = relationship("InternshipListing", back_populates="applications")
+    application = relationship("InternshipApplication")
+    internship = relationship("InternshipPosting")
+    company = relationship("Company")
 
 
 class Scholarship(Base):
@@ -753,8 +1016,6 @@ class Scholarship(Base):
 
     # Relationships
     eligibility_rules = relationship("ScholarshipEligibilityRule", back_populates="scholarship", cascade="all, delete-orphan", uselist=False)
-    applications = relationship("ScholarshipApplication", back_populates="scholarship", cascade="all, delete-orphan")
-    saved_by_students = relationship("SavedScholarship", back_populates="scholarship", cascade="all, delete-orphan")
 
 
 class ScholarshipEligibilityRule(Base):
@@ -784,16 +1045,21 @@ class SavedScholarship(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
-    scholarship_id = Column(Integer, ForeignKey("scholarships.id", ondelete="CASCADE"), nullable=False, index=True)
+    source = Column(String, default="external", nullable=False, index=True)
+    source_id = Column(String, nullable=False, index=True)
+    name_snapshot = Column(String, nullable=True)
+    provider_snapshot = Column(String, nullable=True)
+    source_url = Column(String, nullable=True)
+    application_url = Column(String, nullable=True)
+    scholarship_id = Column(Integer, nullable=True, index=True)
     saved_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        UniqueConstraint("student_id", "scholarship_id", name="uq_student_saved_scholarship"),
+        UniqueConstraint("student_id", "source", "source_id", name="uq_student_saved_scholarship_ext"),
     )
 
     # Relationships
     student = relationship("StudentUser", back_populates="saved_scholarships")
-    scholarship = relationship("Scholarship", back_populates="saved_by_students")
 
 
 class ScholarshipApplication(Base):
@@ -801,18 +1067,24 @@ class ScholarshipApplication(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
-    scholarship_id = Column(Integer, ForeignKey("scholarships.id", ondelete="CASCADE"), nullable=False, index=True)
+    source = Column(String, default="external", nullable=False, index=True)
+    source_id = Column(String, nullable=False, index=True)
+    name_snapshot = Column(String, nullable=True)
+    provider_snapshot = Column(String, nullable=True)
+    source_url_snapshot = Column(String, nullable=True)
+    application_url_snapshot = Column(String, nullable=True)
+    eligibility_status_at_apply = Column(String, default="ELIGIBLE", nullable=True)
     status = Column(String, default="APPLIED", index=True)  # APPLIED, UNDER_REVIEW, ACCEPTED, REJECTED, WITHDRAWN
     applied_at = Column(DateTime(timezone=True), server_default=func.now())
     notes = Column(Text, nullable=True)
+    scholarship_id = Column(Integer, nullable=True, index=True)
 
     __table_args__ = (
-        UniqueConstraint("student_id", "scholarship_id", name="uq_student_scholarship_app"),
+        UniqueConstraint("student_id", "source", "source_id", name="uq_student_scholarship_app_ext"),
     )
 
     # Relationships
     student = relationship("StudentUser", back_populates="scholarship_applications")
-    scholarship = relationship("Scholarship", back_populates="applications")
 
 
 class IngestionRunLog(Base):
@@ -865,4 +1137,55 @@ class MentorMessage(Base):
 
     # Relationships
     conversation = relationship("MentorConversation", back_populates="messages")
+
+
+# ==========================================
+# 10. RECRUITER APPLICATION AUDIT & EMAIL LOGS
+# ==========================================
+class ApplicationStatusAudit(Base):
+    __tablename__ = "application_status_audits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("internship_applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    previous_status = Column(String, nullable=True)
+    new_status = Column(String, nullable=False)
+    changed_by_recruiter_id = Column(Integer, ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
+    changed_at = Column(DateTime(timezone=True), server_default=func.now())
+    notes = Column(Text, nullable=True)
+
+
+class ApplicationEmailLog(Base):
+    __tablename__ = "application_email_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("internship_applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    email_type = Column(String, nullable=False, index=True)  # SHORTLISTED_EMAIL, UNSHORTLISTED_EMAIL
+    recipient_email = Column(String, nullable=False)
+    sender_email = Column(String, nullable=False)
+    subject = Column(String, nullable=False)
+    status = Column(String, default="SENT", nullable=False)  # SENT, FAILED
+# ==========================================
+# 11. STUDENT AI PRACTICE ATTEMPTS & EVALUATION LOGS
+# ==========================================
+class StudentInterviewPracticeSubmission(Base):
+    __tablename__ = "student_interview_practice_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(String, nullable=False, index=True)
+    target_role = Column(String, nullable=False, index=True)
+    category = Column(String, nullable=True, index=True)
+    skill = Column(String, nullable=True)
+    question_text = Column(Text, nullable=False)
+    student_answer = Column(Text, nullable=False)
+    score = Column(Float, nullable=False, default=0.0)
+    verdict = Column(String, nullable=True)
+    answered_question = Column(Boolean, default=False)
+    evaluation_json = Column(Text, nullable=True)  # Full structured JSON string from Groq
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    # Relationships
+    student = relationship("StudentUser")
+
 

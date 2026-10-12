@@ -1,5 +1,19 @@
-import React, { useRef, useState } from 'react';
-import { createInitialProfile, fetchCompleteStudentProfile } from '../services/profileService';
+import React, { useRef, useState, useEffect } from 'react';
+import { createInitialProfile, fetchCompleteStudentProfile, formatCareerTitle } from '../services/profileService';
+import { ensureProfileGlobalStyles, CLAY_COLORS } from './components/DesignTokens';
+import AmbientBackground from './components/AmbientBackground';
+import ProfileHeaderNav from './components/ProfileHeaderNav';
+import ProfileHero from './components/ProfileHero';
+import AIPreAnalysisCard from './components/AIPreAnalysisCard';
+import VerifiedSkillProofsCard from './components/VerifiedSkillProofsCard';
+import GitHubRepositoriesCard from './components/GitHubRepositoriesCard';
+import ActiveApplicationsCard from './components/ActiveApplicationsCard';
+import AcademicCredentialsCard from './components/AcademicCredentialsCard';
+import ProfessionalLinksCard from './components/ProfessionalLinksCard';
+import ProfileFooter from './components/ProfileFooter';
+import { EditProfileModal, ShareProfileModal, DownloadReportModal, ATSBreakdownModal } from './components/ProfileModals';
+import { fetchStudentApplications } from '../services/applicationService';
+
 import {
   ActivityIndicator,
   Animated,
@@ -134,20 +148,18 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
   );
 }
 
-// Default initial state representing the full prefilled mockup profile matching the 6th step review screenshot exactly
+// Clean empty profile structure
 export const DEFAULT_MOCK_PROFILE = {
-  // Step 1: Personal Info
   personalInfo: {
-    fullName: 'Alex Chen',
-    email: 'alex.chen@gmail.com',
-    phone: '+1 (555) 019-2834',
-    headline: 'Senior Frontend Engineer',
-    location: 'San Francisco, CA',
-    yearsOfExperience: '3 Years',
-    bio: 'Experienced frontend developer specializing in responsive React applications, TypeScript architectures, and clean modular designs.',
-    profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+    fullName: '',
+    email: '',
+    phone: '',
+    headline: '',
+    location: '',
+    yearsOfExperience: '',
+    bio: '',
+    profileImage: '',
   },
-  // Step 2: Education
   education: {
     hasExtractedMarksheet: false,
     marksheetFileName: '',
@@ -156,18 +168,16 @@ export const DEFAULT_MOCK_PROFILE = {
     academicYearDetected: '',
     list: [],
   },
-  // Step 3: Career Goals & Preferences
   careerGoals: {
-    targetCareer: 'Senior Frontend Engineer',
-    preferredLocations: ['San Francisco, CA'],
-    careerInterests: ['Web Development', 'UI/UX', 'Node.js'],
-    opportunityTypes: ['Full-time'],
-    workPreferences: ['Hybrid', 'Remote'],
-    industry: 'FinTech / SaaS',
-    timeline: '6-12 Months',
-    careerGoal: 'Seeking to leverage my 3 years of React/TypeScript experience to build performant web platforms in the SaaS/FinTech space.',
+    targetCareer: '',
+    preferredLocations: [],
+    careerInterests: [],
+    opportunityTypes: [],
+    workPreferences: [],
+    industry: '',
+    timeline: '',
+    careerGoal: '',
   },
-  // Step 4: Resume & AI Analysis (Empty default)
   resumeAnalysis: {
     resumeFile: '',
     parseTime: '',
@@ -187,8 +197,6 @@ export const DEFAULT_MOCK_PROFILE = {
       links: {},
     },
   },
-
-  // Step 5: GitHub & Professional Links
   githubLinks: {
     linkedinUrl: '',
     portfolioUrl: '',
@@ -276,12 +284,43 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
   const [extractionConfidence, setExtractionConfidence] = useState({});
 
   // Manual Education Form Field States
-  const [eduDegree, setEduDegree] = useState('');
-  const [eduBranch, setEduBranch] = useState('');
-  const [eduUniv, setEduUniv] = useState('');
-  const [eduStart, setEduStart] = useState('');
-  const [eduGrad, setEduGrad] = useState('');
+  const eduItemInit = profileData?.education?.list?.[0] || {};
+  const [eduDegree, setEduDegree] = useState(
+    eduItemInit.degree ? (typeof eduItemInit.degree === 'object' ? eduItemInit.degree.value : eduItemInit.degree) : (user?.degree || '')
+  );
+  const [eduBranch, setEduBranch] = useState(
+    eduItemInit.branch ? (typeof eduItemInit.branch === 'object' ? eduItemInit.branch.value : eduItemInit.branch) : (user?.branch || '')
+  );
+  const [eduUniv, setEduUniv] = useState(
+    eduItemInit.university ? (typeof eduItemInit.university === 'object' ? eduItemInit.university.value : eduItemInit.university) : (user?.university || '')
+  );
+  const [eduStart, setEduStart] = useState(
+    eduItemInit.startYear ? (typeof eduItemInit.startYear === 'object' ? eduItemInit.startYear.value : eduItemInit.startYear) : (user?.start_year || '')
+  );
+  const [eduGrad, setEduGrad] = useState(
+    eduItemInit.graduationYear ? (typeof eduItemInit.graduationYear === 'object' ? eduItemInit.graduationYear.value : eduItemInit.graduationYear) : (user?.graduation_year || '')
+  );
   const [isUploadingResume, setIsUploadingResume] = useState(false);
+
+  // Sync education fields when profileData / user changes
+  useEffect(() => {
+    const item = profileData?.education?.list?.[0] || {};
+    if (item.degree || user?.degree) {
+      setEduDegree(item.degree ? (typeof item.degree === 'object' ? item.degree.value : item.degree) : (user?.degree || ''));
+    }
+    if (item.branch || user?.branch) {
+      setEduBranch(item.branch ? (typeof item.branch === 'object' ? item.branch.value : item.branch) : (user?.branch || ''));
+    }
+    if (item.university || user?.university) {
+      setEduUniv(item.university ? (typeof item.university === 'object' ? item.university.value : item.university) : (user?.university || ''));
+    }
+    if (item.startYear || user?.start_year) {
+      setEduStart(item.startYear ? (typeof item.startYear === 'object' ? item.startYear.value : item.startYear) : (user?.start_year || ''));
+    }
+    if (item.graduationYear || user?.graduation_year) {
+      setEduGrad(item.graduationYear ? (typeof item.graduationYear === 'object' ? item.graduationYear.value : item.graduationYear) : (user?.graduation_year || ''));
+    }
+  }, [profileData?.education, user]);
 
 
   // Resume Extracted Data Editing States
@@ -294,6 +333,69 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
   const [isViewingOnePageProfile, setIsViewingOnePageProfile] = useState(
     profileData?.verified || (profileData?.personalInfo?.fullName ? true : false)
   );
+
+  // Modal States
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showAtsModal, setShowAtsModal] = useState(false);
+  const [studentApplications, setStudentApplications] = useState([]);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [isReanalyzingResume, setIsReanalyzingResume] = useState(false);
+
+  // Inject Claymorphism Google Fonts & CSS Animations
+  useEffect(() => {
+    ensureProfileGlobalStyles();
+  }, []);
+
+  // Fetch student active applications
+  useEffect(() => {
+    if (user?.email) {
+      fetchStudentApplications(user.email).then(data => {
+        if (data && data.internships) {
+          setStudentApplications(data.internships);
+        }
+      }).catch(err => {
+        console.warn('Error fetching student applications:', err);
+      });
+    }
+  }, [user]);
+
+  // Load real resume analysis data if available
+  useEffect(() => {
+    if (user?.email) {
+      const emailQuery = encodeURIComponent(user.email.trim());
+      fetch(`http://127.0.0.1:8000/api/v1/student/resume-data?email=${emailQuery}`)
+        .then(r => r.json())
+        .then(resData => {
+          if (resData && resData.status === 'success' && resData.resume_data) {
+            const rd = resData.resume_data;
+            const extData = rd.extracted_data || {};
+            setProfileData(prev => ({
+              ...prev,
+              resumeAnalysis: {
+                ...prev.resumeAnalysis,
+                resumeFile: rd.resume_file || resData.resume_url || prev.resumeAnalysis?.resumeFile,
+                parseTime: rd.parse_time || prev.resumeAnalysis?.parseTime,
+                score: typeof rd.score === 'number' ? rd.score : (resData.resume_score ?? prev.resumeAnalysis?.score),
+                scoreText: rd.score_text || prev.resumeAnalysis?.scoreText,
+                scoreBreakdown: rd.score_breakdown || prev.resumeAnalysis?.scoreBreakdown,
+                diagnostics: rd.diagnostics || prev.resumeAnalysis?.diagnostics,
+                extractedData: {
+                  ...prev.resumeAnalysis?.extractedData,
+                  ...extData,
+                },
+                roleFit: rd.role_fit || prev.resumeAnalysis?.roleFit,
+                skillsetValue: rd.skillsetu_value || prev.resumeAnalysis?.skillsetValue,
+              },
+            }));
+          }
+        })
+        .catch(err => {
+          console.warn('Error fetching student resume data:', err);
+        });
+    }
+  }, [user?.email]);
 
   // Controlled Taxonomy Layer States
   const [taxonomyCareers, setTaxonomyCareers] = useState([]);
@@ -444,12 +546,17 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
         errors.bio = 'Bio / About Yourself is required.';
       }
     } else if (step === 2) {
-      if (!currentProfile.education.hasExtractedMarksheet) {
+      const eduItem = currentProfile.education.list[0] || {};
+      const hasMarksheet = currentProfile.education.hasExtractedMarksheet || Boolean(currentProfile.education.marksheetUrl) || Boolean(currentProfile.education.marksheetFileName) || Boolean(user?.marksheet_url);
+      if (!hasMarksheet) {
         errors.marksheet = 'Please upload your latest academic marksheet before proceeding.';
       }
-      if (!eduDegree.trim()) errors.eduDegree = 'Degree is required.';
-      if (!eduUniv.trim()) errors.eduUniv = 'University / Institution is required.';
-      if (!eduGrad.trim()) errors.eduGrad = 'Graduation Year is required.';
+      const degVal = eduDegree.trim() || renderVal(eduItem.degree) || user?.degree;
+      const univVal = eduUniv.trim() || renderVal(eduItem.university) || user?.university;
+      const gradVal = eduGrad.trim() || renderVal(eduItem.graduationYear) || user?.graduation_year;
+      if (!degVal) errors.eduDegree = 'Degree is required.';
+      if (!univVal) errors.eduUniv = 'University / Institution is required.';
+      if (!gradVal) errors.eduGrad = 'Graduation Year is required.';
     } else if (step === 3) {
       const cGoals = currentProfile.careerGoals || {};
       const selectedCareers = cGoals.targetCareerIds || (cGoals.targetCareerId ? [cGoals.targetCareerId] : []);
@@ -468,7 +575,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
       if (workPreferences.length === 0) errors.workPreferences = 'At least one Work Preference is required.';
       if (!cGoals.careerGoal?.trim()) errors.careerGoal = 'Career Goal & Personal Statement description is required.';
     } else if (step === 4) {
-      if (!currentProfile.resumeAnalysis.resumeFile) errors.resumeFile = 'Please upload/select a resume file';
+      if (!currentProfile.resumeAnalysis.resumeFile && !user?.resume_url) errors.resumeFile = 'Please upload/select a resume file';
     }
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -779,8 +886,8 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             parseTime: resData.parse_time || 'Parsed just now',
             score: resData.score ?? 0,
             scoreText: resData.score_text || 'Resume parsed successfully.',
-
             scoreBreakdown: resData.score_breakdown || {},
+            diagnostics: resData.diagnostics || {},
             extractedData: {
               projects: extData.projects || [],
               rawProjects: extData.raw_projects || [],
@@ -793,6 +900,8 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
               achievements: extData.achievements || [],
               links: extData.links || {},
             },
+            roleFit: resData.role_fit,
+            skillsetValue: resData.skillsetu_value,
           },
         }));
 
@@ -2668,262 +2777,189 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     }
   };
 
-  if (isViewingOnePageProfile || currentProfile.verified) {
-    const rawData = currentProfile.resumeAnalysis?.extractedData || {};
-    const linksData = rawData.links || {};
-    const linkedinLink = currentProfile.githubLinks?.linkedinUrl || user?.linkedin_url || linksData.linkedin || '';
-    const portfolioLink = currentProfile.githubLinks?.portfolioUrl || user?.portfolio_url || linksData.portfolio || '';
-    const githubUserId = currentProfile.githubLinks?.githubUsername || user?.github_user_id || linksData.github || '';
-
-    // Skills list from normalized skills / DB
-    const skillsList = (currentProfile.resumeAnalysis?.extractedData?.coreTechnologies?.length > 0)
-      ? currentProfile.resumeAnalysis.extractedData.coreTechnologies
-      : (user?.skills?.length > 0 ? user.skills : ['React Native', 'Python', 'FastAPI']);
-
-    // GitHub repositories list
-    const reposList = currentProfile.githubLinks?.repositories || [];
+  if (isViewingOnePageProfile) {
+    const handleReanalyzeCV = async () => {
+      setIsReanalyzingResume(true);
+      try {
+        if (user?.email) {
+          const res = await fetch('http://127.0.0.1:8000/api/v1/student/reanalyze-resume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: user.email.trim() }),
+          });
+          const resData = await res.json();
+          if (res.ok && resData.status === 'success') {
+            const extData = resData.extracted_data || {};
+            setProfileData(prev => ({
+              ...prev,
+              resumeAnalysis: {
+                ...prev.resumeAnalysis,
+                resumeFile: resData.resume_file || prev.resumeAnalysis?.resumeFile,
+                parseTime: resData.parse_time || prev.resumeAnalysis?.parseTime,
+                score: typeof resData.score === 'number' ? resData.score : (resData.resume_score ?? prev.resumeAnalysis?.score),
+                scoreText: resData.score_text || prev.resumeAnalysis?.scoreText,
+                scoreBreakdown: resData.score_breakdown || prev.resumeAnalysis?.scoreBreakdown,
+                diagnostics: resData.diagnostics || prev.resumeAnalysis?.diagnostics,
+                extractedData: {
+                  ...prev.resumeAnalysis?.extractedData,
+                  ...extData,
+                },
+                roleFit: resData.role_fit || prev.resumeAnalysis?.roleFit,
+                skillsetValue: resData.skillsetu_value || prev.resumeAnalysis?.skillsetValue,
+              },
+            }));
+            if (updateUser) {
+              updateUser({
+                ...user,
+                resume_score: typeof resData.score === 'number' ? resData.score : user.resume_score,
+              });
+            }
+            alert('AI Pre-Analysis & ATS calibration refreshed from latest student credentials.');
+          } else {
+            alert(resData.detail || 'Could not re-analyze resume. Please ensure a CV is uploaded.');
+          }
+        }
+      } catch (err) {
+        console.error('Error reanalyzing CV:', err);
+        alert('Network error while re-analyzing CV. Please try again.');
+      } finally {
+        setIsReanalyzingResume(false);
+      }
+    };
 
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Top Header Card */}
-        <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, marginBottom: 24, borderColor: '#E2E8F0', borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8 }}>
-          <View style={{ flexDirection: isTablet ? 'row' : 'column', justifyContent: 'space-between', alignItems: isTablet ? 'center' : 'flex-start', gap: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-              {(currentProfile.personalInfo?.profileImage || user?.profile_image) ? (
-                <Image
-                  source={{ uri: currentProfile.personalInfo?.profileImage || user?.profile_image }}
-                  style={{ width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: COLORS.teal }}
-                />
-              ) : (
-                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.teal, justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 24, fontWeight: '700', color: '#FFFFFF' }}>
-                    {(currentProfile.personalInfo?.fullName || user?.name || 'A')[0].toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 22, fontWeight: '700', color: COLORS.navy }}>
-                    {currentProfile.personalInfo?.fullName || user?.name || 'Aryan Bhoge'}
-                  </Text>
-                  <View style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>✓ VERIFIED</Text>
-                  </View>
-                </View>
-                <Text style={{ fontSize: 14, color: '#64748B', marginTop: 2 }}>
-                  {currentProfile.careerGoals?.targetCareer || user?.headline || 'Senior Frontend Engineer'} • {currentProfile.personalInfo?.location || user?.location || 'Wardha, India'}
-                </Text>
-              </View>
-            </View>
+      <View style={{ flex: 1, backgroundColor: CLAY_COLORS.canvas, minHeight: '100%' }}>
+        {/* Ambient Animated Blob Background */}
+        <AmbientBackground />
 
-            <View style={{ flexDirection: 'row', gap: 10, alignSelf: isTablet ? 'center' : 'stretch' }}>
-              <Pressable
-                style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, flex: 1, alignItems: 'center' }}
-                onPress={() => setIsViewingOnePageProfile(false)}
-              >
-                <Text style={{ color: COLORS.navy, fontWeight: '600', fontSize: 13 }}>✏️ Edit Profile</Text>
-              </Pressable>
-              <Pressable
-                style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, flex: 1, alignItems: 'center' }}
-                onPress={() => alert('Profile link copied to clipboard!')}
-              >
-                <Text style={{ color: COLORS.navy, fontWeight: '600', fontSize: 13 }}>🔗 Share Profile</Text>
-              </Pressable>
-              <Pressable
-                style={{ backgroundColor: COLORS.teal, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, flex: 1, alignItems: 'center' }}
-                onPress={() => alert('Downloading verified skill report...')}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }}>📥 Download Report</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
+        <ScrollView
+          style={{ flex: 1, backgroundColor: 'transparent' }}
+          contentContainerStyle={{
+            paddingHorizontal: isWide ? 36 : (isTablet ? 24 : 16),
+            paddingTop: 24,
+            paddingBottom: 48,
+            maxWidth: 1440,
+            width: '100%',
+            alignSelf: 'center',
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Top Breadcrumbs & Header Actions */}
+          <ProfileHeaderNav
+            isVerified={currentProfile.verified}
+            onEditProfile={() => {
+              setActiveStep(1);
+              setIsViewingOnePageProfile(false);
+            }}
+            onShareProfile={() => setShowShareModal(true)}
+            onDownloadReport={() => setShowDownloadModal(true)}
+            isDownloading={isDownloadingReport}
+          />
 
-        {/* Dashboard Grid */}
-        <View style={{ flexDirection: isWide ? 'row' : 'column', gap: 24 }}>
-          {/* Left Column (Main Content) */}
-          <View style={{ flex: isWide ? 2 : 1, gap: 24 }}>
-            
-            {/* Verified Skill Proofs Card */}
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#E2E8F0' }}>
-              <Text style={{ fontSize: 17, fontWeight: '700', color: COLORS.navy, marginBottom: 4 }}>Verified Skill Proofs</Text>
-              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>ESCO Canonical Skill Taxonomies with Evidence Verification</Text>
+          {/* Student Profile Hero Card */}
+          <ProfileHero
+            user={user}
+            profileData={currentProfile}
+            onEditProfile={() => {
+              setActiveStep(1);
+              setIsViewingOnePageProfile(false);
+            }}
+            onShareProfile={() => setShowShareModal(true)}
+            onDownloadReport={() => setShowDownloadModal(true)}
+            isDownloading={isDownloadingReport}
+          />
+
+          {/* AI Pre-Analysis & Resume Diagnostics */}
+          <AIPreAnalysisCard
+            resumeAnalysis={currentProfile.resumeAnalysis}
+            user={user}
+            onReanalyze={handleReanalyzeCV}
+            onViewAtsBreakdown={() => setShowAtsModal(true)}
+            isReanalyzing={isReanalyzingResume}
+          />
+
+          {/* Main 2-Column Responsive Dashboard Grid */}
+          <View
+            style={{
+              flexDirection: isWide ? 'row' : 'column',
+              gap: 20,
+              alignItems: 'flex-start',
+            }}
+          >
+            {/* Left Column (Primary Evidence - 1.6fr) */}
+            <View style={{ flex: isWide ? 1.6 : 1, width: '100%', gap: 20 }}>
+              {/* 1. Cryptographic Matrix: Verified Skill Proofs & Readiness */}
               
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {skillsList.map((skill, idx) => (
-                  <View key={idx} style={{ backgroundColor: '#F0FDFA', borderColor: '#CCFBF1', borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.teal }}>{skill}</Text>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0D9488' }}>90%</Text>
-                  </View>
-                ))}
-              </View>
+
+
+              <VerifiedSkillProofsCard
+                profileData={currentProfile}
+                user={user}
+              />
+
+              {/* 2. Open Source Codebases: Public GitHub Repositories */}
+              <GitHubRepositoriesCard
+                githubLinks={currentProfile.githubLinks}
+                user={user}
+              />
             </View>
 
-            {/* Public GitHub Repositories Card */}
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#E2E8F0' }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ fontSize: 17, fontWeight: '700', color: COLORS.navy }}>Public GitHub Repositories</Text>
-                {currentProfile.githubLinks?.githubConnected ? (
-                  <Text style={{ fontSize: 12, color: '#059669', fontWeight: '700' }}>● OAuth Connected</Text>
-                ) : (
-                  <Text style={{ fontSize: 12, color: '#94A3B8' }}>○ Disconnected</Text>
-                )}
-              </View>
+            {/* Right Column (Career, Academic & Professional - 1fr) */}
+            <View style={{ flex: isWide ? 1 : 1, width: '100%', gap: 20, minWidth: isWide ? 330 : '100%' }}>
+             
 
-              {currentProfile.githubLinks?.githubConnected && reposList.length > 0 ? (
-                <View style={{ gap: 12 }}>
-                  {reposList.slice(0, 4).map((repo, rIdx) => (
-                    <View key={rIdx} style={{ padding: 16, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.navy }}>📦 {repo.name}</Text>
-                        <Text style={{ fontSize: 12, color: '#64748B' }}>Updated {repo.updated_at ? new Date(repo.updated_at).toLocaleDateString() : 'recently'}</Text>
-                      </View>
-                      <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>{repo.description || 'Public repository code evidence for technical verification.'}</Text>
-                      
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
-                        {repo.language && (
-                          <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#0369A1' }}>{repo.language}</Text>
-                          </View>
-                        )}
-                        <Text style={{ fontSize: 12, color: '#64748B' }}>⭐ {repo.stargazers_count || 0} stars</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              ) : currentProfile.githubLinks?.githubConnected ? (
-                <View style={{ padding: 14, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.navy }}>GitHub Account Linked</Text>
-                  <Text style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>Username: @{currentProfile.githubLinks.githubUsername || user?.github_user_id || 'connected'}</Text>
-                </View>
-              ) : (
-                <Text style={{ fontSize: 13, color: '#64748B' }}>No GitHub repositories linked yet. Authorize GitHub in profile setup to attach live repository commit evidence.</Text>
-              )}
-            </View>
+              {/* 1. Active Applications Pipeline */}
+              <ActiveApplicationsCard
+                applications={studentApplications}
+                onViewApplications={() => alert('Navigating to Active Applications Pipeline...')}
+              />
 
-            {/* AI Pre-Analysis & Resume Score Card */}
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#E2E8F0' }}>
-              <Text style={{ fontSize: 17, fontWeight: '700', color: COLORS.navy, marginBottom: 16 }}>AI Pre-Analysis & Resume Score</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
-                {/* Score Progress Ring */}
-                {(() => {
-                  const scoreVal = currentProfile.resumeAnalysis?.score || user?.resume_score || 39;
-                  const deg = Math.round((scoreVal / 100) * 360);
-                  const isWeb = Platform.OS === 'web';
-                  const circleBg = isWeb 
-                    ? `conic-gradient(${COLORS.teal} 0deg ${deg}deg, #E2E8F0 ${deg}deg 360deg)`
-                    : COLORS.teal;
+              {/* 2. Academic Credentials & Cryptographic Hash */}
+              <AcademicCredentialsCard
+                education={currentProfile.education}
+                user={user}
+              />
 
-                  return (
-                    <View style={{
-                      width: 96,
-                      height: 96,
-                      borderRadius: 48,
-                      justify: 'center',
-                      alignItems: 'center',
-                      background: circleBg,
-                      backgroundColor: circleBg,
-                      padding: 6,
-                    }}>
-                      <View style={{
-                        width: 84,
-                        height: 84,
-                        borderRadius: 42,
-                        backgroundColor: '#F0FDFA',
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                      }}>
-                        <Text style={{ fontSize: 26, fontWeight: '800', color: COLORS.teal }}>{scoreVal}</Text>
-                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>/ 100</Text>
-                      </View>
-                    </View>
-                  );
-                })()}
-                
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.navy }}>
-                    {currentProfile.resumeAnalysis?.scoreText || 'Strong technical alignment. Adding more measurable metrics to projects could increase impact.'}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 6 }}>
-                    Overall Readiness score derived from ESCO skill completeness, experience quality, and academic credentials.
-                  </Text>
-                </View>
-              </View>
+              {/* 3. Verified Destinations & Professional Links */}
+              <ProfessionalLinksCard
+                githubLinks={currentProfile.githubLinks}
+                user={user}
+              />
             </View>
           </View>
 
-          {/* Right Column (Sidebar Cards) */}
-          <View style={{ flex: isWide ? 1 : 1, gap: 24 }}>
-            
-            {/* Academic Credentials Card */}
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.navy, marginBottom: 12 }}>Academic Credentials</Text>
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, color: '#64748B' }}>Degree</Text>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.navy }}>
-                  {currentProfile.education?.list?.[0]?.degree || user?.degree || 'Bachelor of Technology (B.Tech)'}
-                </Text>
-                <Text style={{ fontSize: 13, color: '#64748B' }}>
-                  {currentProfile.education?.list?.[0]?.university || user?.university || 'Sanjay Ghodawat University'}
-                </Text>
-                <View style={{ backgroundColor: '#F1F5F9', padding: 10, borderRadius: 8, marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.navy }}>
-                    🎓 CGPA: {currentProfile.education?.list?.[0]?.cgpa || user?.cgpa_or_percentage || '7.05 / 10.0'}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: '#059669', fontWeight: '700' }}>✓ Verified</Text>
-                </View>
-              </View>
-            </View>
+          {/* Footer */}
+          <ProfileFooter />
+        </ScrollView>
 
-            {/* Professional Links Card */}
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.navy, marginBottom: 12 }}>Professional Links</Text>
-              <View style={{ gap: 10 }}>
-                {linkedinLink ? (
-                  <Pressable style={{ padding: 10, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontSize: 13, color: COLORS.teal, fontWeight: '600' }}>💼 LinkedIn: {linkedinLink}</Text>
-                  </Pressable>
-                ) : (
-                  <Text style={{ fontSize: 13, color: '#94A3B8' }}>LinkedIn: Not provided</Text>
-                )}
+        {/* Modals */}
+        <EditProfileModal
+          visible={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          profileData={currentProfile}
+          setProfileData={setProfileData}
+          user={user}
+          updateUser={updateUser}
+        />
 
-                {portfolioLink ? (
-                  <Pressable style={{ padding: 10, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontSize: 13, color: COLORS.teal, fontWeight: '600' }}>🌐 Portfolio: {portfolioLink}</Text>
-                  </Pressable>
-                ) : (
-                  <Text style={{ fontSize: 13, color: '#94A3B8' }}>Portfolio: Not provided</Text>
-                )}
+        <ShareProfileModal
+          visible={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          profileUrl={Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/dossier/${user?.id || 'aryan-bhoge'}` : 'https://skillsetu.com/dossier/aryan-bhoge-v6'}
+        />
 
-                {githubUserId ? (
-                  <Pressable style={{ padding: 10, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontSize: 13, color: COLORS.navy, fontWeight: '600' }}>🐙 GitHub: @{githubUserId}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
+        <DownloadReportModal
+          visible={showDownloadModal}
+          onClose={() => setShowDownloadModal(false)}
+          studentName={currentProfile.personalInfo?.fullName || user?.name || 'Aryan Bhoge'}
+        />
 
-            {/* Career Goal Alignment Card */}
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.navy, marginBottom: 12 }}>Career Goal Alignment</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.teal }}>
-                Target: {currentProfile.careerGoals?.targetCareer || user?.headline || 'Senior Frontend Engineer'}
-              </Text>
-              
-              <View style={{ marginTop: 12, gap: 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 12, color: '#64748B' }}>Overall Fit Match</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.navy }}>88%</Text>
-                </View>
-                <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
-                  <View style={{ height: '100%', width: '88%', backgroundColor: COLORS.teal, borderRadius: 3 }} />
-                </View>
-              </View>
-            </View>
-
-          </View>
-        </View>
-      </ScrollView>
+        <ATSBreakdownModal
+          visible={showAtsModal}
+          onClose={() => setShowAtsModal(false)}
+          resumeAnalysis={currentProfile.resumeAnalysis}
+        />
+      </View>
     );
   }
 
@@ -2944,6 +2980,14 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
                 : 'Complete the 6 simple steps below to unlock matches and get verified by our AI agent.'}
             </Text>
           </View>
+          {currentProfile.verified && (
+            <Pressable
+              style={styles.cancelEditBtn}
+              onPress={() => setIsViewingOnePageProfile(true)}
+            >
+              <Text style={styles.cancelEditBtnText}>✕ Exit to Profile</Text>
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -3088,6 +3132,20 @@ const styles = StyleSheet.create({
     color: COLORS.greenLight,
     marginTop: 6,
     lineHeight: 18,
+  },
+  cancelEditBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginLeft: 12,
+  },
+  cancelEditBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   // Stepper tracker
   stepperContainer: {

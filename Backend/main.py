@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
-from app.routers import student, recruiter, admin, taxonomy, github, courses, learning_paths, skill_evidence, mentor, internships, scholarships
+from app.routers import student, recruiter, admin, taxonomy, github, courses, learning_paths, skill_evidence, mentor, internships, scholarships, assessment
 from app import models
 from app.services.init_db_service import init_system_on_startup
 
@@ -38,6 +38,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Ensure uploads directory exists and mount static files
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("uploads/resumes", exist_ok=True)
+os.makedirs("uploads/marksheets", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 app.include_router(student.router, prefix=f"{settings.API_V1_STR}/student", tags=["Student"])
 app.include_router(mentor.router, prefix=f"{settings.API_V1_STR}/mentor", tags=["Personal AI Career Mentor"])
 app.include_router(skill_evidence.router, prefix=f"{settings.API_V1_STR}/student/skill-evidence", tags=["Skill Evidence"])
@@ -49,6 +58,7 @@ app.include_router(courses.router, prefix=f"{settings.API_V1_STR}/courses", tags
 app.include_router(learning_paths.router, prefix=f"{settings.API_V1_STR}/learning-paths", tags=["Learning Paths"])
 app.include_router(internships.router, prefix=f"{settings.API_V1_STR}/internships", tags=["Internships"])
 app.include_router(scholarships.router, prefix=f"{settings.API_V1_STR}/scholarships", tags=["Scholarships"])
+app.include_router(assessment.router, prefix=f"{settings.API_V1_STR}", tags=["AI Assessment System"])
 
 @app.get("/")
 def root():

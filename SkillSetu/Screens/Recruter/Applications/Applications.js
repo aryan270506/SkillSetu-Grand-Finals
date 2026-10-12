@@ -1,6 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
+  Image,
+  Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -10,6 +14,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { recruiterService } from '../services/recruiterService';
+import CandidateEvaluationModal from '../Internship/CandidateEvaluationModal';
 
 const COLORS = {
   bg: '#F8FAFC',
@@ -31,7 +37,54 @@ const COLORS = {
   redPillBg: '#FEE2E2',
   redPillText: '#DC2626',
   grayBg: '#F1F5F9',
+  purplePillBg: '#F3E8FF',
+  purplePillText: '#7E22CE',
 };
+
+function getStatusStyle(candOrStatus) {
+  if (typeof candOrStatus === 'object' && candOrStatus !== null) {
+    if (candOrStatus.statusBg && candOrStatus.statusText && candOrStatus.step_badge) {
+      return {
+        bg: candOrStatus.statusBg,
+        text: candOrStatus.statusText,
+        label: candOrStatus.step_badge || candOrStatus.status || 'Applied',
+      };
+    }
+    if (candOrStatus.raw_status === 'SHORTLISTED' && candOrStatus.current_round_name) {
+      return {
+        bg: '#EDE9FE',
+        text: '#6D28D9',
+        label: candOrStatus.current_round_index
+          ? `⚡ R${candOrStatus.current_round_index}: ${candOrStatus.current_round_name}`
+          : `⚡ ${candOrStatus.current_round_name}`,
+      };
+    }
+  }
+
+  const rawStr = typeof candOrStatus === 'string' ? candOrStatus : (candOrStatus?.status || candOrStatus?.raw_status || '');
+  const norm = (rawStr || '').toUpperCase();
+
+  if (norm === 'SELECTED' || norm === 'HIRED' || norm.includes('SELECTED')) {
+    return { bg: COLORS.greenPillBg, text: COLORS.greenPillText, label: '★ Selected' };
+  }
+  if (norm.startsWith('ROUND') || norm.includes('ASSESSMENT') || norm.includes('INTERVIEW')) {
+    return { bg: '#EDE9FE', text: '#6D28D9', label: `⚡ ${rawStr}` };
+  }
+  if (norm === 'SHORTLISTED') {
+    return { bg: COLORS.bluePillBg, text: COLORS.bluePillText, label: 'Shortlisted' };
+  }
+  if (norm === 'UNDER_REVIEW' || norm === 'UNDER REVIEW') {
+    return { bg: COLORS.orangePillBg, text: COLORS.orangePillText, label: 'Under Review' };
+  }
+  if (norm === 'INTERVIEW' || norm === 'INTERVIEW_SCHEDULED') {
+    return { bg: COLORS.purplePillBg, text: COLORS.purplePillText, label: 'Interview' };
+  }
+  if (norm === 'REJECTED' || norm === 'NOT_SELECTED') {
+    return { bg: COLORS.redPillBg, text: COLORS.redPillText, label: 'Rejected' };
+  }
+  return { bg: '#F1F5F9', text: '#475569', label: 'Applied' };
+}
+
 
 function HoverCard({ children, style, hoverScale = 1.02, onPress }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -72,132 +125,409 @@ function HoverCard({ children, style, hoverScale = 1.02, onPress }) {
   );
 }
 
-const APPLICANTS_LIST = [
-  {
-    id: 'APP-01',
-    name: 'Rahul Sharma',
-    degree: 'B.Tech CSE • IIT Roorkee \'27',
-    college: 'IIT Roorkee',
-    internship: 'Backend Development',
-    dept: 'TechNova Eng',
-    matchPct: '94%',
-    matchLabel: 'High',
-    auditScore: '✓ Passed (93/100)',
-    auditNote: 'Strong Systems project',
-    appliedTime: 'Today, 10:15 AM',
-    status: 'Shortlisted',
-    statusBg: '#E0F2FE',
-    statusText: '#0284C7',
-    avatar: 'RS',
-    cgpa: '8.9/10',
-    selected: true,
-  },
-  {
-    id: 'APP-02',
-    name: 'Priya Patil',
-    degree: 'B.Tech IT • VJTI Mumbai \'27',
-    college: 'VJTI Mumbai',
-    internship: 'AI / ML Intern',
-    dept: 'Applied AI Lab',
-    matchPct: '91%',
-    matchLabel: 'High',
-    auditScore: '✓ Passed (88/100)',
-    auditNote: 'Good NLP models',
-    appliedTime: 'Today, 08:30 AM',
-    status: 'Under Review',
-    statusBg: '#FEF3C7',
-    statusText: '#D97706',
-    avatar: 'PP',
-    cgpa: '9.1/10',
-    selected: false,
-  },
-  {
-    id: 'APP-03',
-    name: 'Aditya Singh',
-    degree: 'B.Tech CSE • BITS Pilani \'27',
-    college: 'BITS Pilani',
-    internship: 'Backend Development',
-    dept: 'Platform Infra',
-    matchPct: '87%',
-    matchLabel: 'Good',
-    auditScore: '⚠️ Review (76/100)',
-    auditNote: 'Docker unverified',
-    appliedTime: 'Yesterday',
-    status: 'New',
-    statusBg: '#DCFCE7',
-    statusText: '#15803D',
-    avatar: 'AS',
-    cgpa: '8.4/10',
-    selected: false,
-  },
-  {
-    id: 'APP-04',
-    name: 'Sneha Joshi',
-    degree: 'B.Tech CSE • COEP Pune \'27',
-    college: 'COEP Pune',
-    internship: 'Frontend Development',
-    dept: 'Web Experience',
-    matchPct: '83%',
-    matchLabel: 'Good',
-    auditScore: '✓ Passed (84/100)',
-    auditNote: 'React 18 clean code',
-    appliedTime: 'Yesterday',
-    status: 'Interview',
-    statusBg: '#E0F2FE',
-    statusText: '#0284C7',
-    avatar: 'SJ',
-    cgpa: '8.7/10',
-    selected: true,
-  },
-  {
-    id: 'APP-05',
-    name: 'Rohan Verma',
-    degree: 'B.Tech ECE • NIT Trichy \'26',
-    college: 'NIT Trichy',
-    internship: 'Backend Development',
-    dept: 'TechNova Eng',
-    matchPct: '66%',
-    matchLabel: '< 70%',
-    auditScore: '🚩 Flagged (42/100)',
-    auditNote: 'Missing SQL & Docker proof',
-    appliedTime: '2 days ago',
-    status: 'Under Review',
-    statusBg: '#FEF3C7',
-    statusText: '#D97706',
-    avatar: 'RV',
-    cgpa: '7.2/10',
-    selected: false,
-  },
-];
-
-export default function Applications() {
+export default function Applications({ user }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1080;
+  const token = user?.token || user?.access_token || '';
 
-  const [applicants, setApplicants] = useState(APPLICANTS_LIST);
-  const [selectedApplicantId, setSelectedApplicantId] = useState('APP-01');
-  const [recruiterNotes, setRecruiterNotes] = useState(
-    'Candidate has strong database indexing projects. Proceed to Round 1 technical interview.'
-  );
+  // 1. Core State
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [summary, setSummary] = useState({
+    total: 0,
+    new: 0,
+    under_review: 0,
+    shortlisted: 0,
+    selected: 0,
+    interview: 0,
+    active_internships_count: 0,
+    funnel: {
+      applied: 0,
+      applied_pct: 100,
+      eligible: 0,
+      eligible_pct: 0,
+      under_review: 0,
+      under_review_pct: 0,
+      shortlisted: 0,
+      shortlisted_pct: 0,
+      interview: 0,
+      interview_pct: 0,
+      selected: 0,
+      selected_pct: 0,
+    },
+  });
+
+  const [applications, setApplications] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({
+    internships: [],
+    statuses: [],
+    degrees: [],
+    branches: [],
+  });
+
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    page_size: 20,
+    total_pages: 1,
+  });
+
+  // 2. Filters & Search State
+  const [selectedInternship, setSelectedInternship] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedScreening, setSelectedScreening] = useState('');
+  const [selectedMinScore, setSelectedMinScore] = useState('');
+  const [selectedDegree, setSelectedDegree] = useState('');
+  const [selectedDateRange, setSelectedDateRange] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('match_score_desc');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Dropdown open toggles
+  const [openDropdown, setOpenDropdown] = useState(null);
+
+  // 3. Selection & Inspection Drawer State
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedApplicantId, setSelectedApplicantId] = useState(null);
+  const [candidateDetail, setCandidateDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [recruiterNotes, setRecruiterNotes] = useState('');
   const [noteSavedMsg, setNoteSavedMsg] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const selectedCandidate =
-    applicants.find((a) => a.id === selectedApplicantId) || applicants[0];
+  // Candidate Evaluation Modal State
+  const [evalModalVisible, setEvalModalVisible] = useState(false);
+  const [evalModalAppId, setEvalModalAppId] = useState(null);
+  const [evalModalInternshipId, setEvalModalInternshipId] = useState(null);
 
-  const selectedCount = applicants.filter((a) => a.selected).length;
+  // Bulk Progression State
+  const [showBulkProgressionConfirm, setShowBulkProgressionConfirm] = useState(false);
+  const [bulkProgressionAction, setBulkProgressionAction] = useState('SELECT_FOR_NEXT_ROUND');
+  const [topNMenuOpen, setTopNMenuOpen] = useState(false);
 
+  // 4. Fetch Summary
+  const loadSummary = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await recruiterService.getApplicationsSummary(token);
+      if (data) {
+        setSummary(data);
+      }
+    } catch (err) {
+      console.warn('Error loading applications summary:', err);
+    }
+  }, [token]);
+
+  // 5. Fetch Applications List
+  const loadApplications = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = {
+        internship_id: selectedInternship || undefined,
+        status: selectedStatus || undefined,
+        screening_status: selectedScreening || undefined,
+        min_match_score: selectedMinScore ? Number(selectedMinScore) : undefined,
+        degree: selectedDegree || undefined,
+        date_range: selectedDateRange || undefined,
+        search: searchQuery.trim() || undefined,
+        sort_by: sortBy,
+        page: currentPage,
+        page_size: 20,
+      };
+
+      const res = await recruiterService.getApplications(token, params);
+      setApplications(res.items || []);
+      setPagination({
+        total: res.total || 0,
+        page: res.page || 1,
+        page_size: res.page_size || 20,
+        total_pages: res.total_pages || 1,
+      });
+
+      if (res.filter_options) {
+        setFilterOptions(res.filter_options);
+      }
+
+      // Auto-select first candidate if none is selected or previous selection is not in list
+      if (res.items && res.items.length > 0) {
+        setSelectedApplicantId((prev) => {
+          if (!prev || !res.items.some((item) => item.id === prev)) {
+            return res.items[0].id;
+          }
+          return prev;
+        });
+      } else {
+        setSelectedApplicantId(null);
+        setCandidateDetail(null);
+      }
+    } catch (err) {
+      console.error('Error fetching applications:', err);
+      setError(err.message || 'Unable to load applications');
+      setApplications([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    token,
+    selectedInternship,
+    selectedStatus,
+    selectedScreening,
+    selectedMinScore,
+    selectedDegree,
+    selectedDateRange,
+    searchQuery,
+    sortBy,
+    currentPage,
+  ]);
+
+  // 6. Fetch Single Candidate Inspection Detail
+  const loadCandidateDetail = useCallback(async (appId) => {
+    if (!token || !appId) return;
+    setDetailLoading(true);
+    try {
+      const detail = await recruiterService.getApplicationDetail(token, appId);
+      setCandidateDetail(detail);
+      setRecruiterNotes(detail?.recruiter_notes || '');
+    } catch (err) {
+      console.warn('Error loading candidate detail:', err);
+      setCandidateDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [token]);
+
+  // Initial & Filter change effects
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
+
+  useEffect(() => {
+    loadApplications();
+  }, [loadApplications]);
+
+  useEffect(() => {
+    if (selectedApplicantId) {
+      loadCandidateDetail(selectedApplicantId);
+    }
+  }, [selectedApplicantId, loadCandidateDetail]);
+
+  // Handle Multi-Select Checkbox
   const toggleSelectApplicant = (id) => {
-    setApplicants((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, selected: !item.selected } : item
-      )
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
-  const handleSaveNotes = () => {
-    setNoteSavedMsg('Note saved successfully!');
-    setTimeout(() => setNoteSavedMsg(''), 1500);
+  const toggleSelectAll = () => {
+    if (selectedIds.length === applications.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(applications.map((a) => a.id));
+    }
   };
+
+  // Handle Save Recruiter Notes
+  const handleSaveNotes = async () => {
+    if (!token || !selectedApplicantId) return;
+    try {
+      await recruiterService.updateApplicationNotes(token, selectedApplicantId, recruiterNotes);
+      setNoteSavedMsg('Note saved successfully!');
+      setTimeout(() => setNoteSavedMsg(''), 2000);
+      loadCandidateDetail(selectedApplicantId);
+    } catch (err) {
+      alert('Failed to save notes: ' + err.message);
+    }
+  };
+
+  // Handle Bulk Action (Shortlist, Review, Reject, Interview)
+  const handleBulkAction = async (action) => {
+    if (!token || selectedIds.length === 0) return;
+    setActionLoading(true);
+    try {
+      await recruiterService.bulkApplicationAction(token, selectedIds, action);
+      setSelectedIds([]);
+      await Promise.all([loadSummary(), loadApplications()]);
+      if (selectedApplicantId) {
+        loadCandidateDetail(selectedApplicantId);
+      }
+    } catch (err) {
+      alert(`Action failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Single Action from Drawer
+  const handleSingleAction = async (action) => {
+    if (!token || !selectedApplicantId) return;
+    setActionLoading(true);
+    try {
+      await recruiterService.bulkApplicationAction(token, [selectedApplicantId], action);
+      await Promise.all([loadSummary(), loadApplications()]);
+      loadCandidateDetail(selectedApplicantId);
+    } catch (err) {
+      alert(`Action failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Open Candidate Evaluation Modal
+  const handleOpenCandidateEvaluation = (appId, internshipId) => {
+    setEvalModalAppId(appId || selectedApplicantId);
+    setEvalModalInternshipId(
+      internshipId ||
+      candidateDetail?.internship?.id ||
+      selectedCandidateRow?.internship_id ||
+      selectedInternship
+    );
+    setEvalModalVisible(true);
+  };
+
+  // Select Top N candidates by authoritative ranking/match score
+  const handleSelectTopN = (n) => {
+    const topNIds = applications.slice(0, n).map((a) => a.id);
+    setSelectedIds(topNIds);
+    setTopNMenuOpen(false);
+  };
+
+  // Handle Single Candidate Progression
+  const handleProgressSingleCandidate = async (action, notes = '') => {
+    if (!token || !selectedApplicantId) return;
+    const internId =
+      candidateDetail?.internship?.id ||
+      selectedCandidateRow?.internship_id ||
+      selectedInternship;
+    if (!internId) {
+      alert('Internship context is required for round progression.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await recruiterService.progressCandidateRound(token, internId, selectedApplicantId, {
+        action,
+        notes,
+      });
+      alert(res.message || 'Candidate progression updated.');
+      await Promise.all([loadSummary(), loadApplications()]);
+      if (selectedApplicantId) {
+        loadCandidateDetail(selectedApplicantId);
+      }
+    } catch (err) {
+      alert(`Progression failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Bulk Progression Trigger
+  const handleTriggerBulkProgression = (action) => {
+    if (selectedIds.length === 0) {
+      alert('Please select at least one candidate.');
+      return;
+    }
+    setBulkProgressionAction(action);
+    setShowBulkProgressionConfirm(true);
+  };
+
+  // Handle Bulk Progression Confirmation
+  const handleConfirmBulkProgression = async () => {
+    if (!token || selectedIds.length === 0) return;
+    const firstSelected = applications.find((a) => selectedIds.includes(a.id));
+    const internId = firstSelected?.internship_id || selectedInternship;
+    if (!internId) {
+      alert('Internship context is required for bulk progression.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await recruiterService.bulkProgressRound(token, internId, {
+        action: bulkProgressionAction,
+        application_ids: selectedIds,
+      });
+      setShowBulkProgressionConfirm(false);
+      setSelectedIds([]);
+
+      if (res.progressed_count === 0 && res.errors && res.errors.length > 0) {
+        alert(`Bulk action could not be completed: ${res.errors[0].error}`);
+      } else if (res.errors && res.errors.length > 0) {
+        alert(`Successfully processed ${res.progressed_count} candidate(s). Note: ${res.errors[0].error}`);
+      } else {
+        alert(res.message || 'Bulk progression completed successfully.');
+      }
+
+      await Promise.all([loadSummary(), loadApplications()]);
+      if (selectedApplicantId) {
+        loadCandidateDetail(selectedApplicantId);
+      }
+    } catch (err) {
+      alert(`Bulk progression failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle CSV Export
+  const handleExportCSV = () => {
+    const query = new URLSearchParams();
+    if (selectedInternship) query.append('internship_id', selectedInternship);
+    if (selectedStatus) query.append('status', selectedStatus);
+    if (token) query.append('token', token);
+    const exportUrl = `http://127.0.0.1:8000/api/v1/recruiter/applications/export-csv?${query.toString()}`;
+    if (Platform.OS === 'web') {
+      window.open(exportUrl, '_blank');
+    } else {
+      Linking.openURL(exportUrl);
+    }
+  };
+
+  // Clear Filters
+  const handleClearFilters = () => {
+    setSelectedInternship('');
+    setSelectedStatus('');
+    setSelectedScreening('');
+    setSelectedMinScore('');
+    setSelectedDegree('');
+    setSelectedDateRange('');
+    setSearchQuery('');
+    setSortBy('match_score_desc');
+    setCurrentPage(1);
+  };
+
+  const selectedCount = selectedIds.length;
+  const selectedCandidateRow = applications.find((a) => a.id === selectedApplicantId);
+
+  // Derive active candidate data
+  const candName = candidateDetail?.student_name || selectedCandidateRow?.student_name || 'Candidate';
+  const candDegree = candidateDetail?.degree || selectedCandidateRow?.degree || '';
+  const candCollege = candidateDetail?.college || selectedCandidateRow?.college || '';
+  const candCgpa = candidateDetail?.cgpa || selectedCandidateRow?.cgpa || 'N/A';
+  const candProfileImg = candidateDetail?.profile_image || selectedCandidateRow?.profile_image;
+  const candAvatar = candidateDetail?.avatar || selectedCandidateRow?.avatar || (candName.substring(0, 2).toUpperCase());
+  const candStatus = candidateDetail?.status || selectedCandidateRow?.status || 'NEW';
+  const candStatusStyle = getStatusStyle(candidateDetail || selectedCandidateRow || candStatus);
+  const candMatchScore = candidateDetail?.match_score ?? selectedCandidateRow?.match_score ?? 0;
+  const candThreshold = candidateDetail?.threshold || selectedCandidateRow?.threshold || '80%';
+  const candEligibility = candidateDetail?.eligibility || selectedCandidateRow?.eligibility || 'NEEDS_DEVELOPMENT';
+  const isCandidateEligible = candEligibility === 'PASSED' || candEligibility === 'Passed';
+
+  // AI Screening data
+  const aiScreening = candidateDetail?.ai_screening;
+  const hasAiScreening = aiScreening && aiScreening.evaluated;
+
+  // Canonical Skills Breakdown
+  const canonicalSkills = candidateDetail?.canonical_skills || [];
+
+  // Verified Projects
+  const verifiedProjects = candidateDetail?.verified_projects || [];
+
+  // Resume info
+  const resumeInfo = candidateDetail?.resume;
+
+  // Timeline
+  const timelineEvents = candidateDetail?.timeline || [];
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.container}>
@@ -216,82 +546,86 @@ export default function Applications() {
         <View style={styles.headerRightActions}>
           <View style={styles.autoScreenBadge}>
             <View style={styles.greenDot} />
-            <Text style={styles.autoScreenText}>Auto-Screening Active</Text>
+            <Text style={styles.autoScreenText}>AI Screening Active</Text>
           </View>
-          <Pressable style={styles.exportBtn}>
-            <Text style={styles.exportBtnText}>📥 Export Applications ▾</Text>
+          <Pressable onPress={handleExportCSV} style={styles.exportBtn}>
+            <Text style={styles.exportBtnText}>📥 Export Applications CSV</Text>
           </Pressable>
         </View>
       </View>
 
       {/* 2. Top Summary Metric Cards (5 Cards) */}
       <View style={styles.metricsGrid}>
-        {/* Card 1 */}
+        {/* Card 1: Total Applications */}
         <HoverCard hoverScale={1.03} style={styles.metricCard}>
           <View style={styles.metricHeader}>
             <Text style={styles.metricLabel}>Total Applications</Text>
             <Text style={{ fontSize: 13 }}>📋</Text>
           </View>
-          <Text style={styles.metricValue}>186</Text>
-          <Text style={styles.metricSub}>Across 5 active internships</Text>
+          <Text style={styles.metricValue}>{summary.total}</Text>
+          <Text style={styles.metricSub}>
+            Across {summary.active_internships_count || 0} active internship{summary.active_internships_count === 1 ? '' : 's'}
+          </Text>
           <View style={[styles.pill, { backgroundColor: COLORS.greenPillBg }]}>
             <Text style={[styles.pillText, { color: COLORS.greenPillText }]}>
-              📈 +24%
+              Live Data
             </Text>
           </View>
         </HoverCard>
 
-        {/* Card 2 */}
+        {/* Card 2: New */}
         <HoverCard hoverScale={1.03} style={styles.metricCard}>
           <View style={styles.metricHeader}>
             <Text style={styles.metricLabel}>New</Text>
             <Text style={{ fontSize: 13 }}>📬</Text>
           </View>
-          <Text style={styles.metricValue}>42</Text>
+          <Text style={styles.metricValue}>{summary.new}</Text>
           <Text style={styles.metricSub}>Needs initial review</Text>
-          <View style={[styles.pill, { backgroundColor: COLORS.orangePillBg }]}>
-            <Text style={[styles.pillText, { color: COLORS.orangePillText }]}>
-              Action required
-            </Text>
-          </View>
+          {summary.new > 0 && (
+            <View style={[styles.pill, { backgroundColor: COLORS.orangePillBg }]}>
+              <Text style={[styles.pillText, { color: COLORS.orangePillText }]}>
+                Action required
+              </Text>
+            </View>
+          )}
         </HoverCard>
 
-        {/* Card 3 */}
+        {/* Card 3: Under Review */}
         <HoverCard hoverScale={1.03} style={styles.metricCard}>
           <View style={styles.metricHeader}>
             <Text style={styles.metricLabel}>Under Review</Text>
             <Text style={{ fontSize: 13 }}>👁️</Text>
           </View>
-          <Text style={styles.metricValue}>58</Text>
-          <Text style={styles.metricSub}>AI screening completed</Text>
+          <Text style={styles.metricValue}>{summary.under_review}</Text>
+          <Text style={styles.metricSub}>In evaluation & screening</Text>
         </HoverCard>
 
-        {/* Card 4 */}
+        {/* Card 4: Shortlisted */}
         <HoverCard hoverScale={1.03} style={styles.metricCard}>
           <View style={styles.metricHeader}>
             <Text style={styles.metricLabel}>Shortlisted</Text>
             <Text style={{ fontSize: 13 }}>⭐</Text>
           </View>
-          <Text style={styles.metricValue}>32</Text>
-          <Text style={styles.metricSub}>Ready for interview scheduling</Text>
+          <Text style={styles.metricValue}>{summary.shortlisted}</Text>
+          <Text style={styles.metricSub}>Ready for interview</Text>
           <View style={[styles.pill, { backgroundColor: COLORS.bluePillBg }]}>
             <Text style={[styles.pillText, { color: COLORS.bluePillText }]}>
-              17% of total
+              {summary.total > 0 ? ((summary.shortlisted / summary.total) * 100).toFixed(0) : 0}% of total
             </Text>
           </View>
         </HoverCard>
 
-        {/* Card 5 */}
+        {/* Card 5: Selected */}
         <HoverCard hoverScale={1.03} style={styles.metricCard}>
           <View style={styles.metricHeader}>
             <Text style={styles.metricLabel}>Selected</Text>
             <Text style={{ fontSize: 13 }}>🏆</Text>
           </View>
-          <Text style={styles.metricValue}>8</Text>
-          <Text style={styles.metricSub}>Offers accepted</Text>
-          <View style={[styles.pill, { backgroundColor: COLORS.bluePillBg }]}>
-            <Text style={[styles.pillText, { color: COLORS.bluePillText }]}>
-              4.3% Conv.
+          <Text style={styles.metricValue}>{summary.selected}</Text>
+          <Text style={styles.metricSub}>Offers accepted / hired</Text>
+          <View style={[styles.pill, { backgroundColor: COLORS.greenPillBg }]}>
+            <Text style={[styles.pillText, { color: COLORS.greenPillText }]}>
+              {summary.total > 0 ? ((summary.selected / summary.total) * 100).toFixed(1) : 0}% Conv.
             </Text>
           </View>
         </HoverCard>
@@ -306,87 +640,115 @@ export default function Applications() {
               Real-time student conversion through automated screening and evaluations
             </Text>
           </View>
-          <View style={styles.normalizedBadge}>
-            <Text style={styles.normalizedBadgeText}>● Normalized for 5 Active Openings</Text>
-          </View>
+         
         </View>
 
         <View style={styles.funnelStepsGrid}>
-          {/* Step 1 */}
+          {/* Step 1: Applied */}
           <View style={styles.funnelBox}>
             <View style={styles.funnelTop}>
               <Text style={styles.funnelStepTitle}>1. Applied</Text>
-              <Text style={styles.funnelPct}>100%</Text>
+              <Text style={styles.funnelPct}>{summary.funnel.applied_pct}%</Text>
             </View>
-            <Text style={styles.funnelNum}>186</Text>
+            <Text style={styles.funnelNum}>{summary.funnel.applied}</Text>
             <Text style={styles.funnelSub}>Gross applications</Text>
             <View style={styles.trackBar}>
-              <View style={[styles.fillBar, { width: '100%', backgroundColor: COLORS.primaryTeal }]} />
+              <View
+                style={[
+                  styles.fillBar,
+                  { width: `${Math.min(100, summary.funnel.applied_pct)}%`, backgroundColor: COLORS.primaryTeal },
+                ]}
+              />
             </View>
           </View>
 
-          {/* Step 2 */}
+          {/* Step 2: Eligible */}
           <View style={styles.funnelBox}>
             <View style={styles.funnelTop}>
               <Text style={styles.funnelStepTitle}>2. Eligible</Text>
-              <Text style={styles.funnelPct}>76.3%</Text>
+              <Text style={styles.funnelPct}>{summary.funnel.eligible_pct}%</Text>
             </View>
-            <Text style={styles.funnelNum}>142</Text>
+            <Text style={styles.funnelNum}>{summary.funnel.eligible}</Text>
             <Text style={styles.funnelSub}>Criteria verified</Text>
             <View style={styles.trackBar}>
-              <View style={[styles.fillBar, { width: '76%', backgroundColor: '#0D9488' }]} />
+              <View
+                style={[
+                  styles.fillBar,
+                  { width: `${Math.min(100, summary.funnel.eligible_pct)}%`, backgroundColor: '#0D9488' },
+                ]}
+              />
             </View>
           </View>
 
-          {/* Step 3 */}
+          {/* Step 3: Under Review */}
           <View style={styles.funnelBox}>
             <View style={styles.funnelTop}>
               <Text style={styles.funnelStepTitle}>3. Under Review</Text>
-              <Text style={styles.funnelPct}>31.2%</Text>
+              <Text style={styles.funnelPct}>{summary.funnel.under_review_pct}%</Text>
             </View>
-            <Text style={styles.funnelNum}>58</Text>
+            <Text style={styles.funnelNum}>{summary.funnel.under_review}</Text>
             <Text style={styles.funnelSub}>Skill screening</Text>
             <View style={styles.trackBar}>
-              <View style={[styles.fillBar, { width: '31%', backgroundColor: '#14B8A6' }]} />
+              <View
+                style={[
+                  styles.fillBar,
+                  { width: `${Math.min(100, summary.funnel.under_review_pct)}%`, backgroundColor: '#14B8A6' },
+                ]}
+              />
             </View>
           </View>
 
-          {/* Step 4 */}
+          {/* Step 4: Shortlisted */}
           <View style={styles.funnelBox}>
             <View style={styles.funnelTop}>
               <Text style={styles.funnelStepTitle}>4. Shortlisted</Text>
-              <Text style={styles.funnelPct}>17.2%</Text>
+              <Text style={styles.funnelPct}>{summary.funnel.shortlisted_pct}%</Text>
             </View>
-            <Text style={styles.funnelNum}>32</Text>
+            <Text style={styles.funnelNum}>{summary.funnel.shortlisted}</Text>
             <Text style={styles.funnelSub}>High confidence</Text>
             <View style={styles.trackBar}>
-              <View style={[styles.fillBar, { width: '17%', backgroundColor: '#5EEAD4' }]} />
+              <View
+                style={[
+                  styles.fillBar,
+                  { width: `${Math.min(100, summary.funnel.shortlisted_pct)}%`, backgroundColor: '#5EEAD4' },
+                ]}
+              />
             </View>
           </View>
 
-          {/* Step 5 */}
+          {/* Step 5: Interview */}
           <View style={styles.funnelBox}>
             <View style={styles.funnelTop}>
               <Text style={styles.funnelStepTitle}>5. Interview</Text>
-              <Text style={styles.funnelPct}>6.4%</Text>
+              <Text style={styles.funnelPct}>{summary.funnel.interview_pct}%</Text>
             </View>
-            <Text style={styles.funnelNum}>12</Text>
+            <Text style={styles.funnelNum}>{summary.funnel.interview}</Text>
             <Text style={styles.funnelSub}>Technical rounds</Text>
             <View style={styles.trackBar}>
-              <View style={[styles.fillBar, { width: '10%', backgroundColor: '#5EEAD4' }]} />
+              <View
+                style={[
+                  styles.fillBar,
+                  { width: `${Math.min(100, summary.funnel.interview_pct)}%`, backgroundColor: '#A78BFA' },
+                ]}
+              />
             </View>
           </View>
 
-          {/* Step 6 */}
+          {/* Step 6: Selected */}
           <View style={styles.funnelBox}>
             <View style={styles.funnelTop}>
               <Text style={styles.funnelStepTitle}>6. Selected</Text>
-              <Text style={styles.funnelPct}>4.3%</Text>
+              <Text style={styles.funnelPct}>{summary.funnel.selected_pct}%</Text>
             </View>
-            <Text style={styles.funnelNum}>8</Text>
+            <Text style={styles.funnelNum}>{summary.funnel.selected}</Text>
             <Text style={styles.funnelSub}>Accepted offers</Text>
             <View style={styles.trackBar}>
-              <View style={[styles.fillBar, { width: '6%', backgroundColor: '#5EEAD4' }]} />
+              <View
+                style={[
+                  styles.fillBar,
+                  { width: `${Math.min(100, summary.funnel.selected_pct)}%`, backgroundColor: '#34D399' },
+                ]}
+              />
             </View>
           </View>
         </View>
@@ -394,53 +756,302 @@ export default function Applications() {
 
       {/* 4. Search Controls & Filter Row */}
       <View style={styles.filterControlsBar}>
-        <View style={styles.filterDropBtn}>
-          <Text style={styles.filterDropText}>All Internships (5) ▾</Text>
+        {/* Search Input */}
+        <View style={styles.searchInputWrapper}>
+          <Text style={{ fontSize: 13 }}>🔍</Text>
+          <TextInput
+            placeholder="Search candidates, college, role..."
+            value={searchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              setCurrentPage(1);
+            }}
+            style={styles.searchInput}
+          />
+          {!!searchQuery && (
+            <Pressable onPress={() => setSearchQuery('')}>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted }}>✕</Text>
+            </Pressable>
+          )}
         </View>
-        <View style={styles.filterDropBtn}>
-          <Text style={styles.filterDropText}>All Statuses ▾</Text>
-        </View>
-        <View style={styles.filterDropBtn}>
-          <Text style={styles.filterDropText}>All Screening ▾</Text>
-        </View>
-        <View style={styles.filterDropBtn}>
-          <Text style={styles.filterDropText}>Skill Match: 80%+ ▾</Text>
-        </View>
-        <View style={styles.filterDropBtn}>
-          <Text style={styles.filterDropText}>Degree & Branch ▾</Text>
-        </View>
-        <View style={styles.filterDropBtn}>
-          <Text style={styles.filterDropText}>Last 30 Days ▾</Text>
-        </View>
-        <Pressable>
-          <Text style={styles.clearFiltersText}>✕ Clear Filters</Text>
+
+        {/* Internship Filter */}
+        <Pressable
+          onPress={() => setOpenDropdown(openDropdown === 'internship' ? null : 'internship')}
+          style={[styles.filterDropBtn, selectedInternship && styles.filterDropBtnActive]}
+        >
+          <Text style={[styles.filterDropText, selectedInternship && styles.filterDropTextActive]}>
+            {selectedInternship
+              ? filterOptions.internships.find((i) => i.id === selectedInternship)?.title || 'Internship'
+              : 'All Internships ▾'}
+          </Text>
         </Pressable>
+
+        {/* Status Filter */}
+        <Pressable
+          onPress={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
+          style={[styles.filterDropBtn, selectedStatus && styles.filterDropBtnActive]}
+        >
+          <Text style={[styles.filterDropText, selectedStatus && styles.filterDropTextActive]}>
+            {selectedStatus ? `Status: ${selectedStatus} ▾` : 'All Statuses ▾'}
+          </Text>
+        </Pressable>
+
+        {/* Skill Match Filter */}
+        <Pressable
+          onPress={() => setOpenDropdown(openDropdown === 'match' ? null : 'match')}
+          style={[styles.filterDropBtn, selectedMinScore && styles.filterDropBtnActive]}
+        >
+          <Text style={[styles.filterDropText, selectedMinScore && styles.filterDropTextActive]}>
+            {selectedMinScore ? `Match: ${selectedMinScore}%+ ▾` : 'Skill Match ▾'}
+          </Text>
+        </Pressable>
+
+        {/* Degree Filter */}
+        <Pressable
+          onPress={() => setOpenDropdown(openDropdown === 'degree' ? null : 'degree')}
+          style={[styles.filterDropBtn, selectedDegree && styles.filterDropBtnActive]}
+        >
+          <Text style={[styles.filterDropText, selectedDegree && styles.filterDropTextActive]}>
+            {selectedDegree ? `Degree: ${selectedDegree} ▾` : 'Degree & Branch ▾'}
+          </Text>
+        </Pressable>
+
+        {/* Date Filter */}
+        <Pressable
+          onPress={() => setOpenDropdown(openDropdown === 'date' ? null : 'date')}
+          style={[styles.filterDropBtn, selectedDateRange && styles.filterDropBtnActive]}
+        >
+          <Text style={[styles.filterDropText, selectedDateRange && styles.filterDropTextActive]}>
+            {selectedDateRange === '7d'
+              ? 'Last 7 Days ▾'
+              : selectedDateRange === '30d'
+              ? 'Last 30 Days ▾'
+              : selectedDateRange === '90d'
+              ? 'Last 90 Days ▾'
+              : 'All Time ▾'}
+          </Text>
+        </Pressable>
+
+        {/* Clear Filters Button */}
+        {(selectedInternship || selectedStatus || selectedMinScore || selectedDegree || selectedDateRange || searchQuery) && (
+          <Pressable onPress={handleClearFilters}>
+            <Text style={styles.clearFiltersText}>✕ Clear Filters</Text>
+          </Pressable>
+        )}
       </View>
+
+      {/* Filter Dropdown Overlays / Modals */}
+      {openDropdown === 'internship' && (
+        <View style={styles.dropdownMenu}>
+          <Pressable
+            onPress={() => {
+              setSelectedInternship('');
+              setOpenDropdown(null);
+            }}
+            style={styles.dropdownOption}
+          >
+            <Text style={[styles.dropdownOptionText, !selectedInternship && styles.dropdownOptionSelected]}>
+              All Internships ({filterOptions.internships.length})
+            </Text>
+          </Pressable>
+          {filterOptions.internships.map((int) => (
+            <Pressable
+              key={int.id}
+              onPress={() => {
+                setSelectedInternship(int.id);
+                setOpenDropdown(null);
+                setCurrentPage(1);
+              }}
+              style={styles.dropdownOption}
+            >
+              <Text
+                style={[
+                  styles.dropdownOptionText,
+                  selectedInternship === int.id && styles.dropdownOptionSelected,
+                ]}
+              >
+                {int.title}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {openDropdown === 'status' && (
+        <View style={styles.dropdownMenu}>
+          {['', 'NEW', 'UNDER_REVIEW', 'SHORTLISTED', 'INTERVIEW', 'SELECTED', 'REJECTED'].map((st) => (
+            <Pressable
+              key={st || 'ALL'}
+              onPress={() => {
+                setSelectedStatus(st);
+                setOpenDropdown(null);
+                setCurrentPage(1);
+              }}
+              style={styles.dropdownOption}
+            >
+              <Text
+                style={[
+                  styles.dropdownOptionText,
+                  selectedStatus === st && styles.dropdownOptionSelected,
+                ]}
+              >
+                {st ? st.replace('_', ' ') : 'All Statuses'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {openDropdown === 'match' && (
+        <View style={styles.dropdownMenu}>
+          {[
+            { label: 'All Match Scores', val: '' },
+            { label: '90%+ Match', val: '90' },
+            { label: '80%+ Match', val: '80' },
+            { label: '70%+ Match', val: '70' },
+            { label: '60%+ Match', val: '60' },
+            { label: '50%+ Match', val: '50' },
+          ].map((item) => (
+            <Pressable
+              key={item.label}
+              onPress={() => {
+                setSelectedMinScore(item.val);
+                setOpenDropdown(null);
+                setCurrentPage(1);
+              }}
+              style={styles.dropdownOption}
+            >
+              <Text
+                style={[
+                  styles.dropdownOptionText,
+                  selectedMinScore === item.val && styles.dropdownOptionSelected,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {openDropdown === 'degree' && (
+        <View style={styles.dropdownMenu}>
+          <Pressable
+            onPress={() => {
+              setSelectedDegree('');
+              setOpenDropdown(null);
+              setCurrentPage(1);
+            }}
+            style={styles.dropdownOption}
+          >
+            <Text style={[styles.dropdownOptionText, !selectedDegree && styles.dropdownOptionSelected]}>
+              All Degrees
+            </Text>
+          </Pressable>
+          {filterOptions.degrees.map((deg) => (
+            <Pressable
+              key={deg}
+              onPress={() => {
+                setSelectedDegree(deg);
+                setOpenDropdown(null);
+                setCurrentPage(1);
+              }}
+              style={styles.dropdownOption}
+            >
+              <Text
+                style={[
+                  styles.dropdownOptionText,
+                  selectedDegree === deg && styles.dropdownOptionSelected,
+                ]}
+              >
+                {deg}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {openDropdown === 'date' && (
+        <View style={styles.dropdownMenu}>
+          {[
+            { label: 'All Time', val: '' },
+            { label: 'Last 7 Days', val: '7d' },
+            { label: 'Last 30 Days', val: '30d' },
+            { label: 'Last 90 Days', val: '90d' },
+          ].map((item) => (
+            <Pressable
+              key={item.label}
+              onPress={() => {
+                setSelectedDateRange(item.val);
+                setOpenDropdown(null);
+                setCurrentPage(1);
+              }}
+              style={styles.dropdownOption}
+            >
+              <Text
+                style={[
+                  styles.dropdownOptionText,
+                  selectedDateRange === item.val && styles.dropdownOptionSelected,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {/* 5. Dynamic Bulk Selection Banner */}
       {selectedCount > 0 && (
         <View style={styles.bulkBanner}>
           <Text style={styles.bulkBannerTitle}>
-            ✓ {selectedCount} Students Selected{' '}
-            <Text style={styles.bulkBannerSub}>
-              ({applicants.filter((a) => a.selected).map((a) => a.name).join(', ')})
-            </Text>
+            ✓ {selectedCount} Student{selectedCount === 1 ? '' : 's'} Selected
           </Text>
 
           <View style={styles.bulkActionsGroup}>
-            <Pressable style={styles.bulkActionTeal}>
-              <Text style={styles.bulkActionTealText}>Shortlist Selected</Text>
+            <Pressable
+              disabled={actionLoading}
+              onPress={() => handleTriggerBulkProgression('SEND_TO_NEXT_ROUND')}
+              style={styles.bulkActionProgression}
+            >
+              <Text style={styles.bulkActionProgressionText}>
+                ⚡ Send Selected to Next Round
+              </Text>
             </Pressable>
-            <Pressable style={styles.bulkActionOutline}>
-              <Text style={styles.bulkActionOutlineText}>Move to Review</Text>
+            <Pressable
+              disabled={actionLoading}
+              onPress={() => handleTriggerBulkProgression('NOT_SELECTED')}
+              style={styles.bulkActionDanger}
+            >
+              <Text style={styles.bulkActionDangerText}>
+                ✕ Mark Not Selected
+              </Text>
             </Pressable>
-            <Pressable style={styles.bulkActionOutline}>
-              <Text style={styles.bulkActionOutlineText}>Schedule Interview</Text>
+            <Pressable
+              disabled={actionLoading}
+              onPress={() => handleBulkAction('SHORTLIST')}
+              style={styles.bulkActionTeal}
+            >
+              <Text style={styles.bulkActionTealText}>
+                {actionLoading ? 'Processing...' : 'Shortlist'}
+              </Text>
             </Pressable>
-            <Pressable style={styles.bulkActionDanger}>
-              <Text style={styles.bulkActionDangerText}>Reject Selected</Text>
+            <Pressable
+              disabled={actionLoading}
+              onPress={() => handleBulkAction('UNDER_REVIEW')}
+              style={styles.bulkActionOutline}
+            >
+              <Text style={styles.bulkActionOutlineText}>Review</Text>
             </Pressable>
-            <Pressable style={styles.bulkActionOutline}>
+            <Pressable
+              disabled={actionLoading}
+              onPress={() => handleBulkAction('REJECT')}
+              style={styles.bulkActionDanger}
+            >
+              <Text style={styles.bulkActionDangerText}>Reject</Text>
+            </Pressable>
+            <Pressable onPress={handleExportCSV} style={styles.bulkActionOutline}>
               <Text style={styles.bulkActionOutlineText}>📥 Export CSV</Text>
             </Pressable>
           </View>
@@ -453,313 +1064,722 @@ export default function Applications() {
         <View style={[styles.card, { flex: 1.3 }]}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>
-              Student Applications <Text style={styles.countBadge}>186</Text>
+              Student Applications <Text style={styles.countBadge}>{pagination.total}</Text>
             </Text>
-            <Pressable style={styles.sortBtn}>
-              <Text style={styles.sortBtnText}>Sort by: Skill Match (Highest) ▾</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {/* Top N Quick Picker */}
+              <View style={{ position: 'relative', zIndex: 30 }}>
+                <Pressable
+                  onPress={() => setTopNMenuOpen((prev) => !prev)}
+                  style={styles.topNBtn}
+                >
+                  <Text style={styles.topNBtnText}>🔝 Select Top N ▾</Text>
+                </Pressable>
+                {topNMenuOpen && (
+                  <View style={styles.topNDropdown}>
+                    {[3, 5, 10, 20].map((n) => (
+                      <Pressable
+                        key={n}
+                        onPress={() => handleSelectTopN(n)}
+                        style={styles.topNOption}
+                      >
+                        <Text style={styles.topNOptionText}>Top {n} Candidates</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 11, color: COLORS.textMuted }}>Sort by:</Text>
+                <Pressable
+                  onPress={() => {
+                    const nextSort =
+                      sortBy === 'match_score_desc'
+                        ? 'applied_at_desc'
+                        : sortBy === 'applied_at_desc'
+                        ? 'name_asc'
+                        : 'match_score_desc';
+                    setSortBy(nextSort);
+                  }}
+                  style={styles.sortBtn}
+                >
+                  <Text style={styles.sortBtnText}>
+                    {sortBy === 'match_score_desc'
+                      ? 'Skill Match (Highest) ▾'
+                      : sortBy === 'applied_at_desc'
+                      ? 'Date Applied (Newest) ▾'
+                      : 'Candidate Name (A-Z) ▾'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
 
           {/* Table Header */}
           <View style={styles.thRow}>
-            <View style={{ width: 28, alignItems: 'center' }}>
-              <Text style={styles.checkboxText}>☐</Text>
-            </View>
-            <Text style={[styles.thCell, { flex: 2 }]}>STUDENT</Text>
-            <Text style={[styles.thCell, { flex: 1.4 }]}>INTERNSHIP</Text>
-            <Text style={[styles.thCell, { flex: 1.2 }]}>SKILL MATCH</Text>
-            <Text style={[styles.thCell, { flex: 1.4 }]}>SCREENING STATUS</Text>
-            <Text style={[styles.thCell, { flex: 1.2 }]}>APPLIED</Text>
-            <Text style={[styles.thCell, { flex: 1.1 }]}>STATUS</Text>
+            <Pressable onPress={toggleSelectAll} style={{ width: 28, alignItems: 'center' }}>
+              <Text style={styles.checkboxText}>
+                {applications.length > 0 && selectedIds.length === applications.length ? '☑' : '☐'}
+              </Text>
+            </Pressable>
+            <Text style={[styles.thCell, { flex: 1.8 }]}>STUDENT</Text>
+            <Text style={[styles.thCell, { flex: 1.3 }]}>INTERNSHIP</Text>
+            <Text style={[styles.thCell, { flex: 1.1 }]}>MATCH SCORE</Text>
+            <Text style={[styles.thCell, { flex: 0.9 }]}>THRESHOLD</Text>
+            <Text style={[styles.thCell, { flex: 1.2 }]}>ELIGIBILITY</Text>
+            <Text style={[styles.thCell, { flex: 1.0 }]}>STATUS</Text>
             <Text style={[styles.thCell, { flex: 0.8, textAlign: 'right' }]}>ACTION</Text>
           </View>
 
-          {/* Table Rows */}
-          {applicants.map((cand) => {
-            const isInspecting = cand.id === selectedApplicantId;
-            return (
-              <Pressable
-                key={cand.id}
-                onPress={() => setSelectedApplicantId(cand.id)}
-                style={[styles.tdRow, isInspecting && styles.tdRowInspecting]}
-              >
+          {/* Loading / Error / Empty States */}
+          {loading ? (
+            <View style={styles.centerBox}>
+              <ActivityIndicator size="large" color={COLORS.primaryTeal} />
+              <Text style={styles.centerText}>Loading candidate applications...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.centerBox}>
+              <Text style={styles.errorText}>⚠️ {error}</Text>
+              <Pressable onPress={loadApplications} style={styles.retryBtn}>
+                <Text style={styles.retryBtnText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : applications.length === 0 ? (
+            <View style={styles.centerBox}>
+              <Text style={{ fontSize: 32, marginBottom: 8 }}>📭</Text>
+              <Text style={styles.emptyTitle}>No applications yet</Text>
+              <Text style={styles.emptySub}>
+                No candidate applications match your filters or have been submitted for your company's postings.
+              </Text>
+            </View>
+          ) : (
+            /* Table Rows */
+            applications.map((cand) => {
+              const isInspecting = cand.id === selectedApplicantId;
+              const isSelected = selectedIds.includes(cand.id);
+              const isEligible = cand.eligibility === 'Passed' || cand.eligibility === 'PASSED';
+              const stStyle = getStatusStyle(cand);
+
+              return (
                 <Pressable
-                  onPress={() => toggleSelectApplicant(cand.id)}
-                  style={{ width: 28, alignItems: 'center' }}
+                  key={cand.id}
+                  onPress={() => setSelectedApplicantId(cand.id)}
+                  style={[styles.tdRow, isInspecting && styles.tdRowInspecting]}
                 >
-                  <Text style={styles.checkboxText}>
-                    {cand.selected ? '☑' : '☐'}
-                  </Text>
-                </Pressable>
-
-                <View style={[styles.tdCell, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
-                  <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarText}>{cand.avatar}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.candName}>{cand.name}</Text>
-                    <Text style={styles.candDegree}>{cand.degree}</Text>
-                  </View>
-                </View>
-
-                <View style={[styles.tdCell, { flex: 1.4 }]}>
-                  <Text style={styles.internshipName}>{cand.internship}</Text>
-                  <Text style={styles.deptName}>{cand.dept}</Text>
-                </View>
-
-                <View style={[styles.tdCell, { flex: 1.2 }]}>
-                  <View style={styles.matchBarRow}>
-                    <View style={styles.matchTrack}>
-                      <View
-                        style={[
-                          styles.matchFill,
-                          { width: cand.matchPct, backgroundColor: COLORS.primaryTeal },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.matchPctVal}>{cand.matchPct}</Text>
-                  </View>
-                  <Text style={styles.matchLbl}>{cand.matchLabel}</Text>
-                </View>
-
-                <View style={[styles.tdCell, { flex: 1.4 }]}>
-                  <View
-                    style={[
-                      styles.auditBadge,
-                      cand.auditScore.includes('✓') && styles.auditPassBg,
-                      cand.auditScore.includes('⚠️') && styles.auditWarnBg,
-                      cand.auditScore.includes('🚩') && styles.auditFlagBg,
-                    ]}
+                  <Pressable
+                    onPress={() => toggleSelectApplicant(cand.id)}
+                    style={{ width: 28, alignItems: 'center' }}
                   >
-                    <Text
+                    <Text style={styles.checkboxText}>{isSelected ? '☑' : '☐'}</Text>
+                  </Pressable>
+
+                  <View style={[styles.tdCell, { flex: 1.8, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                    {cand.profile_image ? (
+                      <Image source={{ uri: cand.profile_image }} style={styles.avatarImg} />
+                    ) : (
+                      <View style={styles.avatarCircle}>
+                        <Text style={styles.avatarText}>{cand.avatar}</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={styles.candName}>
+                        {cand.student_name}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.candDegree}>
+                        {cand.degree || 'Student'} • {cand.college || 'University'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.tdCell, { flex: 1.3 }]}>
+                    <Text numberOfLines={1} style={styles.internshipName}>
+                      {cand.internship_title}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.deptName}>
+                      {cand.department || 'Engineering'}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.tdCell, { flex: 1.1 }]}>
+                    <View style={styles.matchBarRow}>
+                      <View style={styles.matchTrack}>
+                        <View
+                          style={[
+                            styles.matchFill,
+                            {
+                              width: `${Math.min(100, cand.match_score)}%`,
+                              backgroundColor: isEligible ? COLORS.primaryTeal : '#D97706',
+                            },
+                          ]}
+                        />
+                      </View>
+                      <Text style={[styles.matchPctVal, !isEligible && { color: '#D97706' }]}>
+                        {cand.match_score}%
+                      </Text>
+                    </View>
+                    <Text style={styles.matchLbl}>{cand.match_label}</Text>
+                  </View>
+
+                  <View style={[styles.tdCell, { flex: 0.9 }]}>
+                    <View style={styles.thresholdTablePill}>
+                      <Text style={styles.thresholdTablePillText}>{cand.threshold || '80%'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.tdCell, { flex: 1.2 }]}>
+                    <View
                       style={[
-                        styles.auditBadgeText,
-                        cand.auditScore.includes('✓') && styles.auditPassText,
-                        cand.auditScore.includes('⚠️') && styles.auditWarnText,
-                        cand.auditScore.includes('🚩') && styles.auditFlagText,
+                        styles.auditBadge,
+                        isEligible ? styles.auditPassBg : styles.auditWarnBg,
                       ]}
                     >
-                      {cand.auditScore}
+                      <Text
+                        style={[
+                          styles.auditBadgeText,
+                          isEligible ? styles.auditPassText : styles.auditWarnText,
+                        ]}
+                      >
+                        {isEligible ? '✓ Passed' : '⚠️ Needs Dev'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.tdCell, { flex: 1.0 }]}>
+                    <View style={[styles.statusPill, { backgroundColor: stStyle.bg }]}>
+                      <Text style={[styles.statusPillText, { color: stStyle.text }]}>
+                        {stStyle.label}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.tdCell, { flex: 0.8, alignItems: 'flex-end' }]}>
+                    <Text style={[styles.inspectBtnText, isInspecting && { fontWeight: '800' }]}>
+                      {isInspecting ? '● Inspect' : 'Inspect'}
                     </Text>
                   </View>
-                </View>
+                </Pressable>
+              );
+            })
+          )}
 
-                <Text style={[styles.tdMuted, { flex: 1.2 }]}>{cand.appliedTime}</Text>
-
-                <View style={[styles.tdCell, { flex: 1.1 }]}>
-                  <View style={[styles.statusPill, { backgroundColor: cand.statusBg }]}>
-                    <Text style={[styles.statusPillText, { color: cand.statusText }]}>
-                      {cand.status}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={[styles.tdCell, { flex: 0.8, alignItems: 'flex-end' }]}>
-                  <Text style={styles.inspectBtnText}>
-                    {isInspecting ? '● Inspect' : 'Inspect'}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-
-          <View style={styles.tableFooter}>
-            <Text style={styles.tableFooterText}>
-              Showing 1 to 5 of 186 student applications
-            </Text>
-            <View style={styles.paginationRow}>
-              <Text style={styles.pageBtn}>‹</Text>
-              <Text style={[styles.pageBtn, styles.pageBtnActive]}>1</Text>
-              <Text style={styles.pageBtn}>2</Text>
-              <Text style={styles.pageBtn}>3</Text>
-              <Text style={styles.pageBtn}>...</Text>
-              <Text style={styles.pageBtn}>38</Text>
-              <Text style={styles.pageBtn}>›</Text>
+          {/* Pagination Footer */}
+          {pagination.total > 0 && (
+            <View style={styles.tableFooter}>
+              <Text style={styles.tableFooterText}>
+                Showing {Math.min(1, pagination.total) + (pagination.page - 1) * pagination.page_size} to{' '}
+                {Math.min(pagination.total, pagination.page * pagination.page_size)} of {pagination.total} student applications
+              </Text>
+              <View style={styles.paginationRow}>
+                <Pressable
+                  disabled={pagination.page <= 1}
+                  onPress={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  style={[styles.pageBtnPress, pagination.page <= 1 && styles.pageBtnDisabled]}
+                >
+                  <Text style={styles.pageBtn}>‹</Text>
+                </Pressable>
+                {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === pagination.total_pages || Math.abs(p - pagination.page) <= 1)
+                  .map((p, idx, arr) => {
+                    const prevP = arr[idx - 1];
+                    return (
+                      <React.Fragment key={p}>
+                        {prevP && p - prevP > 1 && <Text style={styles.pageBtn}>...</Text>}
+                        <Pressable
+                          onPress={() => setCurrentPage(p)}
+                          style={[styles.pageBtnPress, p === pagination.page && styles.pageBtnActivePress]}
+                        >
+                          <Text
+                            style={[
+                              styles.pageBtn,
+                              p === pagination.page && styles.pageBtnActive,
+                            ]}
+                          >
+                            {p}
+                          </Text>
+                        </Pressable>
+                      </React.Fragment>
+                    );
+                  })}
+                <Pressable
+                  disabled={pagination.page >= pagination.total_pages}
+                  onPress={() => setCurrentPage((p) => Math.min(pagination.total_pages, p + 1))}
+                  style={[styles.pageBtnPress, pagination.page >= pagination.total_pages && styles.pageBtnDisabled]}
+                >
+                  <Text style={styles.pageBtn}>›</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
+          )}
         </View>
 
-        {/* Right Column: Candidate Inspection Drawer (Rahul Sharma) */}
+        {/* Right Column: Candidate Inspection Drawer */}
         <View style={[styles.card, styles.inspectionDrawerCard]}>
-          {/* Candidate Top Header */}
-          <View style={styles.drawerHeader}>
-            <View style={styles.drawerAvatar}>
-              <Text style={styles.drawerAvatarText}>
-                {selectedCandidate.avatar}
+          {detailLoading ? (
+            <View style={styles.centerBox}>
+              <ActivityIndicator size="small" color={COLORS.primaryTeal} />
+              <Text style={styles.centerText}>Loading candidate inspection profile...</Text>
+            </View>
+          ) : !selectedApplicantId ? (
+            <View style={styles.centerBox}>
+              <Text style={{ fontSize: 24, marginBottom: 6 }}>🔍</Text>
+              <Text style={styles.emptyTitle}>Select a Candidate</Text>
+              <Text style={styles.emptySub}>
+                Click "Inspect" on any applicant in the table to view their full evaluation and verification audit.
               </Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.drawerCandidateName}>{selectedCandidate.name}</Text>
-                <View style={[styles.statusPill, { backgroundColor: selectedCandidate.statusBg }]}>
-                  <Text style={[styles.statusPillText, { color: selectedCandidate.statusText }]}>
-                    {selectedCandidate.status}
+          ) : (
+            <>
+              {/* Candidate Top Header */}
+              <View style={styles.drawerHeader}>
+                {candProfileImg ? (
+                  <Image source={{ uri: candProfileImg }} style={styles.drawerAvatarImg} />
+                ) : (
+                  <View style={styles.drawerAvatar}>
+                    <Text style={styles.drawerAvatarText}>{candAvatar}</Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.drawerCandidateName}>{candName}</Text>
+                    <View style={[styles.statusPill, { backgroundColor: candStatusStyle.bg }]}>
+                      <Text style={[styles.statusPillText, { color: candStatusStyle.text }]}>
+                        {candStatusStyle.label}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.drawerDegreeText}>
+                    {candDegree} • {candCollege} {candCgpa !== 'N/A' ? `• CGPA: ${candCgpa}` : ''}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.drawerDegreeText}>
-                {selectedCandidate.degree} • CGPA: {selectedCandidate.cgpa}
-              </Text>
-            </View>
-          </View>
 
-          {/* Applied Internship Box */}
-          <View style={styles.appliedInternshipBox}>
-            <Text style={styles.appliedBoxLbl}>APPLIED INTERNSHIP</Text>
-            <Text style={styles.appliedBoxTitle}>{selectedCandidate.internship} Intern</Text>
-            <Text style={styles.appliedBoxSub}>
-              {selectedCandidate.dept} • Applied {selectedCandidate.appliedTime}
-            </Text>
-          </View>
-
-          {/* AI Screening Audit Box */}
-          <View style={styles.aiAuditCard}>
-            <View style={styles.aiAuditHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>✨</Text>
-                <Text style={styles.aiAuditTitle}>AI Screening Audit</Text>
+              {/* Applied Internship Box */}
+              <View style={styles.appliedInternshipBox}>
+                <Text style={styles.appliedBoxLbl}>APPLIED INTERNSHIP</Text>
+                <Text style={styles.appliedBoxTitle}>
+                  {candidateDetail?.internship?.title || selectedCandidateRow?.internship_title || 'Internship'}
+                </Text>
+                <Text style={styles.appliedBoxSub}>
+                  {candidateDetail?.internship?.location_type || 'Work Mode'} • Threshold: {candThreshold} • Applied{' '}
+                  {candidateDetail?.applied_at_formatted || selectedCandidateRow?.applied_time || 'Recently'}
+                </Text>
               </View>
-              <View style={styles.mintMatchBadge}>
-                <Text style={styles.mintMatchText}>91% Total Match</Text>
-              </View>
-            </View>
 
-            <View style={styles.aiScoresGrid}>
-              <Text style={styles.aiScoreItem}>Required Skills: <Text style={{ fontWeight: '800' }}>94%</Text></Text>
-              <Text style={styles.aiScoreItem}>Resume Evaluation: <Text style={{ fontWeight: '800' }}>88%</Text></Text>
-              <Text style={styles.aiScoreItem}>Project Quality: <Text style={{ fontWeight: '800' }}>96%</Text></Text>
-              <Text style={styles.aiScoreItem}>GitHub Proof: <Text style={{ fontWeight: '800' }}>92%</Text></Text>
-            </View>
-            <Text style={styles.academicsText}>Academics Criterion: 100% (Meets 7.5+ Cutoff)</Text>
+              {/* Assessment Progression Section (Only when active pipeline is configured) */}
+              {(() => {
+                const progression = candidateDetail?.assessment_progression || selectedCandidateRow?.assessment_progression || {};
+                if (progression.has_pipeline === false) return null;
 
-            <View style={styles.aiNoteCard}>
-              <Text style={styles.aiNoteText}>
-                <Text style={{ fontWeight: '800' }}>AI Recommendation Note:</Text> Strong candidate for Backend Development Internship. Demonstrated hands-on schema optimization and automated test suites in distributed systems.
-              </Text>
-            </View>
-          </View>
+                const isSelected = progression.is_selected || candStatus === 'SELECTED' || candStatus === 'HIRED';
+                const isFinal = progression.is_final_round;
+                const isNotSelected = progression.qualification_status === 'NOT_SELECTED' || candStatus === 'NOT_SELECTED' || candStatus === 'REJECTED';
 
-          {/* Skill Match Breakdown */}
-          <View style={styles.skillBreakdownSection}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text style={styles.sectionHeading}>Skill Match Breakdown</Text>
-              <Text style={styles.sectionScoreText}>94% Overall</Text>
-            </View>
+                return (
+                  <View style={styles.progressionDrawerCard}>
+                    <View style={styles.progressionHeaderRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontSize: 16 }}>⚡</Text>
+                        <Text style={styles.progressionTitle}>Assessment Progression</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.qualBadge,
+                          isSelected ? styles.qualPassBg :
+                          isFinal ? styles.qualSelectedBg :
+                          isNotSelected ? styles.qualRejectBg : styles.qualPassBg
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.qualBadgeText,
+                            isSelected ? styles.qualPassText :
+                            isFinal ? styles.qualSelectedText :
+                            isNotSelected ? styles.qualRejectText : styles.qualPassText
+                          ]}
+                        >
+                          {isSelected ? '★ SELECTED' :
+                           isFinal ? '🏁 FINAL ROUND' :
+                           isNotSelected ? '✕ NOT SELECTED' : '● IN PIPELINE'}
+                        </Text>
+                      </View>
+                    </View>
 
-            <View style={styles.skillBarsList}>
-              <SkillBar label="Python" pct="100%" level="100% (Verified)" color="#004D40" />
-              <SkillBar label="SQL & PostgreSQL" pct="95%" level="95% (Verified)" color="#004D40" />
-              <SkillBar label="Node.js & Express" pct="90%" level="90% (Verified)" color="#004D40" />
-              <SkillBar label="MongoDB" pct="88%" level="88% (Verified)" color="#004D40" />
-              <SkillBar label="Docker" pct="80%" level="80% (Intermediate)" color="#0D9488" />
-              <SkillBar label="AWS" pct="65%" level="65% (Developing)" color="#F59E0B" />
-            </View>
+                    {/* 4-Metric Grid */}
+                    <View style={styles.progressionGrid}>
+                      <View style={styles.progMetricItem}>
+                        <Text style={styles.progMetricLbl}>Current Round</Text>
+                        <Text style={styles.progMetricVal}>{progression.current_round_name || 'Aptitude'}</Text>
+                        <Text style={styles.progMetricSub}>
+                          {isFinal ? 'Final Assessment Stage' : `Stage ${(progression.current_round_index ?? 0) + 1} of ${progression.total_rounds || 4}`}
+                        </Text>
+                      </View>
+                      <View style={styles.progMetricItem}>
+                        <Text style={styles.progMetricLbl}>Candidate Rank</Text>
+                        <Text style={styles.progMetricVal}>
+                          #{progression.rank || 1} <Text style={{ fontSize: 11, color: COLORS.textMuted }}>/ {progression.total_candidates_in_round || 1}</Text>
+                        </Text>
+                        <Text style={styles.progMetricSub}>In Current Round</Text>
+                      </View>
+                      <View style={styles.progMetricItem}>
+                        <Text style={styles.progMetricLbl}>Assessment Score</Text>
+                        <Text style={styles.progMetricVal}>{progression.assessment_score ?? 80}%</Text>
+                        <Text style={styles.progMetricSub}>Cutoff: {progression.passing_threshold ?? 70}%</Text>
+                      </View>
+                      <View style={styles.progMetricItem}>
+                        <Text style={styles.progMetricLbl}>Integrity Audit</Text>
+                        <Text
+                          style={[
+                            styles.progMetricVal,
+                            { color: progression.integrity_status === 'VERIFIED' ? COLORS.greenPillText : COLORS.redPillText }
+                          ]}
+                        >
+                          {progression.integrity_status === 'VERIFIED' ? '✓ Clear & Verified' : (progression.integrity_status || 'Verified')}
+                        </Text>
+                        <Text style={styles.progMetricSub}>AI Proctoring</Text>
+                      </View>
+                    </View>
 
-            <View style={styles.skillChipsRow}>
-              {['Python', 'FastAPI', 'Docker', 'SQL', 'Redis', 'Git', 'Microservices'].map((sk, i) => (
-                <View key={i} style={styles.skillChipTag}>
-                  <Text style={styles.skillChipTagText}>{sk}</Text>
+                    {/* Next Round & Progression Action Box */}
+                    <View style={styles.progressionActionBox}>
+                      <Text style={styles.progressionActionHeading}>
+                        {isSelected
+                          ? '🎉 SELECTED · Pipeline Completed'
+                          : isFinal
+                          ? `🏆 Final Round: ${progression.current_round_name || 'Final Stage'}`
+                          : `⏩ Next: ${progression.next_round_name || 'Technical Assessment'}`}
+                      </Text>
+                      <Text style={styles.progressionActionDesc}>
+                        {isSelected
+                          ? 'Candidate has been selected for the internship. No further assessment rounds required.'
+                          : isFinal
+                          ? 'Candidate has reached the final configured assessment round. Clicking Select Candidate moves status to SELECTED.'
+                          : `Candidate is shortlisted. Clicking Send to Next Round advances them directly to ${progression.next_round_name || 'the next round'} in the student dashboard.`}
+                      </Text>
+
+                      {!isSelected && (
+                        <View style={styles.progressionButtonsRow}>
+                          {isFinal ? (
+                            <Pressable
+                              disabled={actionLoading}
+                              onPress={() => handleProgressSingleCandidate('SELECT_CANDIDATE')}
+                              style={[styles.progSelectBtn, { backgroundColor: '#15803D' }, actionLoading && { opacity: 0.6 }]}
+                            >
+                              <Text style={styles.progSelectBtnText}>
+                                ✨ Select Candidate
+                              </Text>
+                            </Pressable>
+                          ) : (
+                            <Pressable
+                              disabled={actionLoading}
+                              onPress={() => handleProgressSingleCandidate('SEND_TO_NEXT_ROUND')}
+                              style={[styles.progSelectBtn, actionLoading && { opacity: 0.6 }]}
+                            >
+                              <Text style={styles.progSelectBtnText}>
+                                ⚡ Send to Next Round
+                              </Text>
+                            </Pressable>
+                          )}
+                          <Pressable
+                            disabled={actionLoading}
+                            onPress={() => handleProgressSingleCandidate('NOT_SELECTED')}
+                            style={[styles.progRejectBtn, actionLoading && { opacity: 0.6 }]}
+                          >
+                            <Text style={styles.progRejectBtnText}>✕ Not Selected</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Open Full Evaluation Modal */}
+                    <Pressable
+                      onPress={() => handleOpenCandidateEvaluation()}
+                      style={styles.openEvalModalBtn}
+                    >
+                      <Text style={styles.openEvalModalBtnText}>
+                        🔍 Candidate Evaluation & Full Audit ↗
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })()}
+
+              {/* AI Screening Audit Box */}
+              <View style={styles.aiAuditCard}>
+                <View style={styles.aiAuditHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 16 }}>✨</Text>
+                    <Text style={styles.aiAuditTitle}>AI Screening Audit</Text>
+                  </View>
+                  <View style={styles.mintMatchBadge}>
+                    <Text style={styles.mintMatchText}>
+                      {hasAiScreening ? `${aiScreening.overall_score}% Total Match` : 'Screening In Progress'}
+                    </Text>
+                  </View>
                 </View>
-              ))}
-            </View>
-          </View>
 
-          {/* Verified Student Resume Box */}
-          <View style={styles.resumeCard}>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={styles.resumeCardTitle}>Verified Student Resume</Text>
-                <Text style={styles.resumeScoreText}>Score: 92/100</Text>
+                {hasAiScreening ? (
+                  <>
+                    <View style={styles.aiScoresGrid}>
+                      <Text style={styles.aiScoreItem}>
+                        Required Skills: <Text style={{ fontWeight: '800' }}>{aiScreening.required_skills_score ?? candMatchScore}%</Text>
+                      </Text>
+                      <Text style={styles.aiScoreItem}>
+                        Resume Evaluation: <Text style={{ fontWeight: '800' }}>{aiScreening.resume_score ?? 85}%</Text>
+                      </Text>
+                      <Text style={styles.aiScoreItem}>
+                        Project Quality: <Text style={{ fontWeight: '800' }}>{aiScreening.project_score ?? 90}%</Text>
+                      </Text>
+                      <Text style={styles.aiScoreItem}>
+                        Technical Assessment: <Text style={{ fontWeight: '800' }}>{aiScreening.technical_score ?? 88}%</Text>
+                      </Text>
+                    </View>
+                    <Text style={styles.academicsText}>
+                      Eligibility Audit: {isCandidateEligible ? 'Passed Criteria' : 'Needs Development'}
+                    </Text>
+
+                    {aiScreening.recommendation_note && (
+                      <View style={styles.aiNoteCard}>
+                        <Text style={styles.aiNoteText}>
+                          <Text style={{ fontWeight: '800' }}>AI Recommendation:</Text> {aiScreening.recommendation_note}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <View style={styles.aiNoteCard}>
+                    <Text style={styles.aiNoteText}>
+                      <Text style={{ fontWeight: '800' }}>Canonical Match Evaluation:</Text> Current candidate match is{' '}
+                      {candMatchScore}% based on canonical verified skill evidence from student portfolio.
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                <Text style={{ fontSize: 18 }}>📄</Text>
+              {/* Skill Match Breakdown */}
+              <View style={styles.skillBreakdownSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={styles.sectionHeading}>Skill Match Breakdown</Text>
+                  <Text style={styles.sectionScoreText}>{candMatchScore}% Overall</Text>
+                </View>
+
+                {canonicalSkills.length > 0 ? (
+                  <View style={styles.skillBarsList}>
+                    {canonicalSkills.map((sk, i) => {
+                      const req = sk.required_level || 75;
+                      const stud = sk.student_level ?? sk.score ?? 0;
+                      const gap = stud - req;
+                      const gapLabel = gap >= 0 ? `+${gap}` : `${gap}`;
+                      const isVerified = sk.is_verified || stud >= req;
+
+                      return (
+                        <SkillBar
+                          key={sk.skill_id || sk.name || i}
+                          label={sk.name || sk.skill_name}
+                          pct={`${Math.min(100, Math.max(5, stud))}%`}
+                          level={`Req: ${req} | Stud: ${stud} (${gapLabel})`}
+                          color={isVerified ? COLORS.primaryTeal : '#D97706'}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={styles.emptySmallText}>No specific skill breakdown available</Text>
+                )}
+
+                {candidateDetail?.skill_chips && candidateDetail.skill_chips.length > 0 && (
+                  <View style={styles.skillChipsRow}>
+                    {candidateDetail.skill_chips.map((sk, i) => (
+                      <View key={i} style={styles.skillChipTag}>
+                        <Text style={styles.skillChipTagText}>{sk}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Verified Student Resume Box */}
+              <View style={styles.resumeCard}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.resumeFileName}>{selectedCandidate.name.replace(' ', '_')}_Resume.pdf</Text>
-                  <Text style={styles.resumeFileMeta}>1.2 MB • Updated 4 days ago</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={styles.resumeCardTitle}>Verified Student Resume</Text>
+                    {resumeInfo?.ats_score && (
+                      <Text style={styles.resumeScoreText}>Score: {resumeInfo.ats_score}/100</Text>
+                    )}
+                  </View>
+
+                  {resumeInfo?.url || resumeInfo?.file_name ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                      <Text style={{ fontSize: 18 }}>📄</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={1} style={styles.resumeFileName}>
+                          {resumeInfo.file_name || `${candName.replace(/\s+/g, '_')}_Resume.pdf`}
+                        </Text>
+                        <Text style={styles.resumeFileMeta}>
+                          {resumeInfo.updated_at ? `Updated ${resumeInfo.updated_at}` : 'Uploaded'}
+                        </Text>
+                      </View>
+                      {resumeInfo.url && (
+                        <Pressable
+                          onPress={() => {
+                            if (Platform.OS === 'web') {
+                              window.open(resumeInfo.url, '_blank');
+                            } else {
+                              Linking.openURL(resumeInfo.url);
+                            }
+                          }}
+                          style={styles.iconBtn}
+                        >
+                          <Text>👁️</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  ) : (
+                    <Text style={[styles.emptySmallText, { marginTop: 6 }]}>Resume not uploaded</Text>
+                  )}
                 </View>
-                <Pressable style={styles.iconBtn}>
-                  <Text>👁️</Text>
-                </Pressable>
-                <Pressable style={styles.iconBtn}>
-                  <Text>📥</Text>
+              </View>
+
+              {/* Verified Projects (Code Proof) */}
+              <View style={styles.codeProofSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={styles.sectionHeading}>Verified Projects (Code Proof)</Text>
+                  {verifiedProjects.length > 0 && (
+                    <Text style={styles.verifiedCountBadge}>
+                      {verifiedProjects.length} Repositor{verifiedProjects.length === 1 ? 'y' : 'ies'}
+                    </Text>
+                  )}
+                </View>
+
+                {verifiedProjects.length > 0 ? (
+                  <View style={styles.projectsList}>
+                    {verifiedProjects.map((proj, i) => {
+                      const repoName = proj.name || proj.repo_name || proj.title || 'repository';
+                      const repoUrl = proj.html_url || proj.github_url || proj.url || (proj.name ? `https://github.com/${proj.name}` : '');
+                      return (
+                        <Pressable
+                          key={proj.id || i}
+                          onPress={() => {
+                            if (repoUrl) {
+                              if (Platform.OS === 'web') {
+                                window.open(repoUrl, '_blank', 'noopener,noreferrer');
+                              } else {
+                                Linking.openURL(repoUrl);
+                              }
+                            }
+                          }}
+                          style={({ hovered, pressed }) => [
+                            styles.projectItem,
+                            hovered && styles.projectItemHovered,
+                            pressed && { opacity: 0.8 },
+                          ]}
+                        >
+                          <Text style={{ fontSize: 13 }}>📁</Text>
+                          <Text numberOfLines={1} style={styles.projectTitle}>
+                            {repoName}
+                          </Text>
+                          <Text style={styles.projectExtLink}>↗️</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={styles.emptySmallText}>No verified projects uploaded</Text>
+                )}
+              </View>
+
+              {/* Application Audit Timeline */}
+              <View style={styles.timelineSection}>
+                <Text style={styles.sectionHeading}>Application Audit Timeline</Text>
+                <View style={styles.timelineList}>
+                  {timelineEvents.length > 0 ? (
+                    timelineEvents.map((evt, i) => (
+                      <TimelineItem
+                        key={evt.id || i}
+                        time={evt.timestamp || 'Event'}
+                        text={evt.message || evt.event_name}
+                      />
+                    ))
+                  ) : (
+                    <>
+                      <TimelineItem
+                        time="Applied"
+                        text={`Application received for ${candidateDetail?.internship?.title || 'Internship'}`}
+                      />
+                      <TimelineItem
+                        time="Status"
+                        text={`Current status: ${candStatusStyle.label}`}
+                      />
+                    </>
+                  )}
+                </View>
+              </View>
+
+              {/* Internal Recruiter Notes */}
+              <View style={styles.notesSection}>
+                <Text style={styles.sectionHeading}>Internal Recruiter Notes</Text>
+                <TextInput
+                  style={styles.notesInput}
+                  multiline
+                  numberOfLines={3}
+                  value={recruiterNotes}
+                  onChangeText={setRecruiterNotes}
+                  placeholder="Add recruiter feedback or interview notes..."
+                />
+                {!!noteSavedMsg && <Text style={styles.noteSavedText}>✓ {noteSavedMsg}</Text>}
+                <Pressable onPress={handleSaveNotes} style={styles.saveNoteBtn}>
+                  <Text style={styles.saveNoteText}>Save Note</Text>
                 </Pressable>
               </View>
-            </View>
-          </View>
 
-          {/* Verified Projects (Code Proof) */}
-          <View style={styles.codeProofSection}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text style={styles.sectionHeading}>Verified Projects (Code Proof)</Text>
-              <Text style={{ fontSize: 14 }}>‹ ›</Text>
-            </View>
+              {/* Bottom Primary Actions */}
+              <View style={styles.drawerFooterActions}>
+                <Pressable
+                  disabled={actionLoading}
+                  onPress={() => handleSingleAction('INTERVIEW')}
+                  style={styles.scheduleInterviewBigBtn}
+                >
+                  <Text style={styles.scheduleInterviewBigText}>📅 Schedule Interview</Text>
+                </Pressable>
 
-            <View style={styles.projectItem}>
-              <Text style={styles.projectTitle}>Student Management System ↗️</Text>
-              <Text style={styles.projectDesc}>
-                FastAPI + PostgreSQL backend architecture with JWT authentication and RBAC.
-              </Text>
-              <Text style={styles.projectCommitMeta}>142 commits • 92% code test coverage</Text>
-            </View>
+                <View style={styles.drawerFooterSecondaryRow}>
+                  {candStatus === 'SHORTLISTED' ? (
+                    <Pressable
+                      disabled={actionLoading}
+                      onPress={() => handleSingleAction('UNSHORTLIST')}
+                      style={styles.actionPillBtn}
+                    >
+                      <Text style={styles.actionPillText}>Un-shortlist</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      disabled={actionLoading}
+                      onPress={() => handleSingleAction('SHORTLIST')}
+                      style={styles.actionPillBtn}
+                    >
+                      <Text style={styles.actionPillText}>Shortlist</Text>
+                    </Pressable>
+                  )}
 
-            <View style={styles.projectItem}>
-              <Text style={styles.projectTitle}>Distributed Cache Service ↗️</Text>
-              <Text style={styles.projectDesc}>
-                Redis + Python lightweight in-memory key-value eviction simulator. Concurrency tested.
-              </Text>
-            </View>
-          </View>
+                  <Pressable
+                    disabled={actionLoading}
+                    onPress={() => handleSingleAction('UNDER_REVIEW')}
+                    style={styles.actionPillBtn}
+                  >
+                    <Text style={styles.actionPillText}>Move to Review</Text>
+                  </Pressable>
 
-          {/* Application Audit Timeline */}
-          <View style={styles.timelineSection}>
-            <Text style={styles.sectionHeading}>Application Audit Timeline</Text>
-            <View style={styles.timelineList}>
-              <TimelineItem time="Today 10:15 AM" text="Application received via SkillSetu Portal" />
-              <TimelineItem time="Today 10:16 AM" text="Automated AI Screening completed (Score: 92/100)" />
-              <TimelineItem time="Today 11:30 AM" text="Recruiter Neha Sharma reviewed application" />
-              <TimelineItem time="Today 11:45 AM" text="Moved to Shortlisted stage" />
-              <TimelineItem time="Upcoming Action" text="Technical Round 1 Scheduling" isUpcoming />
-            </View>
-          </View>
-
-          {/* Internal Recruiter Notes */}
-          <View style={styles.notesSection}>
-            <Text style={styles.sectionHeading}>Internal Recruiter Notes</Text>
-            <TextInput
-              style={styles.notesInput}
-              multiline
-              numberOfLines={3}
-              value={recruiterNotes}
-              onChangeText={setRecruiterNotes}
-              placeholder="Add recruiter feedback or interview notes..."
-            />
-            {!!noteSavedMsg && (
-              <Text style={styles.noteSavedText}>✓ {noteSavedMsg}</Text>
-            )}
-            <Pressable onPress={handleSaveNotes} style={styles.saveNoteBtn}>
-              <Text style={styles.saveNoteText}>Save Note</Text>
-            </Pressable>
-          </View>
-
-          {/* Bottom Primary Actions */}
-          <View style={styles.drawerFooterActions}>
-            <Pressable style={styles.scheduleInterviewBigBtn}>
-              <Text style={styles.scheduleInterviewBigText}>📅 Schedule Interview</Text>
-            </Pressable>
-
-            <View style={styles.drawerFooterSecondaryRow}>
-              <Pressable style={styles.actionPillBtn}>
-                <Text style={styles.actionPillText}>Shortlisted</Text>
-              </Pressable>
-              <Pressable style={styles.actionPillBtn}>
-                <Text style={styles.actionPillText}>Send Message</Text>
-              </Pressable>
-              <Pressable style={styles.actionPillDangerBtn}>
-                <Text style={styles.actionPillDangerText}>Reject</Text>
-              </Pressable>
-            </View>
-          </View>
+                  <Pressable
+                    disabled={actionLoading}
+                    onPress={() => handleSingleAction('REJECT')}
+                    style={styles.actionPillDangerBtn}
+                  >
+                    <Text style={styles.actionPillDangerText}>Reject</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
@@ -774,6 +1794,96 @@ export default function Applications() {
           <Text style={styles.footerLink}>Support</Text>
         </View>
       </View>
+
+      {/* Bulk Progression Confirmation Modal */}
+      <Modal
+        visible={showBulkProgressionConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowBulkProgressionConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalBox}>
+            <View style={styles.confirmModalHeader}>
+              <Text style={{ fontSize: 24, marginRight: 8 }}>
+                {bulkProgressionAction === 'NOT_SELECTED' ? '⚠️' : '⚡'}
+              </Text>
+              <Text style={styles.confirmModalTitle}>
+                {bulkProgressionAction === 'NOT_SELECTED'
+                  ? 'Confirm Bulk Non-Selection'
+                  : 'Confirm Candidate Progression'}
+              </Text>
+            </View>
+
+            {(() => {
+              const firstSelectedApp = applications.find((a) => selectedIds.includes(a.id));
+              const nextRoundName =
+                firstSelectedApp?.assessment_progression?.next_round_name ||
+                firstSelectedApp?.assessment_progression?.current_round_name ||
+                'Next Assessment Round';
+              const isFinal = firstSelectedApp?.assessment_progression?.is_final_round;
+
+              return (
+                <View style={styles.confirmModalBody}>
+                  <Text style={styles.confirmModalMessage}>
+                    {bulkProgressionAction === 'NOT_SELECTED'
+                      ? `${selectedIds.length} candidate${selectedIds.length > 1 ? 's' : ''} will be marked as Not Selected for this round.`
+                      : isFinal
+                      ? `${selectedIds.length} candidate${selectedIds.length > 1 ? 's' : ''} will be permanently selected (status: SELECTED).`
+                      : `${selectedIds.length} candidate${selectedIds.length > 1 ? 's' : ''} will move to ${nextRoundName}.`}
+                  </Text>
+                  <Text style={styles.confirmModalSubText}>
+                    This action is authoritative and will immediately update candidate records in PostgreSQL, notify student dashboards, and preserve auditable assessment history.
+                  </Text>
+                </View>
+              );
+            })()}
+
+            <View style={styles.confirmModalActions}>
+              <Pressable
+                onPress={() => setShowBulkProgressionConfirm(false)}
+                style={styles.confirmCancelBtn}
+              >
+                <Text style={styles.confirmCancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                disabled={actionLoading}
+                onPress={handleConfirmBulkProgression}
+                style={[
+                  styles.confirmSubmitBtn,
+                  bulkProgressionAction === 'NOT_SELECTED' && styles.confirmSubmitDangerBtn,
+                  actionLoading && { opacity: 0.6 },
+                ]}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.confirmSubmitBtnText}>
+                    {bulkProgressionAction === 'NOT_SELECTED'
+                      ? 'Confirm Non-Selection'
+                      : 'Confirm & Advance'}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Candidate Evaluation Modal */}
+      <CandidateEvaluationModal
+        visible={evalModalVisible}
+        onClose={() => setEvalModalVisible(false)}
+        token={token}
+        internshipId={evalModalInternshipId}
+        applicationId={evalModalAppId}
+        onStatusUpdated={async () => {
+          await Promise.all([loadSummary(), loadApplications()]);
+          if (selectedApplicantId) {
+            loadCandidateDetail(selectedApplicantId);
+          }
+        }}
+      />
     </ScrollView>
   );
 }
@@ -1020,25 +2130,81 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 12,
     padding: 10,
+    position: 'relative',
+    zIndex: 10,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 6,
+    minWidth: 200,
+    flex: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.textDark,
+    paddingVertical: 2,
   },
   filterDropBtn: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: COLORS.border,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 6,
+  },
+  filterDropBtnActive: {
+    backgroundColor: COLORS.mintBg,
+    borderColor: COLORS.mintBorder,
   },
   filterDropText: {
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.textDark,
   },
+  filterDropTextActive: {
+    color: COLORS.primaryTeal,
+    fontWeight: '700',
+  },
   clearFiltersText: {
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.textMuted,
     marginLeft: 6,
+  },
+  dropdownMenu: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 6,
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    maxHeight: 200,
+  },
+  dropdownOption: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+  },
+  dropdownOptionText: {
+    fontSize: 12,
+    color: COLORS.textDark,
+  },
+  dropdownOptionSelected: {
+    fontWeight: '700',
+    color: COLORS.primaryTeal,
   },
   bulkBanner: {
     flexDirection: 'row',
@@ -1055,11 +2221,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
-  },
-  bulkBannerSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#5EEAD4',
   },
   bulkActionsGroup: {
     flexDirection: 'row',
@@ -1161,6 +2322,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  avatarImg: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
   avatarText: {
     color: '#FFFFFF',
     fontSize: 11,
@@ -1214,6 +2380,20 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignSelf: 'flex-start',
   },
+  thresholdTablePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignSelf: 'flex-start',
+  },
+  thresholdTablePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+  },
   auditPassBg: { backgroundColor: COLORS.greenPillBg },
   auditWarnBg: { backgroundColor: COLORS.orangePillBg },
   auditFlagBg: { backgroundColor: COLORS.redPillBg },
@@ -1221,10 +2401,6 @@ const styles = StyleSheet.create({
   auditPassText: { color: COLORS.greenPillText },
   auditWarnText: { color: COLORS.orangePillText },
   auditFlagText: { color: COLORS.redPillText },
-  tdMuted: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
   statusPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -1253,19 +2429,26 @@ const styles = StyleSheet.create({
   paginationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
+  },
+  pageBtnPress: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pageBtnActivePress: {
+    backgroundColor: COLORS.primaryTeal,
+  },
+  pageBtnDisabled: {
+    opacity: 0.4,
   },
   pageBtn: {
     fontSize: 11,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
     color: COLORS.textMuted,
   },
   pageBtnActive: {
-    backgroundColor: COLORS.primaryTeal,
     color: '#FFFFFF',
     fontWeight: '700',
-    borderRadius: 4,
   },
 
   // Right Drawer Inspection Panel
@@ -1288,6 +2471,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryTeal,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  drawerAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   drawerAvatarText: {
     color: '#FFFFFF',
@@ -1470,30 +2658,49 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   codeProofSection: {
-    marginBottom: 12,
+    marginBottom: 14,
+  },
+  verifiedCountBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.primaryTeal,
+    backgroundColor: COLORS.mintBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORS.mintBorder,
+  },
+  projectsList: {
+    gap: 6,
+    marginTop: 4,
   },
   projectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderRadius: 6,
-    padding: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginBottom: 6,
+    gap: 8,
+    cursor: 'pointer',
+  },
+  projectItemHovered: {
+    backgroundColor: COLORS.mintBg,
+    borderColor: COLORS.mintBorder,
   },
   projectTitle: {
+    flex: 1,
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.primaryTeal,
   },
-  projectDesc: {
+  projectExtLink: {
     fontSize: 10,
-    color: COLORS.textDark,
-    marginTop: 2,
-  },
-  projectCommitMeta: {
-    fontSize: 9,
-    color: COLORS.textMuted,
-    marginTop: 2,
+    color: COLORS.primaryTeal,
+    fontWeight: '700',
   },
   timelineSection: {
     marginBottom: 12,
@@ -1627,5 +2834,332 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
     fontWeight: '500',
+  },
+  centerBox: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  centerText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  emptySub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    maxWidth: 260,
+  },
+  emptySmallText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+  errorText: {
+    fontSize: 12,
+    color: COLORS.redPillText,
+    fontWeight: '600',
+  },
+  retryBtn: {
+    backgroundColor: COLORS.primaryTeal,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginTop: 6,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // Bulk Progression & Top N Styles
+  bulkActionProgression: {
+    backgroundColor: COLORS.primaryTeal,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkActionProgressionText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  topNBtn: {
+    backgroundColor: '#E6F4F1',
+    borderWidth: 1,
+    borderColor: '#B2DFDB',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  topNBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primaryTeal,
+  },
+  topNDropdown: {
+    position: 'absolute',
+    top: 30,
+    left: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 4,
+    minWidth: 140,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 100,
+  },
+  topNOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  topNOptionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textDark,
+  },
+
+  // Assessment Progression Drawer Card
+  progressionDrawerCard: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 14,
+  },
+  progressionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  progressionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  qualBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  qualBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  qualPassBg: {
+    backgroundColor: '#DCFCE7',
+  },
+  qualPassText: {
+    color: '#15803D',
+  },
+  qualSelectedBg: {
+    backgroundColor: '#E0F2FE',
+  },
+  qualSelectedText: {
+    color: '#0369A1',
+  },
+  qualRejectBg: {
+    backgroundColor: '#F1F5F9',
+  },
+  qualRejectText: {
+    color: '#64748B',
+  },
+  qualFailBg: {
+    backgroundColor: '#FEE2E2',
+  },
+  qualFailText: {
+    color: '#B91C1C',
+  },
+  progressionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  progMetricItem: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: 8,
+    padding: 8,
+  },
+  progMetricLbl: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0F766E',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  progMetricVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.textDark,
+    marginTop: 2,
+  },
+  progMetricSub: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+    marginTop: 1,
+  },
+  progressionActionBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    padding: 10,
+    marginBottom: 10,
+  },
+  progressionActionHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F766E',
+    marginBottom: 2,
+  },
+  progressionActionDesc: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    lineHeight: 14,
+    marginBottom: 8,
+  },
+  progressionButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  progSelectBtn: {
+    flex: 2,
+    backgroundColor: '#0D9488',
+    paddingVertical: 7,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progSelectBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  progRejectBtn: {
+    flex: 1,
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 7,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progRejectBtnText: {
+    color: '#DC2626',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  openEvalModalBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#0D9488',
+    borderRadius: 6,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  openEvalModalBtnText: {
+    color: '#0D9488',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // Modal Overlay & Confirmation Box
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmModalBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 24,
+    width: '100%',
+    maxWidth: 480,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  confirmModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  confirmModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  confirmModalBody: {
+    marginBottom: 20,
+  },
+  confirmModalMessage: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textDark,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  confirmModalSubText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 16,
+  },
+  confirmModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  confirmCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  confirmCancelBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textDark,
+  },
+  confirmSubmitBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#0D9488',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmSubmitDangerBtn: {
+    backgroundColor: '#DC2626',
+  },
+  confirmSubmitBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

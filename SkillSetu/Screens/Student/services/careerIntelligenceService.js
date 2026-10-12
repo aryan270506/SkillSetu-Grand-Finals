@@ -279,14 +279,44 @@ export async function startProjectTrack(projectId, email) {
 }
 
 /**
- * Submit capstone project deliverables.
+ * Fetch connected GitHub repositories available for a specific project.
  */
-export async function submitProjectTrack(projectId, email, repositoryUrl, notes = '') {
+export async function fetchAvailableProjectRepos(projectId, email) {
   try {
+    const emailParam = encodeURIComponent(email || '');
+    const res = await fetch(`${API_BASE}/student/projects/${projectId}/available-repos?email=${emailParam}`);
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      return data;
+    }
+    return { connected: false, repositories: [] };
+  } catch (err) {
+    console.error('[CareerIntelligenceService] fetch available repos error:', err);
+    return { connected: false, repositories: [] };
+  }
+}
+
+/**
+ * Submit capstone project deliverables from connected GitHub repository.
+ */
+export async function submitProjectTrack(projectId, email, repoData, notes = '') {
+  try {
+    const payload = {
+      email,
+      notes,
+    };
+    if (typeof repoData === 'string') {
+      payload.repository_url = repoData;
+    } else if (typeof repoData === 'object' && repoData !== null) {
+      payload.repository_url = repoData.html_url || repoData.url || '';
+      payload.repository_id = repoData.id || '';
+      payload.repository_name = repoData.name || '';
+    }
+
     const res = await fetch(`${API_BASE}/student/projects/${projectId}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, repository_url: repositoryUrl, notes }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (res.ok && data.status === 'success') {

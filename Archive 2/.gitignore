@@ -1,0 +1,6 @@
+node_modules/
+.env
+data/
+recordings/
+agent/venv/
+__pycache__/

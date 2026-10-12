@@ -11,7 +11,11 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { fetchStudentApplications } from '../services/applicationService';
+import {
+  fetchStudentApplications,
+  checkApplicationAssessment,
+  startApplicationAssessment,
+} from '../services/applicationService';
 
 const COLORS = {
   canvas: '#f9f9f8',
@@ -114,16 +118,22 @@ function HoverableCard({ children, style, containerStyle, ...props }) {
   );
 }
 
-export default function Application({ user, profileData }) {
+export default function Application({ user, profileData, onNavigate }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const isDesktop = width >= 1024;
 
-  const studentEmail = user?.email || profileData?.personalInfo?.email || 'abhoge27@gmail.com';
+  const studentEmail = user?.email || profileData?.personalInfo?.email || '';
 
   const [activeTab, setActiveTab] = useState('All Applications');
   const [selectedApp, setSelectedApp] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
+
+  // AI Assessment State
+  const [assessmentInfo, setAssessmentInfo] = useState(null);
+  const [assessmentChecking, setAssessmentChecking] = useState(false);
+  const [assessmentLaunching, setAssessmentLaunching] = useState(false);
+  const [assessmentError, setAssessmentError] = useState('');
 
   // API State
   const [appData, setAppData] = useState({
@@ -204,28 +214,77 @@ export default function Application({ user, profileData }) {
     } else if (activeTab === 'Scholarships') {
       return all.filter((a) => a.type === 'scholarship');
     } else if (activeTab === 'Under Review') {
-      return all.filter((a) => a.status === 'UNDER_REVIEW' || a.status === 'APPLIED');
+      return all.filter((a) => {
+        const s = (a.application_status || a.status || '').toUpperCase();
+        return s === 'UNDER_REVIEW' || s === 'APPLIED';
+      });
     } else if (activeTab === 'Shortlisted / Accepted') {
-      return all.filter((a) => a.status === 'SHORTLISTED' || a.status === 'ACCEPTED');
+      return all.filter((a) => {
+        const s = (a.application_status || a.status || '').toUpperCase();
+        return s === 'SHORTLISTED' || s === 'ACCEPTED' || s === 'SELECTED' || s === 'ROUND_IN_PROGRESS' || s === 'ROUND_COMPLETED';
+      });
     }
     return all;
   }, [appData, activeTab]);
 
-  const handleCardClick = (app) => {
+  const handleCardClick = async (app) => {
     setSelectedApp(app);
     setShowDrawer(true);
+    setAssessmentInfo(null);
+    setAssessmentError('');
+
+    if (app.type === 'internship') {
+      setAssessmentChecking(true);
+      try {
+        const info = await checkApplicationAssessment(app.id, studentEmail);
+        setAssessmentInfo(info);
+      } catch (err) {
+        console.warn('Failed to check application assessment:', err);
+      } finally {
+        setAssessmentChecking(false);
+      }
+    }
+  };
+
+  const handleLaunchAssessment = async () => {
+    if (!selectedApp) return;
+    setAssessmentLaunching(true);
+    setAssessmentError('');
+    try {
+      const res = await startApplicationAssessment(selectedApp.id, studentEmail);
+      if (res?.assessment_url) {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.open(res.assessment_url, '_blank');
+        } else {
+          Linking.openURL(res.assessment_url);
+        }
+        handleCardClick(selectedApp);
+      }
+    } catch (err) {
+      setAssessmentError(err.message || 'Could not launch assessment session.');
+    } finally {
+      setAssessmentLaunching(false);
+    }
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
+    const s = (status || '').toUpperCase();
+    switch (s) {
+      case 'SELECTED':
       case 'ACCEPTED':
+      case 'OFFERED':
         return { text: '#047857', bg: '#d1fae5' };
       case 'SHORTLISTED':
         return { text: COLORS.teal, bg: COLORS.mint };
+      case 'ROUND_IN_PROGRESS':
+        return { text: '#0284c7', bg: '#e0f2fe' };
+      case 'ROUND_COMPLETED':
+        return { text: '#0d9488', bg: '#ccfbf1' };
       case 'UNDER_REVIEW':
       case 'APPLIED':
         return { text: COLORS.amber, bg: COLORS.amberLight };
       case 'REJECTED':
+      case 'NOT_SELECTED':
         return { text: COLORS.rose, bg: COLORS.roseLight };
       default:
         return { text: COLORS.muted, bg: COLORS.panel };
@@ -297,7 +356,11 @@ export default function Application({ user, profileData }) {
           <View style={styles.applicationsList}>
             {filteredList.length > 0 ? (
               filteredList.map((item) => {
-                const badge = getStatusColor(item.status);
+                const badge = getStatusColor(item.application_status || item.statusClass || item.status);
+                const isInternship = item.type === 'internship';
+                const isSelected = (item.application_status || item.statusClass || '').toUpperCase() === 'SELECTED' || item.statusClass === 'ACCEPTED';
+                const isRejected = (item.application_status || item.statusClass || '').toUpperCase() === 'REJECTED' || item.statusClass === 'NOT_SELECTED';
+
                 return (
                   <HoverableCard
                     key={`${item.type}-${item.id}`}
@@ -313,26 +376,88 @@ export default function Application({ user, profileData }) {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.appTitle}>{item.title}</Text>
                         <Text style={styles.appCompany}>
-                          {item.organization} • {item.type === 'internship' ? 'Internship' : 'Scholarship'}
+                          Company: <Text style={{ fontWeight: '700', color: COLORS.ink }}>{item.organization}</Text> • {isInternship ? 'Internship' : 'Scholarship'}
                         </Text>
                       </View>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                          {item.status || 'APPLIED'}
+                          {item.application_status || item.statusClass || item.status || 'APPLIED'}
                         </Text>
                       </View>
                     </View>
 
+                    {/* Authoritative Details Block */}
+                    <View style={styles.authoritativeDetailBox}>
+                      <View style={styles.detailRowItem}>
+                        <Text style={styles.detailLabel}>Application Status:</Text>
+                        <Text style={[styles.detailValueBold, { color: badge.text }]}>
+                          {item.application_status || item.statusClass || item.status}
+                        </Text>
+                      </View>
+
+                      {isInternship && item.current_round_name && !isSelected && !isRejected && (
+                        <View style={styles.detailRowItem}>
+                          <Text style={styles.detailLabel}>Current Round:</Text>
+                          <Text style={styles.detailValueBold}>{item.current_round_name}</Text>
+                        </View>
+                      )}
+
+                      {isSelected && (
+                        <View style={styles.selectedMessageBox}>
+                          <Text style={styles.selectedPipelineText}>
+                            Assessment Pipeline: <Text style={{ fontWeight: '800' }}>COMPLETED</Text>
+                          </Text>
+                          <Text style={styles.selectedCongratsText}>
+                            🎉 Congratulations! You have been selected.
+                          </Text>
+                        </View>
+                      )}
+
+                      {isRejected && (
+                        <View style={styles.rejectedMessageBox}>
+                          <Text style={styles.rejectedReasonText}>
+                            Reason: {item.rejection_reason || 'Your application was not selected for the next stage.'}
+                          </Text>
+                        </View>
+                      )}
+
+                      {!isSelected && !isRejected && item.nextAction && (
+                        <View style={styles.detailRowItem}>
+                          <Text style={styles.detailLabel}>Next Action:</Text>
+                          <Text style={styles.nextActionHighlight}>{item.nextAction}</Text>
+                        </View>
+                      )}
+                    </View>
+
                     <View style={styles.appCardMeta}>
                       <Text style={styles.appliedDateText}>Applied on: {item.appliedDate}</Text>
-                      {item.portalUrl && (
+                      
+                      <View style={styles.cardActionsRow}>
+                        {isInternship && onNavigate && (
+                          <Pressable
+                            style={styles.viewRoundsBtn}
+                            onPress={() => onNavigate('Rounds', { applicationId: item.application_id })}
+                          >
+                            <Text style={styles.viewRoundsBtnText}>[ View Rounds ]</Text>
+                          </Pressable>
+                        )}
+
                         <Pressable
-                          style={styles.portalLink}
-                          onPress={() => Linking.openURL(item.portalUrl)}
+                          style={styles.viewAppBtn}
+                          onPress={() => handleCardClick(item)}
                         >
-                          <Text style={styles.portalLinkText}>Open Portal ↗</Text>
+                          <Text style={styles.viewAppBtnText}>[ View Application ]</Text>
                         </Pressable>
-                      )}
+
+                        {item.portalUrl && (
+                          <Pressable
+                            style={styles.portalLink}
+                            onPress={() => Linking.openURL(item.portalUrl)}
+                          >
+                            <Text style={styles.portalLinkText}>Open Portal ↗</Text>
+                          </Pressable>
+                        )}
+                      </View>
                     </View>
                   </HoverableCard>
                 );
@@ -413,6 +538,162 @@ export default function Application({ user, profileData }) {
                 </View>
               </View>
             </View>
+
+            {/* AI Assessment Section */}
+            {assessmentChecking ? (
+              <View style={styles.assessmentLoadingBox}>
+                <ActivityIndicator size="small" color={COLORS.green} />
+                <Text style={styles.assessmentCheckingText}>Checking assessment schedule...</Text>
+              </View>
+            ) : assessmentInfo?.has_assessment ? (
+              <View style={styles.assessmentDrawerCard}>
+                <View style={styles.assessmentCardHeader}>
+                  <Text style={styles.assessmentCardTitle}>🤖 AI Assessment Pipeline</Text>
+                  <View style={[
+                    styles.assessmentBadgeActive,
+                    assessmentInfo.overall_status === 'COMPLETED' ? { backgroundColor: '#d1fae5' } :
+                    assessmentInfo.overall_status === 'EXPIRED' ? { backgroundColor: '#fee2e2' } :
+                    assessmentInfo.can_start ? { backgroundColor: '#d1fae5' } : { backgroundColor: '#fef3c7' }
+                  ]}>
+                    <Text style={[
+                      styles.assessmentBadgeActiveText,
+                      assessmentInfo.overall_status === 'COMPLETED' ? { color: '#065f46' } :
+                      assessmentInfo.overall_status === 'EXPIRED' ? { color: '#991b1b' } :
+                      assessmentInfo.can_start ? { color: '#065f46' } : { color: '#b45309' }
+                    ]}>
+                      {assessmentInfo.overall_status === 'COMPLETED' ? 'Completed' :
+                       assessmentInfo.overall_status === 'EXPIRED' ? 'Expired' :
+                       assessmentInfo.can_start ? 'Available Now' : 'Scheduled'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.assessmentCardDesc}>
+                  This opening requires an AI-proctored multi-round evaluation. Each round follows its individual schedule and time limit.
+                </Text>
+
+                {/* Authoritative Progression Banner */}
+                {assessmentInfo.progression && (
+                  <View style={styles.studentProgressionBox}>
+                    <View style={styles.studentProgressionHeader}>
+                      <Text style={styles.studentProgressionTitle}>
+                        📍 Current Stage: <Text style={{ fontWeight: '800' }}>{assessmentInfo.progression.current_round_name || 'Round'}</Text>
+                      </Text>
+                      <View style={styles.studentProgressionBadge}>
+                        <Text style={styles.studentProgressionBadgeText}>
+                          {assessmentInfo.progression.status || 'In Assessment'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {assessmentInfo.progression.next_round_name && (
+                      <View style={styles.studentNextRoundBox}>
+                        <Text style={styles.studentNextRoundLabel}>
+                          ⏩ Next Round: <Text style={{ fontWeight: '800' }}>{assessmentInfo.progression.next_round_name}</Text>
+                        </Text>
+                        {assessmentInfo.progression.next_round_schedule && (
+                          <Text style={styles.studentNextRoundSchedule}>
+                            📅 {assessmentInfo.progression.next_round_schedule.scheduled_date || 'Date TBD'} · ⏱ {assessmentInfo.progression.next_round_schedule.scheduled_time || 'Schedule confirmed'} ({assessmentInfo.progression.next_round_schedule.timezone || 'Asia/Kolkata'})
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Round-by-Round Scheduling Breakdown */}
+                {assessmentInfo.round_schedules && assessmentInfo.round_schedules.length > 0 && (
+                  <View style={styles.studentRoundList}>
+                    {assessmentInfo.round_schedules.map((r) => {
+                      const isAvail = r.status === 'AVAILABLE';
+                      const isInProg = r.status === 'IN_PROGRESS';
+                      const isSched = r.status === 'SCHEDULED';
+                      const isComp = r.status === 'COMPLETED';
+                      const isExp = r.status === 'EXPIRED';
+
+                      return (
+                        <View key={r.round_id} style={styles.studentRoundItem}>
+                          <View style={styles.studentRoundHeader}>
+                            <Text style={styles.studentRoundName}>{r.round_name}</Text>
+                            <View style={[
+                              styles.studentRoundStatusBadge,
+                              isComp ? styles.srBadgeComp :
+                              isInProg ? styles.srBadgeInProg :
+                              isAvail ? styles.srBadgeAvail :
+                              isExp ? styles.srBadgeExp : styles.srBadgeSched
+                            ]}>
+                              <Text style={[
+                                styles.studentRoundStatusText,
+                                isComp ? styles.srTextComp :
+                                isInProg ? styles.srTextInProg :
+                                isAvail ? styles.srTextAvail :
+                                isExp ? styles.srTextExp : styles.srTextSched
+                              ]}>
+                                {isComp ? '✓ Completed' :
+                                 isInProg ? `⏱ In Progress (${Math.ceil(r.remaining_seconds / 60)}m left)` :
+                                 isAvail ? '🟢 Available' :
+                                 isExp ? '⛔ Closed' :
+                                 `⧗ Starts in ${Math.ceil(r.starts_in_seconds / 60)}m`}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.studentRoundScheduleText}>
+                            📅 {r.scheduled_date || r.start_date || 'Date TBD'}{' '}
+                            {r.schedule_mode === 'GEMINI_MANAGED'
+                              ? `· ⏱ ${r.display_time || 'Time will be assigned automatically'}`
+                              : r.schedule_mode === 'fixed_session'
+                              ? `· ⏱ ${r.display_time || `${r.start_time || '16:00'} – ${r.end_time || '16:40'}`}`
+                              : `· ⏱ ${r.start_time || '10:00'} – ${r.end_time || '22:00'}`}{' '}
+                            ({r.timezone || 'Asia/Kolkata'})
+                          </Text>
+                          <Text style={styles.studentRoundDurationText}>
+                            ⏱ Duration: {r.duration_min} min · {r.schedule_type || (r.schedule_mode === 'fixed_session' ? 'Fixed Session' : r.schedule_mode === 'GEMINI_MANAGED' ? 'Gemini Managed' : 'Flexible Window')}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {assessmentInfo.overall_status === 'COMPLETED' ? (
+                  <View style={styles.assessmentScoreBox}>
+                    <Text style={styles.assessmentScoreText}>
+                      ✓ Assessment Completed — Verified Score: <Text style={{ fontWeight: '800' }}>{assessmentInfo.session?.overall_score}%</Text>
+                    </Text>
+                  </View>
+                ) : assessmentInfo.overall_status === 'EXPIRED' ? (
+                  <View style={[styles.assessmentScoreBox, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]}>
+                    <Text style={[styles.assessmentScoreText, { color: '#b91c1c' }]}>
+                      ⛔ Assessment availability window has closed.
+                    </Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    style={[
+                      styles.startAssessmentBtn,
+                      (!assessmentInfo.can_start || assessmentLaunching) && { opacity: 0.6 }
+                    ]}
+                    onPress={handleLaunchAssessment}
+                    disabled={!assessmentInfo.can_start || assessmentLaunching}
+                  >
+                    {assessmentLaunching ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.startAssessmentBtnText}>
+                        {assessmentInfo.session?.status === 'IN_PROGRESS'
+                          ? 'Resume AI Assessment →'
+                          : assessmentInfo.can_start
+                          ? 'Start AI Assessment →'
+                          : 'Assessment Scheduled'}
+                      </Text>
+                    )}
+                  </Pressable>
+                )}
+
+                {assessmentError ? (
+                  <Text style={styles.assessmentErrorText}>{assessmentError}</Text>
+                ) : null}
+              </View>
+            ) : null}
 
             {selectedApp.portalUrl && (
               <Pressable
@@ -777,10 +1058,279 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
+    marginTop: 8,
   },
   drawerPortalBtnText: {
     color: COLORS.paper,
     fontWeight: '700',
     fontSize: 13.5,
+  },
+  assessmentDrawerCard: {
+    backgroundColor: COLORS.mint,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.mintBorder,
+    padding: 14,
+    marginBottom: 16,
+    gap: 8,
+  },
+  assessmentCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  assessmentCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.teal,
+  },
+  assessmentBadgeActive: {
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  assessmentBadgeActiveText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065f46',
+  },
+  assessmentCardDesc: {
+    fontSize: 12,
+    color: COLORS.muted,
+    lineHeight: 16,
+  },
+  studentRoundList: {
+    gap: 8,
+    marginVertical: 4,
+  },
+  studentRoundItem: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.mintBorder,
+    borderRadius: 8,
+    padding: 10,
+    gap: 4,
+  },
+  studentRoundHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  studentRoundName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.ink,
+  },
+  studentRoundStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  studentRoundStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  srBadgeComp: { backgroundColor: '#d1fae5' },
+  srTextComp: { color: '#065f46' },
+  srBadgeInProg: { backgroundColor: '#dbeafe' },
+  srTextInProg: { color: '#1d4ed8' },
+  srBadgeAvail: { backgroundColor: '#ecfdf5' },
+  srTextAvail: { color: '#047857' },
+  srBadgeExp: { backgroundColor: '#fee2e2' },
+  srTextExp: { color: '#b91c1c' },
+  srBadgeSched: { backgroundColor: '#fef3c7' },
+  srTextSched: { color: '#b45309' },
+  studentRoundScheduleText: {
+    fontSize: 11,
+    color: COLORS.muted,
+    fontWeight: '600',
+  },
+  studentRoundDurationText: {
+    fontSize: 10.5,
+    color: COLORS.muted,
+  },
+  startAssessmentBtn: {
+    backgroundColor: COLORS.teal,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startAssessmentBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  assessmentScoreBox: {
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.mintBorder,
+  },
+  assessmentScoreText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.green,
+  },
+  assessmentLoadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    backgroundColor: COLORS.panel,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  assessmentCheckingText: {
+    fontSize: 12,
+    color: COLORS.muted,
+  },
+  assessmentErrorText: {
+    fontSize: 11,
+    color: COLORS.rose,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  studentProgressionBox: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  studentProgressionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  studentProgressionTitle: {
+    fontSize: 12,
+    color: '#0F766E',
+  },
+  studentProgressionBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  studentProgressionBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  studentNextRoundBox: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#CCFBF1',
+  },
+  studentNextRoundLabel: {
+    fontSize: 11,
+    color: '#0F766E',
+    marginBottom: 2,
+  },
+  studentNextRoundSchedule: {
+    fontSize: 10.5,
+    color: COLORS.muted,
+    fontWeight: '600',
+  },
+  authoritativeDetailBox: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 6,
+  },
+  detailRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: COLORS.muted,
+    fontWeight: '600',
+  },
+  detailValueBold: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: COLORS.ink,
+  },
+  nextActionHighlight: {
+    fontSize: 13,
+    fontWeight: '750',
+    color: COLORS.teal,
+  },
+  selectedMessageBox: {
+    backgroundColor: '#d1fae5',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 4,
+    gap: 2,
+  },
+  selectedPipelineText: {
+    fontSize: 12,
+    color: '#065f46',
+    fontWeight: '600',
+  },
+  selectedCongratsText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065f46',
+  },
+  rejectedMessageBox: {
+    backgroundColor: '#ffe4e6',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 4,
+  },
+  rejectedReasonText: {
+    fontSize: 12.5,
+    color: '#9f1239',
+    fontWeight: '600',
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  viewRoundsBtn: {
+    backgroundColor: COLORS.mint,
+    borderWidth: 1,
+    borderColor: COLORS.mintBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  viewRoundsBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: COLORS.teal,
+  },
+  viewAppBtn: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  viewAppBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: COLORS.ink,
   },
 });

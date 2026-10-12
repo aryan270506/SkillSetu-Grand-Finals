@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkillSetu — Comprehensive Assessment Dossier</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">SkillSetu AI Assessment</a>
+    <nav><a href="/">New Assessment</a><a href="/reports.html">Past Reports</a></nav>
+  </header>
+
+  <main class="container">
+    <h1 id="title">Candidate Assessment Dossier</h1>
+    <p class="sub" id="meta"></p>
+
+    <div class="report-grid">
+      <!-- Media Playback & Transcript -->
+      <section class="stack">
+        <div class="card">
+          <h2>Session Recording</h2>
+          <video id="video" controls preload="metadata"></video>
+          <p class="sub hidden" id="noVideo" style="margin:0">No video recording saved for this session.</p>
+        </div>
+        <div class="card">
+          <h2>Full Session Transcript</h2>
+          <div class="transcript" id="transcript"></div>
+        </div>
+      </section>
+
+      <!-- Multi-Round Evaluation Dossier -->
+      <aside class="stack" id="evaluation">
+        <div class="card"><p class="sub" style="margin:0">Loading evaluation dossier…</p></div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="/js/report.js"></script>
+</body>
+</html>

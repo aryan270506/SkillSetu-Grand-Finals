@@ -16,7 +16,10 @@ import RecruiterDashboard from '../Dashboard/Recruter-Dashboard';
 import Internship from '../Internship/Internship';
 import Applications from '../Applications/Applications';
 import Interviews from '../Interviews/Interviews';
+import Analytics from '../Analytics/Analytics';
 import RecruterProfile from '../Profile/Profile';
+import { recruiterService } from '../services/recruiterService';
+import InternshipFormModal from '../Internship/InternshipFormModal';
 
 const COLORS = {
     headerBg: '#FFFFFF',
@@ -26,26 +29,45 @@ const COLORS = {
     primaryTeal: '#004D40',
     primaryTealLight: '#005C4B',
     mintBg: '#E6F4F1',
+    mintBadge: '#D1FAE5',
+    mintBadgeText: '#065F46',
     avatarBg: '#004D40',
     badgeRed: '#EF4444',
     pageBg: '#F8FAFC',
+    amberBg: '#FEF3C7',
+    amberText: '#92400E',
+    accentGreen: '#10B981',
 };
 
 export default function RecruterHeader({ user, onLogout }) {
     const { width } = useWindowDimensions();
     const isCompact = width < 900;
+    const token = user?.token || user?.access_token || '';
+
     const [activeTab, setActiveTab] = useState('Dashboard');
     const [hoveredTabId, setHoveredTabId] = useState(null);
     const [showDropdown, setShowDropdown] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const [showPostModal, setShowPostModal] = useState(false);
 
+    // Live Authoritative Profile & Completion State from Backend
+    const [profileData, setProfileData] = useState(null);
+    const [completion, setCompletion] = useState({
+        percentage: user?.completion_percentage || 0,
+        is_complete: !!user?.profile_completed,
+        missing_required_sections: [],
+    });
+
     // New Internship Form State
     const [roleTitle, setRoleTitle] = useState('');
-    const [department, setDepartment] = useState('TechNova Engineering');
-    const [location, setLocation] = useState('Bengaluru (Hybrid)');
+    const [department, setDepartment] = useState('Engineering');
+    const [location, setLocation] = useState('Pune (Hybrid)');
     const [stipend, setStipend] = useState('₹35,000/mo');
+    const [skillsText, setSkillsText] = useState('React, Python, Docker');
+    const [applicationThreshold, setApplicationThreshold] = useState(80);
+    const [postLoading, setPostLoading] = useState(false);
     const [postSuccess, setPostSuccess] = useState(false);
+    const [postError, setPostError] = useState('');
 
     const tabs = [
         'Dashboard',
@@ -53,7 +75,7 @@ export default function RecruterHeader({ user, onLogout }) {
         'Internships',
         'Students',
         'Applications',
-        'Interviews',
+        'Assessments',
         'Analytics',
     ];
 
@@ -64,6 +86,34 @@ export default function RecruterHeader({ user, onLogout }) {
             scaleAnims[tab] = new Animated.Value(1);
         }
     });
+
+    // Fetch initial authoritative profile from PostgreSQL
+    const loadProfileData = async () => {
+        try {
+            const data = await recruiterService.getProfile(token);
+            if (data) {
+                setProfileData(data);
+                if (data.completion) {
+                    setCompletion(data.completion);
+                }
+            }
+        } catch (err) {
+            console.warn('Recruiter header profile check:', err);
+        }
+    };
+
+    useEffect(() => {
+        loadProfileData();
+    }, [token]);
+
+    const handleProfileUpdated = (updatedData) => {
+        if (updatedData) {
+            setProfileData(updatedData);
+            if (updatedData.completion) {
+                setCompletion(updatedData.completion);
+            }
+        }
+    };
 
     // Animate tab scales on hoveredTabId changes
     useEffect(() => {
@@ -95,14 +145,43 @@ export default function RecruterHeader({ user, onLogout }) {
         });
     }, [hoveredTabId]);
 
-    const handlePublishInternship = () => {
-        if (!roleTitle.trim()) return;
-        setPostSuccess(true);
-        setTimeout(() => {
-            setPostSuccess(false);
-            setShowPostModal(false);
-            setRoleTitle('');
-        }, 1000);
+    const handlePublishInternship = async () => {
+        if (!roleTitle.trim()) {
+            setPostError('Role title is required.');
+            return;
+        }
+        setPostLoading(true);
+        setPostError('');
+        try {
+            const skillsArr = skillsText.split(',').map((s) => s.trim()).filter(Boolean);
+            const threshVal = parseInt(applicationThreshold, 10) || 80;
+            await recruiterService.createInternship(token, {
+                title: roleTitle.trim(),
+                department: department.trim(),
+                location: location.trim(),
+                stipend: stipend.trim(),
+                required_skills: skillsArr,
+                application_threshold: threshVal,
+            });
+            setPostSuccess(true);
+            setTimeout(() => {
+                setPostSuccess(false);
+                setShowPostModal(false);
+                setRoleTitle('');
+                setApplicationThreshold(80);
+                loadProfileData();
+            }, 1200);
+        } catch (err) {
+            setPostError(err.message || 'Failed to publish opening. Complete your company profile first.');
+        } finally {
+            setPostLoading(false);
+        }
+    };
+
+    const isLockedTab = (tab) => {
+        if (completion.is_complete) return false;
+        if (tab === 'My Profile') return false;
+        return true;
     };
 
     return (
@@ -127,11 +206,12 @@ export default function RecruterHeader({ user, onLogout }) {
                     </Text>
                 </Pressable>
 
-                {/* Navigation Tabs - Centered with Spring Scale Hover Animation */}
+                {/* Navigation Tabs */}
                 {!isCompact && (
                     <View style={styles.headerCenter}>
                         {tabs.map((tab) => {
                             const isActive = activeTab === tab;
+                            const locked = isLockedTab(tab);
                             const scaleAnim = scaleAnims[tab] || new Animated.Value(1);
 
                             return (
@@ -156,9 +236,10 @@ export default function RecruterHeader({ user, onLogout }) {
                                             style={[
                                                 styles.tabText,
                                                 isActive && styles.tabTextActive,
+                                                locked && tab !== 'Dashboard' && styles.tabTextLocked,
                                             ]}
                                         >
-                                            {tab}
+                                            {tab} {locked && tab !== 'Dashboard' ? '🔒' : ''}
                                         </Text>
                                         {isActive && <View style={styles.activeIndicator} />}
                                     </Animated.View>
@@ -170,9 +251,22 @@ export default function RecruterHeader({ user, onLogout }) {
 
                 {/* Header Right Actions */}
                 <View style={styles.headerRight}>
-                    {/* Search Icon */}
-                    <Pressable style={styles.iconButton}>
-                        <Text style={styles.iconText}>🔍</Text>
+                    {/* Completion Status Pill */}
+                    <Pressable
+                        onPress={() => setActiveTab('My Profile')}
+                        style={[
+                            styles.headerCompletionPill,
+                            completion.is_complete ? styles.completionPillDone : styles.completionPillPending,
+                        ]}
+                    >
+                        <Text style={[
+                            styles.headerCompletionText,
+                            completion.is_complete ? styles.completionTextDone : styles.completionTextPending,
+                        ]}>
+                            {completion.is_complete
+                                ? '✓ Profile Complete'
+                                : `Company Profile: ${completion.percentage}% Complete`}
+                        </Text>
                     </Pressable>
 
                     {/* Notification Bell */}
@@ -181,36 +275,61 @@ export default function RecruterHeader({ user, onLogout }) {
                         style={styles.iconButton}
                     >
                         <Text style={styles.iconText}>🔔</Text>
-                        <View style={styles.bellBadge}>
-                            <Text style={styles.bellBadgeText}>1</Text>
-                        </View>
                     </Pressable>
 
-                    {/* User Profile */}
+                    {/* User Profile Dropdown */}
                     <Pressable
                         onPress={() => setShowDropdown(!showDropdown)}
                         style={styles.userProfileRow}
                     >
                         <View style={styles.userAvatar}>
                             <Text style={styles.userAvatarText}>
-                                {user?.name ? user.name.charAt(0) : 'N'}
+                                {user?.name ? user.name.charAt(0).toUpperCase() : 'R'}
                             </Text>
                         </View>
                         {!isCompact && (
                             <View style={styles.userInfoText}>
                                 <Text style={styles.userName} numberOfLines={1}>
-                                    {user?.name || 'Neha Sharma'}
+                                    {user?.name || profileData?.recruiter?.name || 'Recruiter'}
                                 </Text>
                                 <Text style={styles.userRole} numberOfLines={1}>
-                                    {user?.companyName
-                                        ? `Talent Lead • ${user.companyName}`
-                                        : 'Talent Lead • TechNova'}
+                                    {profileData?.company?.name
+                                        ? `${profileData.recruiter?.designation || 'Lead'} • ${profileData.company.name}`
+                                        : (user?.companyName ? `Lead • ${user.companyName}` : 'Recruiter Workspace')}
                                 </Text>
                             </View>
                         )}
                     </Pressable>
                 </View>
             </View>
+
+            {/* Mandatory Company Profile Completion Banner (Shown on every tab until complete) */}
+            {!completion.is_complete && (
+                <View style={styles.mandatoryBanner}>
+                    <View style={styles.bannerLeft}>
+                        <Text style={styles.bannerShieldIcon}>🛡️</Text>
+                        <View>
+                            <Text style={styles.bannerTitle}>
+                                Complete your company profile to unlock recruiter features.
+                            </Text>
+                            <Text style={styles.bannerSub}>
+                                Company profile is currently <Text style={{ fontWeight: '800' }}>{completion.percentage}% complete</Text>. Required threshold is 80%+ with all mandatory sections.
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.bannerRight}>
+                        <View style={styles.bannerProgressBar}>
+                            <View style={[styles.bannerProgressFill, { width: `${Math.max(5, completion.percentage)}%` }]} />
+                        </View>
+                        <Pressable
+                            style={styles.bannerActionBtn}
+                            onPress={() => setActiveTab('My Profile')}
+                        >
+                            <Text style={styles.bannerActionBtnText}>Complete Profile →</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            )}
 
             {/* Compact View Tab Bar */}
             {isCompact && (
@@ -222,6 +341,7 @@ export default function RecruterHeader({ user, onLogout }) {
                 >
                     {tabs.map((tab) => {
                         const isActive = activeTab === tab;
+                        const locked = isLockedTab(tab);
                         return (
                             <Pressable
                                 key={tab}
@@ -229,9 +349,13 @@ export default function RecruterHeader({ user, onLogout }) {
                                 style={[styles.tabItem, isActive && styles.tabItemActive]}
                             >
                                 <Text
-                                    style={[styles.tabText, isActive && styles.tabTextActive]}
+                                    style={[
+                                        styles.tabText,
+                                        isActive && styles.tabTextActive,
+                                        locked && tab !== 'Dashboard' && styles.tabTextLocked,
+                                    ]}
                                 >
-                                    {tab}
+                                    {tab} {locked && tab !== 'Dashboard' ? '🔒' : ''}
                                 </Text>
                                 {isActive && <View style={styles.activeIndicator} />}
                             </Pressable>
@@ -246,15 +370,11 @@ export default function RecruterHeader({ user, onLogout }) {
                     <Text style={styles.notifTitle}>Notifications</Text>
                     <View style={styles.notifItem}>
                         <Text style={styles.notifText}>
-                            Rahul Sharma applied for Backend Development Intern.
+                            {completion.is_complete
+                                ? 'Your company workspace is active on SkillSetu.'
+                                : 'Complete your company profile to start publishing openings.'}
                         </Text>
-                        <Text style={styles.notifTime}>10m ago</Text>
-                    </View>
-                    <View style={styles.notifItem}>
-                        <Text style={styles.notifText}>
-                            Interview scheduled with Aditya Singh for tomorrow.
-                        </Text>
-                        <Text style={styles.notifTime}>3h ago</Text>
+                        <Text style={styles.notifTime}>Live</Text>
                     </View>
                 </View>
             )}
@@ -263,10 +383,10 @@ export default function RecruterHeader({ user, onLogout }) {
             {showDropdown && (
                 <View style={styles.dropdownPopover}>
                     <Text style={styles.dropdownName}>
-                        {user?.name || 'Neha Sharma'}
+                        {user?.name || profileData?.recruiter?.name || 'Recruiter'}
                     </Text>
                     <Text style={styles.dropdownSub}>
-                        {user?.email || 'neha.sharma@technova.com'}
+                        {user?.email || profileData?.recruiter?.email || ''}
                     </Text>
                     <View style={styles.dropdownDivider} />
                     <Pressable
@@ -276,7 +396,7 @@ export default function RecruterHeader({ user, onLogout }) {
                         }}
                         style={styles.dropdownItem}
                     >
-                        <Text style={styles.dropdownItemText}>👤 My Profile</Text>
+                        <Text style={styles.dropdownItemText}>👤 My Profile & Organization</Text>
                     </Pressable>
                     <Pressable
                         onPress={() => {
@@ -290,19 +410,71 @@ export default function RecruterHeader({ user, onLogout }) {
                 </View>
             )}
 
-            {/* Screen Body */}
+            {/* Screen Body with Route Guard */}
             <View style={styles.screenBody}>
                 {activeTab === 'My Profile' ? (
-                    <RecruterProfile />
+                    <RecruterProfile
+                        user={user}
+                        onProfileUpdated={handleProfileUpdated}
+                        onNavigateTab={(tab) => setActiveTab(tab)}
+                    />
+                ) : !completion.is_complete && activeTab !== 'Dashboard' ? (
+                    /* Locked State Feature Gate Overlay for Incomplete Profiles */
+                    <View style={styles.lockedFeatureContainer}>
+                        <View style={styles.lockedFeatureCard}>
+                            <View style={styles.lockedIconCircle}>
+                                <Text style={styles.lockedIconEmoji}>🔒</Text>
+                            </View>
+                            <Text style={styles.lockedFeatureTitle}>
+                                {activeTab} Feature Locked
+                            </Text>
+                            <Text style={styles.lockedFeatureDesc}>
+                                Complete your company profile to unlock candidate discovery, internship publishing, application tracking, interview scheduling, and analytics.
+                            </Text>
+
+                            <View style={styles.lockedProgressBox}>
+                                <View style={styles.lockedProgressRow}>
+                                    <Text style={styles.lockedProgressLabel}>Company Profile Progress</Text>
+                                    <Text style={styles.lockedProgressVal}>{completion.percentage}%</Text>
+                                </View>
+                                <View style={styles.lockedTrack}>
+                                    <View style={[styles.lockedFill, { width: `${Math.max(5, completion.percentage)}%` }]} />
+                                </View>
+                            </View>
+
+                            {completion.missing_required_sections?.length > 0 && (
+                                <View style={styles.missingBox}>
+                                    <Text style={styles.missingBoxTitle}>Required sections remaining:</Text>
+                                    {completion.missing_required_sections.map((sec, idx) => (
+                                        <Text key={idx} style={styles.missingItemText}>• {sec}</Text>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Pressable
+                                style={styles.unlockActionBtn}
+                                onPress={() => setActiveTab('My Profile')}
+                            >
+                                <Text style={styles.unlockActionBtnText}>Complete Company Profile Now →</Text>
+                            </Pressable>
+                        </View>
+                    </View>
                 ) : activeTab === 'Internships' ? (
-                    <Internship onOpenPostModal={() => setShowPostModal(true)} />
+                    <Internship
+                        user={user}
+                        onOpenPostModal={() => setShowPostModal(true)}
+                    />
                 ) : activeTab === 'Applications' ? (
-                    <Applications />
-                ) : activeTab === 'Interviews' ? (
-                    <Interviews />
+                    <Applications user={user} />
+                ) : activeTab === 'Assessments' || activeTab === 'Interviews' ? (
+                    <Interviews user={user} />
+                ) : activeTab === 'Analytics' ? (
+                    <Analytics user={user} onNavigateTab={(tab) => setActiveTab(tab)} />
                 ) : (
                     <RecruiterDashboard
                         user={user}
+                        profileData={profileData}
+                        completion={completion}
                         activeTab={activeTab}
                         onNavigateTab={(tab) => setActiveTab(tab)}
                         onOpenPostModal={() => setShowPostModal(true)}
@@ -310,78 +482,16 @@ export default function RecruterHeader({ user, onLogout }) {
                 )}
             </View>
 
-            {/* Post New Internship Modal */}
-            <Modal
+            {/* Post New Internship Modal (Create Mode) */}
+            <InternshipFormModal
                 visible={showPostModal}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowPostModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalCard}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Post New Internship</Text>
-                            <Pressable onPress={() => setShowPostModal(false)}>
-                                <Text style={styles.modalCloseText}>✕</Text>
-                            </Pressable>
-                        </View>
-
-                        {postSuccess && (
-                            <View style={styles.successBanner}>
-                                <Text style={styles.successBannerText}>
-                                    ✓ Internship published successfully!
-                                </Text>
-                            </View>
-                        )}
-
-                        <ScrollView style={styles.modalForm}>
-                            <Text style={styles.label}>Role Title *</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="e.g. Backend Development Intern"
-                                value={roleTitle}
-                                onChangeText={setRoleTitle}
-                            />
-
-                            <Text style={styles.label}>Department / Team</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={department}
-                                onChangeText={setDepartment}
-                            />
-
-                            <Text style={styles.label}>Location</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={location}
-                                onChangeText={setLocation}
-                            />
-
-                            <Text style={styles.label}>Monthly Stipend</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={stipend}
-                                onChangeText={setStipend}
-                            />
-                        </ScrollView>
-
-                        <View style={styles.modalFooter}>
-                            <Pressable
-                                onPress={() => setShowPostModal(false)}
-                                style={styles.cancelBtn}
-                            >
-                                <Text style={styles.cancelBtnText}>Cancel</Text>
-                            </Pressable>
-                            <Pressable
-                                onPress={handlePublishInternship}
-                                style={styles.publishBtn}
-                            >
-                                <Text style={styles.publishBtnText}>Publish Opening</Text>
-                            </Pressable>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+                mode="create"
+                token={token}
+                onClose={() => setShowPostModal(false)}
+                onSuccess={() => {
+                    loadProfileData();
+                }}
+            />
         </SafeAreaView>
     );
 }
@@ -448,120 +558,132 @@ const styles = StyleSheet.create({
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#f59e0b',
+        backgroundColor: '#00BFA5',
     },
     logoNodeLeft: {
         position: 'absolute',
-        bottom: 0,
-        left: 1,
-        width: 7,
-        height: 7,
-        borderRadius: 4,
-        backgroundColor: '#2c6370',
+        top: 10,
+        left: 0,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: COLORS.primaryTeal,
     },
     logoNodeRight: {
         position: 'absolute',
-        right: 1,
-        bottom: 0,
-        width: 7,
-        height: 7,
-        borderRadius: 4,
+        top: 6,
+        right: 0,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
         backgroundColor: COLORS.primaryTeal,
     },
     logoTitle: {
         fontSize: 20,
         fontWeight: '800',
-        color: COLORS.primaryTeal,
-        letterSpacing: -0.5,
+        color: '#171d35',
     },
     logoTitleAccent: {
-        color: COLORS.primaryTeal,
+        color: '#00BFA5',
     },
     headerCenter: {
-        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 24,
+        gap: 8,
     },
     tabItem: {
-        paddingVertical: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
         position: 'relative',
     },
-    tabItemActive: {},
+    tabItemActive: {
+        backgroundColor: COLORS.mintBg,
+    },
     tabText: {
-        fontSize: 14,
-        fontWeight: '500',
+        fontSize: 13,
+        fontWeight: '600',
         color: COLORS.textMuted,
     },
     tabTextActive: {
         color: COLORS.primaryTeal,
         fontWeight: '700',
     },
+    tabTextLocked: {
+        color: '#94A3B8',
+    },
     activeIndicator: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 3,
+        bottom: -2,
+        left: 14,
+        right: 14,
+        height: 2,
         backgroundColor: COLORS.primaryTeal,
-        borderTopLeftRadius: 2,
-        borderTopRightRadius: 2,
+        borderRadius: 2,
     },
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 16,
+        gap: 12,
+    },
+    headerCompletionPill: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+    },
+    completionPillPending: {
+        backgroundColor: COLORS.amberBg,
+        borderColor: '#FDE68A',
+    },
+    completionPillDone: {
+        backgroundColor: COLORS.mintBadge,
+        borderColor: '#A7F3D0',
+    },
+    headerCompletionText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    completionTextPending: {
+        color: COLORS.amberText,
+    },
+    completionTextDone: {
+        color: COLORS.mintBadgeText,
     },
     iconButton: {
         width: 36,
         height: 36,
-        borderRadius: 18,
-        backgroundColor: '#F1F5F9',
+        borderRadius: 8,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: COLORS.border,
         justifyContent: 'center',
         alignItems: 'center',
-        position: 'relative',
     },
     iconText: {
         fontSize: 15,
-    },
-    bellBadge: {
-        position: 'absolute',
-        top: 2,
-        right: 2,
-        backgroundColor: COLORS.badgeRed,
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    bellBadgeText: {
-        color: '#FFFFFF',
-        fontSize: 9,
-        fontWeight: '800',
     },
     userProfileRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        paddingLeft: 8,
+        paddingLeft: 4,
     },
     userAvatar: {
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: COLORS.primaryTeal,
+        backgroundColor: COLORS.avatarBg,
         justifyContent: 'center',
         alignItems: 'center',
     },
     userAvatarText: {
         color: '#FFFFFF',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '700',
     },
     userInfoText: {
-        justifyContent: 'center',
+        maxWidth: 160,
     },
     userName: {
         fontSize: 13,
@@ -571,72 +693,142 @@ const styles = StyleSheet.create({
     userRole: {
         fontSize: 11,
         color: COLORS.textMuted,
-        marginTop: 1,
     },
+
+    // Mandatory Banner
+    mandatoryBanner: {
+        backgroundColor: '#0F172A',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    bannerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        flex: 1,
+        minWidth: 300,
+    },
+    bannerShieldIcon: {
+        fontSize: 22,
+    },
+    bannerTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#FFFFFF',
+        marginBottom: 2,
+    },
+    bannerSub: {
+        fontSize: 12,
+        color: '#94A3B8',
+    },
+    bannerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+    },
+    bannerProgressBar: {
+        width: 120,
+        height: 8,
+        backgroundColor: '#334155',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    bannerProgressFill: {
+        height: '100%',
+        backgroundColor: '#10B981',
+        borderRadius: 4,
+    },
+    bannerActionBtn: {
+        backgroundColor: '#00BFA5',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 6,
+    },
+    bannerActionBtnText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#0F172A',
+    },
+
+    // Compact Bar
     compactTabsScroll: {
-        backgroundColor: COLORS.headerBg,
+        backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
+        maxHeight: 48,
     },
     compactTabsContainer: {
         paddingHorizontal: 16,
-        gap: 16,
+        paddingVertical: 6,
+        gap: 8,
     },
+
+    // Notif Popover
     notifPopover: {
         position: 'absolute',
-        top: 64,
+        top: 68,
         right: 80,
-        width: 280,
+        width: 300,
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
-        padding: 14,
         borderWidth: 1,
         borderColor: COLORS.border,
+        padding: 16,
         shadowColor: '#000',
-        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
         shadowRadius: 10,
-        elevation: 6,
         zIndex: 200,
+        elevation: 8,
     },
     notifTitle: {
-        fontSize: 13,
-        fontWeight: '700',
+        fontSize: 14,
+        fontWeight: '800',
         color: COLORS.textMain,
-        marginBottom: 8,
+        marginBottom: 10,
     },
     notifItem: {
-        paddingVertical: 6,
+        paddingVertical: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
     },
     notifText: {
         fontSize: 12,
         color: COLORS.textMain,
+        lineHeight: 16,
     },
     notifTime: {
         fontSize: 10,
         color: COLORS.textMuted,
-        marginTop: 2,
+        marginTop: 4,
     },
+
+    // Dropdown Popover
     dropdownPopover: {
         position: 'absolute',
-        top: 64,
+        top: 68,
         right: 24,
-        width: 220,
+        width: 240,
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
-        padding: 14,
         borderWidth: 1,
         borderColor: COLORS.border,
+        padding: 16,
         shadowColor: '#000',
-        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
         shadowRadius: 10,
-        elevation: 6,
         zIndex: 200,
+        elevation: 8,
     },
     dropdownName: {
         fontSize: 14,
-        fontWeight: '700',
+        fontWeight: '800',
         color: COLORS.textMain,
     },
     dropdownSub: {
@@ -647,7 +839,7 @@ const styles = StyleSheet.create({
     dropdownDivider: {
         height: 1,
         backgroundColor: COLORS.border,
-        marginVertical: 10,
+        marginVertical: 12,
     },
     dropdownItem: {
         paddingVertical: 8,
@@ -663,78 +855,215 @@ const styles = StyleSheet.create({
     dropdownLogoutText: {
         fontSize: 13,
         fontWeight: '700',
-        color: COLORS.badgeRed,
+        color: '#EF4444',
     },
+
+    // Screen Body
     screenBody: {
         flex: 1,
+    },
+
+    // Locked Feature Gate
+    lockedFeatureContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    lockedFeatureCard: {
+        maxWidth: 520,
+        width: '100%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        padding: 32,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 4,
+    },
+    lockedIconCircle: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: COLORS.amberBg,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    lockedIconEmoji: {
+        fontSize: 28,
+    },
+    lockedFeatureTitle: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: COLORS.textMain,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    lockedFeatureDesc: {
+        fontSize: 13,
+        lineHeight: 20,
+        color: COLORS.textMuted,
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    lockedProgressBox: {
+        width: '100%',
+        backgroundColor: '#F8FAFC',
+        padding: 14,
+        borderRadius: 10,
+        marginBottom: 16,
+    },
+    lockedProgressRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    lockedProgressLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: COLORS.textMain,
+    },
+    lockedProgressVal: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: COLORS.primaryTeal,
+    },
+    lockedTrack: {
+        width: '100%',
+        height: 8,
+        backgroundColor: '#E2E8F0',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    lockedFill: {
+        height: '100%',
+        backgroundColor: COLORS.primaryTeal,
+        borderRadius: 4,
+    },
+    missingBox: {
+        width: '100%',
+        backgroundColor: '#FFFBEB',
+        borderColor: '#FDE68A',
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 20,
+    },
+    missingBoxTitle: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: COLORS.amberText,
+        marginBottom: 4,
+    },
+    missingItemText: {
+        fontSize: 12,
+        color: '#92400E',
+        lineHeight: 18,
+    },
+    unlockActionBtn: {
+        width: '100%',
+        backgroundColor: COLORS.primaryTeal,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    unlockActionBtnText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '700',
     },
 
     // Modal
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
     },
     modalCard: {
         width: '100%',
-        maxWidth: 500,
+        maxWidth: 540,
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
-        padding: 24,
+        overflow: 'hidden',
     },
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
     },
     modalTitle: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '800',
         color: COLORS.textMain,
     },
     modalCloseText: {
         fontSize: 18,
         color: COLORS.textMuted,
+        fontWeight: '700',
     },
     successBanner: {
-        backgroundColor: COLORS.mintBg,
-        padding: 10,
+        backgroundColor: COLORS.mintBadge,
+        padding: 12,
+        marginHorizontal: 20,
+        marginTop: 12,
         borderRadius: 8,
-        marginBottom: 12,
     },
     successBannerText: {
-        color: COLORS.primaryTeal,
+        color: COLORS.mintBadgeText,
         fontSize: 13,
         fontWeight: '700',
-        textAlign: 'center',
+    },
+    errorBanner: {
+        backgroundColor: '#FEE2E2',
+        padding: 12,
+        marginHorizontal: 20,
+        marginTop: 12,
+        borderRadius: 8,
+    },
+    errorBannerText: {
+        color: '#DC2626',
+        fontSize: 13,
+        fontWeight: '600',
     },
     modalForm: {
-        maxHeight: 300,
+        padding: 20,
+        maxHeight: 400,
     },
     label: {
         fontSize: 12,
         fontWeight: '700',
         color: COLORS.textMain,
+        marginBottom: 6,
         marginTop: 10,
-        marginBottom: 4,
     },
     input: {
+        backgroundColor: '#FFFFFF',
         borderWidth: 1,
         borderColor: COLORS.border,
         borderRadius: 8,
         paddingHorizontal: 12,
         paddingVertical: 10,
         fontSize: 13,
-        color: COLORS.textMain,
     },
     modalFooter: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
         gap: 12,
-        marginTop: 20,
+        padding: 20,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+        backgroundColor: '#F8FAFC',
     },
     cancelBtn: {
         paddingHorizontal: 16,
@@ -742,21 +1071,117 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         borderWidth: 1,
         borderColor: COLORS.border,
+        backgroundColor: '#FFFFFF',
     },
     cancelBtnText: {
         fontSize: 13,
-        fontWeight: '600',
+        fontWeight: '700',
         color: COLORS.textMuted,
     },
     publishBtn: {
-        backgroundColor: COLORS.primaryTeal,
         paddingHorizontal: 18,
         paddingVertical: 10,
         borderRadius: 8,
+        backgroundColor: COLORS.primaryTeal,
     },
     publishBtnText: {
         fontSize: 13,
         fontWeight: '700',
         color: '#FFFFFF',
+    },
+    thresholdSection: {
+        marginTop: 18,
+        padding: 14,
+        backgroundColor: '#F0FDFA',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#99F6E4',
+    },
+    thresholdHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    thresholdSectionTitle: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#0F766E',
+        letterSpacing: 0.5,
+    },
+    thresholdCurrentBadge: {
+        backgroundColor: '#CCFBF1',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#5EEAD4',
+    },
+    thresholdCurrentBadgeText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#0F766E',
+    },
+    thresholdDesc: {
+        fontSize: 12,
+        color: '#334155',
+        lineHeight: 16,
+        marginBottom: 10,
+    },
+    thresholdPillsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 10,
+    },
+    thresholdPill: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 6,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+    },
+    thresholdPillActive: {
+        backgroundColor: '#0F766E',
+        borderColor: '#0F766E',
+    },
+    thresholdPillText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    thresholdPillTextActive: {
+        color: '#FFFFFF',
+    },
+    customThresholdRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 10,
+    },
+    customThresholdLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#334155',
+    },
+    customThresholdInput: {
+        width: 60,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#99F6E4',
+        borderRadius: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#0F766E',
+        textAlign: 'center',
+    },
+    thresholdHelpText: {
+        fontSize: 11,
+        fontStyle: 'italic',
+        color: '#0D9488',
+        lineHeight: 15,
     },
 });

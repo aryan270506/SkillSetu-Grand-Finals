@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkillSetu — AI Assessment &amp; Interview System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">SkillSetu AI Assessment</a>
+    <nav><a href="/">New Assessment</a><a href="/reports.html">Past Reports</a></nav>
+  </header>
+
+  <main class="container narrow">
+    <h1>Start Assessment &amp; Interview</h1>
+    <p class="sub">Upload candidate resume and the job description. The AI Multi-Agent system will orchestrate role-specific evaluation rounds.</p>
+
+    <form id="setup" class="card">
+      <label for="name">Candidate Full Name</label>
+      <input type="text" id="name" name="name" required placeholder="e.g. Rahul Sharma">
+
+      <label for="resume">Resume <span class="hint">(PDF, DOCX or TXT, max 10 MB)</span></label>
+      <input type="file" id="resume" name="resume" accept=".pdf,.docx,.txt,.md" required>
+
+      <label for="jd">Job Description / Required Skills</label>
+      <textarea id="jd" name="jd" required placeholder="Paste the job description and key competencies here…"></textarea>
+
+      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);">
+        <label style="margin-top:0;">Assessment Pipeline Configuration</label>
+        <p class="sub" style="font-size: 13px; margin-bottom: 12px;">Choose which AI agent rounds to include in this evaluation:</p>
+        
+        <div style="display: grid; gap: 8px;">
+          <label style="display:flex; align-items:center; gap:8px; font-weight:normal; margin:0; cursor:pointer;">
+            <input type="checkbox" id="round_aptitude" name="round_aptitude" checked>
+            <span><b>Round 1: Aptitude Agent</b> (Dynamic MCQ, Quantitative, Logical, Verbal)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-weight:normal; margin:0; cursor:pointer;">
+            <input type="checkbox" id="round_technical" name="round_technical" checked>
+            <span><b>Round 2: Technical Agent</b> (Conceptual Theory + Live Code Sandbox)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-weight:normal; margin:0; cursor:pointer;">
+            <input type="checkbox" id="round_interview" name="round_interview" checked>
+            <span><b>Round 3: AI Interview Agent</b> (LiveKit + Gemini Live Native Voice)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-weight:normal; margin:0; cursor:pointer;">
+            <input type="checkbox" id="round_gd" name="round_gd" checked>
+            <span><b>Round 4: Group Discussion Agent</b> (Debate Topic + Individual Collaboration Evaluation)</span>
+          </label>
+        </div>
+      </div>
+
+      <label for="questionCount">Questions per Round <span class="hint">(3–15)</span></label>
+      <input type="number" id="questionCount" name="questionCount" min="3" max="15" value="6">
+
+      <button class="btn block" type="submit" id="submit">Launch Assessment Pipeline</button>
+      <div class="error" id="error"></div>
+    </form>
+  </main>
+
+  <script>
+    const form = document.getElementById('setup');
+    const btn = document.getElementById('submit');
+    const errorEl = document.getElementById('error');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Orchestrating AI Agents…';
+
+      const formData = new FormData(form);
+      const pipelineConfig = {
+        rounds: [
+          { id: 'aptitude', type: 'APTITUDE', name: 'Aptitude Round', enabled: document.getElementById('round_aptitude').checked, durationMin: 20 },
+          { id: 'technical', type: 'TECHNICAL', name: 'Technical Round', enabled: document.getElementById('round_technical').checked, durationMin: 35 },
+          { id: 'interview', type: 'AI_INTERVIEW', name: 'AI Voice Interview', enabled: document.getElementById('round_interview').checked, durationMin: 15 },
+          { id: 'gd', type: 'GROUP_DISCUSSION', name: 'Group Discussion', enabled: document.getElementById('round_gd').checked, durationMin: 15 },
+        ],
+        weights: { aptitude: 20, technical: 40, interview: 20, gd: 20 },
+      };
+
+      formData.append('pipelineConfig', JSON.stringify(pipelineConfig));
+
+      try {
+        const res = await fetch('/api/interviews', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Something went wrong');
+        location.href = `/interview.html?id=${data.id}`;
+      } catch (err) {
+        errorEl.textContent = err.message;
+        btn.disabled = false;
+        btn.textContent = 'Launch Assessment Pipeline';
+      }
+    });
+  </script>
+</body>
+</html>

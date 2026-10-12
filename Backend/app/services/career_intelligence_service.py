@@ -20,7 +20,8 @@ from app.models import (
     EscoAssessmentQuestion,
     ProjectSubmission,
     StudentLearningProgress,
-    StudentSkillEvidence
+    StudentSkillEvidence,
+    StudentGithubConnection
 )
 
 from app.services import (
@@ -31,6 +32,29 @@ from app.services import (
 )
 
 logger = logging.getLogger("career_intelligence_service")
+
+# Provider-specific authoritative evidence rules
+PROVIDER_EVIDENCE_RULES: Dict[str, List[str]] = {
+    "nptel": ["certificate", "assessment"],
+    "freecodecamp": ["certificate", "assessment"],
+    "swayam": ["certificate", "assessment"],
+    "youtube": ["assessment"],
+}
+
+def get_provider_evidence_requirements(prov_slug: Optional[str], cert_available: bool = False) -> List[str]:
+    """Authoritative provider evidence requirements resolver."""
+    p = (prov_slug or "").lower().strip()
+    if p in PROVIDER_EVIDENCE_RULES:
+        return list(PROVIDER_EVIDENCE_RULES[p])
+    if "nptel" in p or "swayam" in p:
+        return ["certificate", "assessment"]
+    if "freecodecamp" in p or "free code camp" in p or "fcc" in p:
+        return ["certificate", "assessment"]
+    if "youtube" in p:
+        return ["assessment"]
+    if cert_available:
+        return ["certificate", "assessment"]
+    return ["assessment"]
 
 
 def get_canonical_skill_id(db: Session, skill_name: str) -> Optional[int]:
@@ -131,19 +155,22 @@ def get_student_career_intelligence(
         db=db
     )
 
-    # 3. Retrieve or Generate Active Learning Path
+    # 3. Retrieve or Generate Active Learning Path strictly scoped to active_career
     learning_path = (
         db.query(LearningPath)
         .options(
             joinedload(LearningPath.items).joinedload(LearningPathItem.course).joinedload(Course.provider),
             joinedload(LearningPath.items).joinedload(LearningPathItem.course).joinedload(Course.skills)
         )
-        .filter(LearningPath.student_id == student.id)
+        .filter(
+            LearningPath.student_id == student.id,
+            (LearningPath.target_careers.ilike(f"%{active_career}%") | LearningPath.name.ilike(f"%{active_career}%"))
+        )
         .order_by(LearningPath.created_at.desc())
         .first()
     )
 
-    # If no path exists, generate one automatically
+    # If no career-specific path exists, generate one automatically for this exact career
     if not learning_path or not learning_path.items:
         serialized_path = learning_path_service.generate_learning_path(
             db=db,
@@ -180,10 +207,66 @@ def get_student_career_intelligence(
                     if c_sname != (item.skill_name or "").lower().strip():
                         path_items_by_skill_name.setdefault(c_sname, []).append(item)
 
-    # 4. Build Canonical Skill Intelligence Matrix
+    # 4. Build Canonical Skill Intelligence Matrix with 3-Way Component Tracking (Course, Test, Assignment) + GitHub Evidence
     all_required_skills = gap_analysis.get("all_skills", [])
     if not all_required_skills:
         all_required_skills = gap_analysis.get("skill_gaps", [])
+
+    # Fetch all authoritative student artifacts from PostgreSQL for fast evaluation
+    student_evidence_records = db.query(StudentSkillEvidence).filter(StudentSkillEvidence.student_id == student.id).all()
+    student_assessment_attempts = db.query(StudentAssessmentAttempt).filter(
+        StudentAssessmentAttempt.student_id == student.id,
+        StudentAssessmentAttempt.score >= 70
+    ).all()
+    student_project_submissions = db.query(ProjectSubmission).filter(
+        ProjectSubmission.student_id == student.id,
+        ProjectSubmission.analysis_status == "ANALYZED"
+    ).all()
+    student_practice_attempts = db.query(StudentPracticeAttempt).filter(
+        StudentPracticeAttempt.student_id == student.id,
+        StudentPracticeAttempt.is_completed == True
+    ).all()
+    student_learning_progresses = db.query(StudentLearningProgress).filter(
+        StudentLearningProgress.student_id == student.id,
+        StudentLearningProgress.status == "COMPLETED"
+    ).all()
+    gh_connection = db.query(StudentGithubConnection).filter(
+        func.lower(StudentGithubConnection.student_email) == clean_email
+    ).first()
+
+    gh_parsed_skills: Dict[str, float] = {}
+    if gh_connection and gh_connection.skills_json:
+        try:
+            gh_raw = json.loads(gh_connection.skills_json)
+            if isinstance(gh_raw, dict):
+                gh_parsed_skills = {k.lower().strip(): float(v) for k, v in gh_raw.items() if v}
+            elif isinstance(gh_raw, list):
+                for item in gh_raw:
+                    name = (item.get("name") or item.get("skill") or "").lower().strip()
+                    if name:
+                        gh_parsed_skills[name] = float(item.get("score") or item.get("percentage") or 70.0)
+        except Exception:
+            gh_parsed_skills = {}
+
+    def _matches_skill(target_s: str, cand_s: str) -> bool:
+        if not target_s or not cand_s:
+            return False
+        t = target_s.lower().strip()
+        c = cand_s.lower().strip()
+        if t == c:
+            return True
+        import re
+        t_clean = re.sub(r'[^a-z0-9]', '', t)
+        c_clean = re.sub(r'[^a-z0-9]', '', c)
+        if t_clean and c_clean and t_clean == c_clean:
+            return True
+        if (len(t) >= 3 and len(c) >= 3) and (t in c or c in t):
+            return True
+        # Check token sets
+        t_tokens = set(re.findall(r'[a-z0-9+#.]+', t))
+        c_tokens = set(re.findall(r'[a-z0-9+#.]+', c))
+        return bool(t_tokens & c_tokens)
+
 
     unified_skills = []
     verified_count = 0
@@ -196,31 +279,114 @@ def get_student_career_intelligence(
         s_norm = s_name.lower().strip()
         sk_id = sk.get("skill_id") or get_canonical_skill_id(db, s_name) or abs(hash(s_norm)) % 100000
 
-        curr_level = float(sk.get("current_level") or sk.get("student_level") or sk.get("score") or 0.0)
-        req_level = float(sk.get("required_level") or sk.get("target_level") or 80.0)
-        gap_val = float(sk.get("gap") if sk.get("gap") is not None else (curr_level - req_level))
-        
-        # Determine canonical status
-        raw_status = (sk.get("status") or "").upper().strip()
-        if curr_level >= req_level or raw_status in ("STRONG", "VERIFIED"):
-            status_label = "Verified"
-            canonical_status = "verified"
-            verified_count += 1
-        elif curr_level >= 40.0 or raw_status in ("DEVELOPING", "LEARNING_ACTIVE"):
-            status_label = "Learning Active"
-            canonical_status = "learning_active"
-        elif curr_level > 0:
-            status_label = "Developing"
-            canonical_status = "developing"
-        else:
-            status_label = "Needs Improvement"
-            canonical_status = "needs_improvement"
+        # --- 1. Course Consumption / Learning Activity (Tracked separately, NOT skill verification) ---
+        course_completed = False
+        course_activity_percent = 0.0
+        for ev in student_evidence_records:
+            if ev.source_type in ("course_completion", "learning_progress") and _matches_skill(s_name, ev.skill_name):
+                course_activity_percent = max(course_activity_percent, float((ev.evidence_score or 0) * 100.0))
+                if (ev.evidence_score or 0) >= 0.35 or ev.source_type == "course_completion":
+                    course_completed = True
 
-        # Find linked courses for this skill from the active learning path
+        if learning_path and learning_path.items:
+            for l_item in learning_path.items:
+                if _matches_skill(s_name, l_item.skill_name or ""):
+                    p_pct = float(l_item.progress_percent or 0.0)
+                    course_activity_percent = max(course_activity_percent, p_pct)
+                    if l_item.status == "completed" or p_pct >= 100.0:
+                        course_completed = True
+                elif l_item.course and l_item.course.skills:
+                    if any(_matches_skill(s_name, cs.skill_name) for cs in l_item.course.skills):
+                        p_pct = float(l_item.progress_percent or 0.0)
+                        course_activity_percent = max(course_activity_percent, p_pct)
+                        if l_item.status == "completed" or p_pct >= 100.0:
+                            course_completed = True
+
+        if not course_completed and student_learning_progresses:
+            for lp in student_learning_progresses:
+                if _matches_skill(s_name, lp.skill_name):
+                    course_completed = True
+                    course_activity_percent = max(course_activity_percent, 100.0)
+                    break
+
+        # --- 2. Certificate Evidence (Cryptographic / Uploaded) ---
+        certificate_verified = False
+        for ev in student_evidence_records:
+            if ev.source_type in ("certificate_verification", "certificate") and _matches_skill(s_name, ev.skill_name):
+                if (ev.evidence_score or 0) >= 0.50:
+                    certificate_verified = True
+                    break
+
+        # --- 3. Test / Assessment Evidence (Passed diagnostic/assessment threshold >= 70%) ---
+        test_passed = False
+        test_failed = False
+        for ev in student_evidence_records:
+            if ev.source_type in ("verified_assessment", "assessment", "test_pass", "test") and _matches_skill(s_name, ev.skill_name):
+                if (ev.evidence_score or 0) >= 0.70:
+                    test_passed = True
+                    break
+
+        if not test_passed and student_assessment_attempts:
+            for att in student_assessment_attempts:
+                if (hasattr(att, 'skill_name') and att.skill_name and _matches_skill(s_name, att.skill_name)) or \
+                   (hasattr(att, 'test_title') and att.test_title and _matches_skill(s_name, att.test_title)):
+                    if (att.score or 0) >= 70:
+                        test_passed = True
+                        break
+                    else:
+                        test_failed = True
+
+        # --- 4. Assignment / Practical Project Evidence ---
+        assignment_completed = False
+        for ev in student_evidence_records:
+            if ev.source_type in ("verified_project", "project_submission", "assignment_completion") and _matches_skill(s_name, ev.skill_name):
+                if (ev.evidence_score or 0) >= 0.50:
+                    assignment_completed = True
+                    break
+
+        if not assignment_completed and student_project_submissions:
+            for p_sub in student_project_submissions:
+                if _matches_skill(s_name, p_sub.skill_name or ""):
+                    assignment_completed = True
+                    break
+                if p_sub.analysis_result:
+                    try:
+                        res_json = json.loads(p_sub.analysis_result)
+                        v_skills = res_json.get("verified_skills", []) or []
+                        if any(_matches_skill(s_name, vs if isinstance(vs, str) else vs.get("name", "")) for vs in v_skills):
+                            assignment_completed = True
+                            break
+                    except Exception:
+                        pass
+
+        if not assignment_completed and student_practice_attempts:
+            for pr in student_practice_attempts:
+                if _matches_skill(s_name, pr.skill_name or ""):
+                    assignment_completed = True
+                    break
+
+        # --- 5. GitHub Evidence ---
+        github_evidence = False
+        for ev in student_evidence_records:
+            if ev.source_type in ("github", "github_analyzer") and _matches_skill(s_name, ev.skill_name):
+                github_evidence = True
+                break
+
+        if not github_evidence and gh_parsed_skills:
+            for gh_sk, gh_sc in gh_parsed_skills.items():
+                if _matches_skill(s_name, gh_sk) and gh_sc > 0:
+                    github_evidence = True
+                    break
+
+        # --- 6. Associated Course / Recommended Courses ---
         linked_path_items = path_items_by_skill_name.get(s_norm, [])
         recommended_courses_for_skill = []
-
         seen_course_ids = set()
+
+        primary_prov_slug = "youtube"
+        primary_prov_name = "YouTube"
+        primary_cert_avail = False
+
         for p_item in linked_path_items:
             c = p_item.course
             if not c or c.id in seen_course_ids:
@@ -229,6 +395,10 @@ def get_student_career_intelligence(
 
             prov_slug = c.provider.slug if c.provider else "nptel"
             prov_name = c.provider.name if c.provider else "NPTEL"
+            if len(recommended_courses_for_skill) == 0:
+                primary_prov_slug = prov_slug
+                primary_prov_name = prov_name
+                primary_cert_avail = bool(c.certificate_available)
 
             recommended_courses_for_skill.append({
                 "course_id": c.id,
@@ -238,7 +408,7 @@ def get_student_career_intelligence(
                 "provider_name": prov_name,
                 "canonical_url": c.url,
                 "progress_percent": round(p_item.progress_percent or 0.0, 1),
-                "status": p_item.status,
+                "status": p_item.status or "not_started",
                 "stage": p_item.stage,
                 "gap_closure_type": "Closes Gap" if p_item.skill_name and p_item.skill_name.lower().strip() == s_norm else "Supports Skill",
                 "instructor": c.instructor,
@@ -248,7 +418,6 @@ def get_student_career_intelligence(
                 "certificate_available": bool(c.certificate_available)
             })
 
-        # If no course found in active path for this skill, look in general course catalog
         if not recommended_courses_for_skill:
             matching_courses = (
                 db.query(Course)
@@ -263,6 +432,11 @@ def get_student_career_intelligence(
                 seen_course_ids.add(mc.id)
                 prov_slug = mc.provider.slug if mc.provider else "nptel"
                 prov_name = mc.provider.name if mc.provider else "NPTEL"
+                if len(recommended_courses_for_skill) == 0:
+                    primary_prov_slug = prov_slug
+                    primary_prov_name = prov_name
+                    primary_cert_avail = bool(mc.certificate_available)
+
                 recommended_courses_for_skill.append({
                     "course_id": mc.id,
                     "learning_path_item_id": None,
@@ -270,8 +444,8 @@ def get_student_career_intelligence(
                     "provider": prov_slug,
                     "provider_name": prov_name,
                     "canonical_url": mc.url,
-                    "progress_percent": 0.0,
-                    "status": "not_started",
+                    "progress_percent": round(course_activity_percent, 1),
+                    "status": "completed" if course_completed else "not_started",
                     "stage": mc.level or "Intermediate",
                     "gap_closure_type": "Closes Gap",
                     "instructor": mc.instructor,
@@ -281,6 +455,100 @@ def get_student_career_intelligence(
                     "certificate_available": bool(mc.certificate_available)
                 })
 
+        # --- 7. Authoritative Provider-Specific Evidence Verification ---
+        req_types = get_provider_evidence_requirements(primary_prov_slug, primary_cert_avail)
+        evidence_requirements_list = []
+        all_reqs_satisfied = True
+
+        if "certificate" in req_types:
+            is_sat = bool(certificate_verified)
+            evidence_requirements_list.append({
+                "type": "certificate",
+                "label": "Certificate",
+                "status": "verified" if is_sat else "missing",
+                "status_label": "Certificate Verified" if is_sat else "Certificate Required",
+                "is_satisfied": is_sat,
+                "is_required": True
+            })
+            if not is_sat:
+                all_reqs_satisfied = False
+
+        if "assessment" in req_types:
+            is_sat = bool(test_passed)
+            evidence_requirements_list.append({
+                "type": "assessment",
+                "label": "Skill Assessment",
+                "status": "passed" if test_passed else ("failed" if test_failed else "not_passed"),
+                "status_label": "Assessment Passed" if test_passed else ("Assessment Failed" if test_failed else "Assessment Required"),
+                "is_satisfied": is_sat,
+                "is_required": True
+            })
+            if not is_sat:
+                all_reqs_satisfied = False
+
+        # --- Genuine Evidence Score Extraction (Assessment, Project, GitHub, Certificate) ---
+        max_genuine_evidence_score = 0.0
+        for ev in student_evidence_records:
+            if ev.source_type in ("verified_assessment", "assessment", "test_pass", "test", "verified_project", "project_submission", "certificate_verification", "certificate", "github") and _matches_skill(s_name, ev.skill_name):
+                raw_s = float(ev.evidence_score or 0.0)
+                score_pct = raw_s * 100.0 if raw_s <= 1.0 else raw_s
+                max_genuine_evidence_score = max(max_genuine_evidence_score, score_pct)
+
+        if student_assessment_attempts:
+            for att in student_assessment_attempts:
+                if (hasattr(att, 'skill_name') and att.skill_name and _matches_skill(s_name, att.skill_name)) or \
+                   (hasattr(att, 'test_title') and att.test_title and _matches_skill(s_name, att.test_title)):
+                    max_genuine_evidence_score = max(max_genuine_evidence_score, float(att.score or 0.0))
+
+        if gh_parsed_skills:
+            for gh_sk, gh_sc in gh_parsed_skills.items():
+                if _matches_skill(s_name, gh_sk):
+                    max_genuine_evidence_score = max(max_genuine_evidence_score, float(gh_sc))
+
+        # --- Authoritative Canonical Skill Score from Skills System ---
+        canonical_curr_score = max(
+            float(sk.get("current_level") if sk.get("current_level") is not None else (sk.get("current_score") or 0.0)),
+            max_genuine_evidence_score
+        )
+        req_level = float(sk.get("required_level") or sk.get("target_level") or 80.0)
+
+        # Skill is verified when provider evidence requirements are satisfied OR student has direct project/github/assessment evidence
+        has_direct_evidence = bool(sk.get("is_verified") or sk.get("status") in ("VERIFIED", "verified") or assignment_completed or github_evidence or (test_passed and ("certificate" not in req_types)))
+        is_verified = bool(all_reqs_satisfied or has_direct_evidence)
+        
+        # Course progress must NOT automatically verify or artificially inflate skill score
+        curr_level = canonical_curr_score
+        if is_verified:
+            if curr_level < req_level and not has_direct_evidence:
+                curr_level = req_level
+            status_label = "VERIFIED"
+            canonical_status = "verified"
+            verified_count += 1
+            gap_val = round(max(0.0, req_level - curr_level), 1)
+        else:
+            # If not fully verified by all provider criteria, clamp only if no genuine assessment/project/github evidence exists
+            if curr_level >= req_level and not (test_passed or github_evidence or assignment_completed):
+                curr_level = max(0.0, req_level - 20.0)
+            gap_val = round(max(0.0, req_level - curr_level), 1)
+
+            if "certificate" in req_types and not certificate_verified and test_passed:
+                status_label = "CERTIFICATE REQUIRED"
+                canonical_status = "certificate_required"
+            elif not test_passed:
+                if test_failed:
+                    status_label = "FAILED ASSESSMENT"
+                    canonical_status = "failed_assessment"
+                else:
+                    status_label = "ASSESSMENT REQUIRED"
+                    canonical_status = "assessment_required"
+            else:
+                status_label = "EVIDENCE REQUIRED"
+                canonical_status = "evidence_required"
+
+        # Evidence component checklist for UI
+        completed_components_count = (1 if certificate_verified else 0) + (1 if test_passed else 0) + (1 if assignment_completed else 0)
+        progress_percent = round((completed_components_count / 3.0) * 100.0, 1)
+
         unified_skills.append({
             "skill_id": sk_id,
             "esco_id": sk_id,
@@ -288,18 +556,72 @@ def get_student_career_intelligence(
             "category": sk.get("category", "Core Development"),
             "current_score": round(curr_level, 1),
             "target_score": round(req_level, 1),
-            "gap": round(gap_val, 1),
+            "gap": gap_val,
             "status": status_label,
             "canonical_status": canonical_status,
             "importance": sk.get("importance", "CORE"),
             "career_importance": "Core Skill" if sk.get("importance") == "CORE" else "Supporting Skill",
             "gap_explanation": sk.get("reason") or f"Target requirement for {active_career}. Current score: {curr_level:.0f}%, Target: {req_level:.0f}%.",
-            "recommended_courses": recommended_courses_for_skill
+            "recommended_courses": recommended_courses_for_skill,
+            
+            # Explicit evidence tracking
+            "provider": primary_prov_slug,
+            "provider_name": primary_prov_name,
+            "evidence_requirements": evidence_requirements_list,
+            "certificate_verified": certificate_verified,
+            "test_passed": test_passed,
+            "test_failed": test_failed,
+            "course_completed": course_completed,
+            "course_activity_percent": round(course_activity_percent, 1),
+            "assignment_completed": assignment_completed,
+            "github_evidence": github_evidence,
+            "is_verified": is_verified,
+            "progress_percent": progress_percent,
+            "components": {
+                "course": {
+                    "completed": course_completed,
+                    "label": "Completed" if course_completed else "In Progress",
+                    "icon": "✅" if course_completed else "○"
+                },
+                "certificate": {
+                    "completed": certificate_verified,
+                    "label": "Verified" if certificate_verified else "Missing",
+                    "icon": "✅" if certificate_verified else "○"
+                },
+                "test": {
+                    "completed": test_passed,
+                    "label": "Passed" if test_passed else ("Failed" if test_failed else "Required"),
+                    "icon": "✅" if test_passed else ("❌" if test_failed else "○")
+                },
+                "assignment": {
+                    "completed": assignment_completed,
+                    "label": "Completed" if assignment_completed else "Pending",
+                    "icon": "✅" if assignment_completed else "○"
+                },
+                "github": {
+                    "completed": github_evidence,
+                    "label": "Evidence Found" if github_evidence else "No Evidence",
+                    "icon": "✅" if github_evidence else "○"
+                }
+            }
         })
 
-    # 5. Career Readiness Calculation
+    # 5. Career Readiness Calculation (Authoritative Canonical: from Skills gap engine)
     total_skills_count = max(len(unified_skills), 1)
-    readiness_score = round((verified_count / total_skills_count) * 100, 1)
+    canonical_match_score = (
+        gap_analysis.get("career_match", {}).get("score")
+        if isinstance(gap_analysis.get("career_match"), dict)
+        else gap_analysis.get("career_match_score")
+    )
+    if canonical_match_score is None and isinstance(gap_analysis.get("career_readiness"), dict):
+        canonical_match_score = gap_analysis.get("career_readiness", {}).get("score")
+    
+    if canonical_match_score is not None:
+        readiness_score = float(canonical_match_score)
+    else:
+        tot_req = sum(float(sk.get("target_score", 80.0)) for sk in unified_skills) or 1.0
+        tot_ach = sum(min(float(sk.get("current_score", 0.0)), float(sk.get("target_score", 80.0))) for sk in unified_skills)
+        readiness_score = round((tot_ach / tot_req) * 100.0, 1)
 
     readiness_data = {
         "score": readiness_score,
@@ -307,7 +629,7 @@ def get_student_career_intelligence(
         "gap_count": max(0, total_skills_count - verified_count),
         "total_skills": total_skills_count,
         "status": "Ready" if readiness_score >= 80 else ("Developing" if readiness_score >= 40 else "Needs Attention"),
-        "target_fit_score": min(100, max(45, round(readiness_score * 0.85 + 25)))
+        "target_fit_score": readiness_score
     }
 
     # 6. Serialize Full Learning Path
@@ -336,12 +658,6 @@ def get_student_career_intelligence(
 
         for s_idx, (stg_name, stg_items) in enumerate(stage_items_list):
             stg_total = max(len(stg_items), 1)
-            completed_items = [i for i in stg_items if i.get("status") == "completed" or i.get("progress_percent") == 100]
-            stg_progress = round(sum(float(i.get("progress_percent") or 0.0) for i in stg_items) / stg_total)
-            
-            is_done = len(completed_items) == len(stg_items) and len(stg_items) > 0
-            is_active = not is_done and (stg_progress > 0 or s_idx == 0)
-            m_status = "completed" if is_done else ("active" if is_active else "upcoming")
             
             # Map individual skill entities addressed in this milestone
             stage_skills = []
@@ -356,14 +672,17 @@ def get_student_career_intelligence(
                 elif sk_name and sk_name.lower().strip() in skills_by_name:
                     matched_sk = skills_by_name[sk_name.lower().strip()]
 
-                c_score = matched_sk.get("current_score", 0.0) if matched_sk else (item.get("progress_percent") or 0.0)
+                c_score = matched_sk.get("current_score", 0.0) if matched_sk else 0.0
                 t_score = matched_sk.get("target_score", 85.0) if matched_sk else 85.0
                 g_val = matched_sk.get("gap", max(0.0, t_score - c_score)) if matched_sk else max(0.0, t_score - c_score)
                 priority_label = (
                     "High Priority" if g_val > 40 else ("Medium Priority" if g_val > 0 else "Satisfied")
                 )
-                status_label = matched_sk.get("status", "Developing") if matched_sk else ("Verified" if g_val == 0 else "Developing")
-                
+                status_label = matched_sk.get("status", "ASSESSMENT REQUIRED") if matched_sk else "ASSESSMENT REQUIRED"
+                canonical_st = matched_sk.get("canonical_status", "assessment_required") if matched_sk else "assessment_required"
+                is_sk_verified = matched_sk.get("is_verified", False) if matched_sk else False
+                ev_reqs = matched_sk.get("evidence_requirements", []) if matched_sk else []
+
                 stage_skills.append({
                     "skill_id": sk_id or (matched_sk.get("skill_id") if matched_sk else f"sk_{sk_name.lower().replace(' ', '_')}"),
                     "skill_name": sk_name or (matched_sk.get("skill_name") if matched_sk else "Core Competency"),
@@ -372,11 +691,25 @@ def get_student_career_intelligence(
                     "gap": round(float(g_val), 1),
                     "priority": priority_label,
                     "status": status_label,
+                    "canonical_status": canonical_st,
+                    "is_verified": is_sk_verified,
+                    "evidence_requirements": ev_reqs,
+                    "certificate_verified": matched_sk.get("certificate_verified", False) if matched_sk else False,
+                    "test_passed": matched_sk.get("test_passed", False) if matched_sk else False,
+                    "test_failed": matched_sk.get("test_failed", False) if matched_sk else False,
                     "learning_path_item_id": item.get("id"),
-                    "progress_percent": round(float(item.get("progress_percent") or 0.0), 1),
+                    "course_progress_percent": round(float(item.get("progress_percent") or 0.0), 1),
                     "item_status": item.get("status", "not_started"),
                     "course": item.get("course")
                 })
+
+            # Milestone progress calculated from verified competencies
+            verified_stage_skills = [sk for sk in stage_skills if sk.get("is_verified")]
+            stg_competency_progress = round((len(verified_stage_skills) / max(len(stage_skills), 1)) * 100.0)
+            
+            is_done = (len(verified_stage_skills) == len(stage_skills)) and len(stage_skills) > 0
+            is_active = not is_done and (stg_competency_progress > 0 or s_idx == 0)
+            m_status = "completed" if is_done else ("active" if is_active else "upcoming")
 
             m_title = stg_name
             num_skills = len(stage_skills)
@@ -387,12 +720,12 @@ def get_student_career_intelligence(
             )
             
             badge_text = (
-                f"100% Completed • {len(completed_items)} Modules Verified"
+                f"Milestone Completed • {len(verified_stage_skills)}/{len(stage_skills)} Competencies Verified"
                 if is_done
                 else (
-                    f"Active Learning Track • {stg_progress}% Complete (Step {s_idx + 1} of {len(stage_items_list)})"
+                    f"Active Competency Track • {stg_competency_progress}% Verified ({len(verified_stage_skills)}/{len(stage_skills)} Skills)"
                     if is_active
-                    else f"Upcoming Phase • {len(stg_items)} Recommended Courses"
+                    else f"Upcoming Phase • {len(stage_skills)} Target Competencies"
                 )
             )
             date_text = "Verified Milestone" if is_done else ("In Progress" if is_active else f"Est. {s_idx + 2} Weeks")
@@ -403,7 +736,7 @@ def get_student_career_intelligence(
                 "title": m_title,
                 "description": m_desc,
                 "status": m_status,
-                "progress": stg_progress,
+                "progress": stg_competency_progress,
                 "badge_text": badge_text,
                 "date_text": date_text,
                 "items_count": len(stg_items),
@@ -578,14 +911,22 @@ def get_student_career_intelligence(
 
     top_gap_skill_name = gap_skills[0]["skill_name"] if gap_skills else (unified_skills[0]["skill_name"] if unified_skills else "JavaScript")
 
-    # Core Diagnostic Test (Foundation)
+    # Core Diagnostic Test (Foundation) - strictly scoped to active_career or its primary skill
     core_diag_db = db.query(EscoAssessment).filter(
-        (EscoAssessment.title == f"{active_career} Core Diagnostic") |
-        (EscoAssessment.title == "Full Stack Developer Core Diagnostic") |
-        (EscoAssessment.id == 9)
+        EscoAssessment.title.ilike(f"%{active_career}%Core Diagnostic%")
     ).first()
     if not core_diag_db:
+        core_diag_db = db.query(EscoAssessment).filter(
+            EscoAssessment.skill_name.ilike(f"%{active_career}%")
+        ).first()
+    if not core_diag_db and unified_skills:
+        primary_skill = unified_skills[0]["skill_name"]
+        core_diag_db = db.query(EscoAssessment).filter(
+            func.lower(EscoAssessment.skill_name) == primary_skill.lower()
+        ).first()
+    if not core_diag_db:
         core_diag_db = db.query(EscoAssessment).filter(EscoAssessment.id == 9).first()
+
     core_diag_id = core_diag_db.id if core_diag_db else 9
     core_diag_title = core_diag_db.title if core_diag_db else f"{active_career} Core Diagnostic"
     core_diag_questions_count = db.query(EscoAssessmentQuestion).filter(EscoAssessmentQuestion.assessment_id == core_diag_id).count()
@@ -593,17 +934,24 @@ def get_student_career_intelligence(
         core_diag_questions_count = max(15, min(25, core_diag_questions_count or 20))
 
     core_diag_attempt = next(
-        (a for a in completed_attempts if a.test_title.lower() == core_diag_title.lower()),
+        (a for a in completed_attempts if a.test_title.lower() == core_diag_title.lower() or (a.skill_name.lower() == active_career.lower() and "diagnostic" in a.test_title.lower())),
         None
     )
     core_diag_score = core_diag_attempt.score if core_diag_attempt else None
     core_diag_status = f"Completed (Score: {core_diag_score}%)" if core_diag_score is not None else "Available"
     core_diag_action = "Retake Diagnostic" if core_diag_attempt else "Begin Test"
 
-    # Intermediate Skill Assessment
-    skill_assess_db = db.query(EscoAssessment).filter(func.lower(EscoAssessment.skill_name) == top_gap_skill_name.lower()).first()
+    # Intermediate Skill Assessment - dynamically mapped to highest gap skill
+    skill_assess_db = db.query(EscoAssessment).filter(
+        func.lower(EscoAssessment.skill_name) == top_gap_skill_name.lower()
+    ).first()
+    if not skill_assess_db:
+        skill_assess_db = db.query(EscoAssessment).filter(
+            EscoAssessment.title.ilike(f"%{top_gap_skill_name}%")
+        ).first()
     if not skill_assess_db:
         skill_assess_db = db.query(EscoAssessment).filter(EscoAssessment.id == 2).first()
+
     skill_assess_id = skill_assess_db.id if skill_assess_db else 2
     skill_assess_title = skill_assess_db.title if skill_assess_db else f"{top_gap_skill_name} Assessment"
     skill_assess_q_count = db.query(EscoAssessmentQuestion).filter(EscoAssessmentQuestion.assessment_id == skill_assess_id).count()
@@ -620,11 +968,15 @@ def get_student_career_intelligence(
 
     # Advanced Readiness Mock (Prerequisites: Core Diagnostic >= 70% and at least 1 Skill Assessment >= 70%)
     adv_mock_db = db.query(EscoAssessment).filter(
-        (EscoAssessment.title == f"{active_career} System Readiness Mock") |
-        (EscoAssessment.title == "Full Stack Developer System Readiness Mock") |
-        (EscoAssessment.skill_name == "System Readiness") |
-        (EscoAssessment.id == 10)
+        EscoAssessment.title.ilike(f"%{active_career}%Readiness Mock%")
     ).first()
+    if not adv_mock_db:
+        adv_mock_db = db.query(EscoAssessment).filter(
+            EscoAssessment.title.ilike(f"%{active_career}%Mock%")
+        ).first()
+    if not adv_mock_db:
+        adv_mock_db = db.query(EscoAssessment).filter(EscoAssessment.id == 10).first()
+
     adv_mock_id = adv_mock_db.id if adv_mock_db else 10
     adv_mock_title = adv_mock_db.title if adv_mock_db else f"{active_career} System Readiness Mock"
     adv_mock_q_count = db.query(EscoAssessmentQuestion).filter(EscoAssessmentQuestion.assessment_id == adv_mock_id).count()
@@ -632,7 +984,7 @@ def get_student_career_intelligence(
         adv_mock_q_count = max(15, min(25, adv_mock_q_count or 20))
 
     advanced_mock_attempt = next(
-        (a for a in completed_attempts if a.test_title.lower() == adv_mock_title.lower()),
+        (a for a in completed_attempts if a.test_title.lower() == adv_mock_title.lower() or (a.skill_name.lower() == active_career.lower() and "readiness" in a.test_title.lower())),
         None
     )
     adv_diag_passed = bool(core_diag_score and core_diag_score >= 70)
@@ -754,98 +1106,194 @@ def get_student_career_intelligence(
     p1_status = "completed" if (p1_sub and p1_sub.analysis_status == "ANALYZED") else ("in_progress" if p1_sub else "not_started")
     p1_btn = "Completed" if p1_status == "completed" else ("Continue Project" if p1_status == "in_progress" else "Start Project Track")
 
-    p2_id = "proj_microservices_stream"
-    p2_sub = proj_submissions_by_id.get(p2_id)
-    p2_status = "completed" if (p2_sub and p2_sub.analysis_status == "ANALYZED") else ("in_progress" if p2_sub else "not_started")
+    is_mobile = "mobile" in active_career.lower() or "mobile" in active_career_id.lower()
+    
+    if is_mobile:
+        p2_id = "proj_mobile_offline_sync"
+        p2_sub = proj_submissions_by_id.get(p2_id)
+        p2_status = "completed" if (p2_sub and p2_sub.analysis_status == "ANALYZED") else ("in_progress" if p2_sub else "not_started")
 
-    capstone_projects = [
-        {
-            "id": p1_id,
-            "tags": [f"{active_career} Track", "2.5 Week Duration", "Enterprise Grade"],
-            "title": f"{active_career} End-to-End Enterprise Architecture",
-            "desc": f"Architect, build, and deploy an automated production system covering authentication, database schema design, and asynchronous workflows aligned to {active_career} industry standards.",
-            "skills": [s["skill_name"] for s in unified_skills[:4]],
-            "status": p1_status,
-            "btn_label": p1_btn,
-            "is_primary": True,
-            "xp": 200,
-            "milestones": [
-                {
-                    "milestone": "01",
-                    "title": "System Architecture & Normalized Schema",
-                    "status": "completed" if p1_status in ("in_progress", "completed") else "pending",
-                    "deliverable": "Database schema migrations, entity-relationship diagrams, and API design blueprint."
-                },
-                {
-                    "milestone": "02",
-                    "title": "Core Services & Authentication Implementation",
-                    "status": "completed" if p1_status == "completed" else ("active" if p1_status == "in_progress" else "pending"),
-                    "deliverable": "JWT authentication middleware, CRUD REST API endpoints, and connection pooling."
-                },
-                {
-                    "milestone": "03",
-                    "title": "Automated Testing, Docker Containerization & Deployment",
-                    "status": "completed" if p1_status == "completed" else "pending",
-                    "deliverable": "Docker Compose setup, automated integration test suite, and CI/CD workflow configuration."
-                }
-            ],
-            "specs": {
-                "objective": f"Demonstrate production-readiness for {active_career} roles by building an end-to-end enterprise solution.",
-                "architecture": "Layered Microservices / Modular Monolith with PostgreSQL persistence, Redis caching, and Docker Compose orchestration.",
-                "requirements": [
-                    "Implement stateless token authentication with refresh tokens",
-                    "Design relational database schema with indexing and foreign keys",
-                    "Write integration tests with >80% code coverage",
-                    "Package application with multi-stage Docker build"
+        capstone_projects = [
+            {
+                "id": p1_id,
+                "tags": [f"{active_career} Track", "2.5 Week Duration", "Enterprise Grade"],
+                "title": f"{active_career} End-to-End Enterprise Architecture",
+                "desc": f"Architect, build, and deploy an automated production cross-platform mobile application covering React Native, navigation, offline state management, and RESTful API integration aligned to {active_career} industry standards.",
+                "skills": [s["skill_name"] for s in unified_skills[:4]],
+                "status": p1_status,
+                "btn_label": p1_btn,
+                "is_primary": True,
+                "xp": 200,
+                "milestones": [
+                    {
+                        "milestone": "01",
+                        "title": "Mobile Navigation & UI Component System",
+                        "status": "completed" if p1_status in ("in_progress", "completed") else "pending",
+                        "deliverable": "Design atomic UI components, tab & stack navigation hierarchy, and theme tokens."
+                    },
+                    {
+                        "milestone": "02",
+                        "title": "State Management & RESTful API Integration",
+                        "status": "completed" if p1_status == "completed" else ("active" if p1_status == "in_progress" else "pending"),
+                        "deliverable": "Implement persistent client state store, async token auth, and cached API requests."
+                    },
+                    {
+                        "milestone": "03",
+                        "title": "Offline Persistence & App Store Build Packaging",
+                        "status": "completed" if p1_status == "completed" else "pending",
+                        "deliverable": "Configure SQLite / AsyncStorage persistence, automated mobile unit tests, and production APK / IPA bundle build."
+                    }
                 ],
-                "evaluation_criteria": [
-                    "Code maintainability and modular structure (30%)",
-                    "Test coverage and error resilience (25%)",
-                    "Database query performance and indexing (25%)",
-                    "Production containerization and CI/CD readiness (20%)"
-                ]
-            }
-        },
-        {
-            "id": p2_id,
-            "tags": ["Full-Stack Infrastructure", "3-Week Project", "Production Track"],
-            "title": "Real-Time Scalable Microservices & Data Streaming Engine",
-            "desc": "Engineer a high-concurrency microservice system with real-time websocket synchronization, caching, and automated end-to-end integration tests.",
-            "skills": [s["skill_name"] for s in (unified_skills[4:8] if len(unified_skills) >= 8 else unified_skills)],
-            "status": p2_status,
-            "btn_label": "View Specs",
-            "is_primary": False,
-            "xp": 200,
-            "milestones": [
-                {
-                    "milestone": "01",
-                    "title": "Pub/Sub Messaging & Event Bus",
-                    "status": "pending",
-                    "deliverable": "Message broker event producers and consumers with Redis / Kafka."
-                },
-                {
-                    "milestone": "02",
-                    "title": "Real-Time WebSocket Gateway",
-                    "status": "pending",
-                    "deliverable": "Bi-directional socket connections with room subscription and presence tracking."
+                "specs": {
+                    "objective": f"Demonstrate production-readiness for {active_career} roles by building an end-to-end mobile solution.",
+                    "architecture": "Cross-Platform Mobile Architecture with React Navigation, React Native Async/SQLite persistence, and RESTful API gateway.",
+                    "requirements": [
+                        "Implement secure biometrics or token authentication",
+                        "Design fluid gesture-driven UI with responsive layouts",
+                        "Implement offline-first caching and sync queue",
+                        "Bundle release build with Hermes optimization"
+                    ],
+                    "evaluation_criteria": [
+                        "Code maintainability and component modularity (30%)",
+                        "Test coverage and offline error resilience (25%)",
+                        "Smooth 60fps UI rendering and memory efficiency (25%)",
+                        "Mobile production bundle packaging (20%)"
+                    ]
                 }
-            ],
-            "specs": {
-                "objective": "Build a high-throughput event streaming engine handling concurrent socket connections.",
-                "architecture": "Event-Driven Microservices with Redis Pub/Sub and WebSocket gateways.",
-                "requirements": [
-                    "Handle concurrent WebSocket client broadcasts",
-                    "Implement distributed locking and idempotency",
-                    "Benchmark latency under high concurrency"
+            },
+            {
+                "id": p2_id,
+                "tags": ["Mobile Infrastructure", "3-Week Project", "Production Track"],
+                "title": "Mobile Offline-First Architecture & Bi-Directional Cloud Sync",
+                "desc": "Engineer an offline-first mobile app with local SQLite persistence, background sync workers, push notifications, and resilient network state handling.",
+                "skills": [s["skill_name"] for s in (unified_skills[2:6] if len(unified_skills) >= 6 else unified_skills)],
+                "status": p2_status,
+                "btn_label": "View Specs",
+                "is_primary": False,
+                "xp": 200,
+                "milestones": [
+                    {
+                        "milestone": "01",
+                        "title": "Local Storage & Change Tracking Engine",
+                        "status": "pending",
+                        "deliverable": "Local SQLite database tables with mutation queue and change log tracking."
+                    },
+                    {
+                        "milestone": "02",
+                        "title": "Background Worker & Cloud Sync Gateway",
+                        "status": "pending",
+                        "deliverable": "Bi-directional reconciliation service with conflict resolution strategies."
+                    }
                 ],
-                "evaluation_criteria": [
-                    "Throughput and socket reconnection handling (35%)",
-                    "State synchronization consistency (35%)",
-                    "Error recovery and backoff mechanisms (30%)"
-                ]
+                "specs": {
+                    "objective": "Build a resilient offline-first mobile synchronization engine.",
+                    "architecture": "Offline-First Mobile Architecture with SQLite local database and REST sync worker.",
+                    "requirements": [
+                        "Queue mutations during offline network states",
+                        "Resolve conflicting edits using Last-Write-Wins and CRDT logic",
+                        "Send background sync notifications upon reconnection"
+                    ],
+                    "evaluation_criteria": [
+                        "Offline data consistency and recovery (35%)",
+                        "Background battery and network efficiency (35%)",
+                        "Error recovery and edge case handling (30%)"
+                    ]
+                }
             }
-        }
-    ]
+        ]
+    else:
+        p2_id = "proj_microservices_stream"
+        p2_sub = proj_submissions_by_id.get(p2_id)
+        p2_status = "completed" if (p2_sub and p2_sub.analysis_status == "ANALYZED") else ("in_progress" if p2_sub else "not_started")
+
+        capstone_projects = [
+            {
+                "id": p1_id,
+                "tags": [f"{active_career} Track", "2.5 Week Duration", "Enterprise Grade"],
+                "title": f"{active_career} End-to-End Enterprise Architecture",
+                "desc": f"Architect, build, and deploy an automated production system covering authentication, database schema design, and asynchronous workflows aligned to {active_career} industry standards.",
+                "skills": [s["skill_name"] for s in unified_skills[:4]],
+                "status": p1_status,
+                "btn_label": p1_btn,
+                "is_primary": True,
+                "xp": 200,
+                "milestones": [
+                    {
+                        "milestone": "01",
+                        "title": "System Architecture & Normalized Schema",
+                        "status": "completed" if p1_status in ("in_progress", "completed") else "pending",
+                        "deliverable": "Database schema migrations, entity-relationship diagrams, and API design blueprint."
+                    },
+                    {
+                        "milestone": "02",
+                        "title": "Core Services & Authentication Implementation",
+                        "status": "completed" if p1_status == "completed" else ("active" if p1_status == "in_progress" else "pending"),
+                        "deliverable": "JWT authentication middleware, CRUD REST API endpoints, and connection pooling."
+                    },
+                    {
+                        "milestone": "03",
+                        "title": "Automated Testing, Docker Containerization & Deployment",
+                        "status": "completed" if p1_status == "completed" else "pending",
+                        "deliverable": "Docker Compose setup, automated integration test suite, and CI/CD workflow configuration."
+                    }
+                ],
+                "specs": {
+                    "objective": f"Demonstrate production-readiness for {active_career} roles by building an end-to-end enterprise solution.",
+                    "architecture": "Layered Microservices / Modular Monolith with PostgreSQL persistence, Redis caching, and Docker Compose orchestration.",
+                    "requirements": [
+                        "Implement stateless token authentication with refresh tokens",
+                        "Design relational database schema with indexing and foreign keys",
+                        "Write integration tests with >80% code coverage",
+                        "Package application with multi-stage Docker build"
+                    ],
+                    "evaluation_criteria": [
+                        "Code maintainability and modular structure (30%)",
+                        "Test coverage and error resilience (25%)",
+                        "Database query performance and indexing (25%)",
+                        "Production containerization and CI/CD readiness (20%)"
+                    ]
+                }
+            },
+            {
+                "id": p2_id,
+                "tags": ["Full-Stack Infrastructure", "3-Week Project", "Production Track"],
+                "title": "Real-Time Scalable Microservices & Data Streaming Engine",
+                "desc": "Engineer a high-concurrency microservice system with real-time websocket synchronization, caching, and automated end-to-end integration tests.",
+                "skills": [s["skill_name"] for s in (unified_skills[4:8] if len(unified_skills) >= 8 else unified_skills)],
+                "status": p2_status,
+                "btn_label": "View Specs",
+                "is_primary": False,
+                "xp": 200,
+                "milestones": [
+                    {
+                        "milestone": "01",
+                        "title": "Pub/Sub Messaging & Event Bus",
+                        "status": "pending",
+                        "deliverable": "Message broker event producers and consumers with Redis / Kafka."
+                    },
+                    {
+                        "milestone": "02",
+                        "title": "Real-Time WebSocket Gateway",
+                        "status": "pending",
+                        "deliverable": "Bi-directional socket connections with room subscription and presence tracking."
+                    }
+                ],
+                "specs": {
+                    "objective": "Build a high-throughput event streaming engine handling concurrent socket connections.",
+                    "architecture": "Event-Driven Microservices with Redis Pub/Sub and WebSocket gateways.",
+                    "requirements": [
+                        "Handle concurrent WebSocket client broadcasts",
+                        "Implement distributed locking and idempotency",
+                        "Benchmark latency under high concurrency"
+                    ],
+                    "evaluation_criteria": [
+                        "Throughput and socket reconnection handling (35%)",
+                        "State synchronization consistency (35%)",
+                        "Error recovery and backoff mechanisms (30%)"
+                    ]
+                }
+            }
+        ]
 
     # 13. Dynamic Validated Credentials from Verified Evidence
     verified_skills_list = [s for s in unified_skills if s["canonical_status"] == "verified"]

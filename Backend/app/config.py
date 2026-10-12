@@ -61,8 +61,21 @@ class Settings(BaseModel):
     # Provider Synchronization Intervals (Hours)
     NPTEL_SYNC_INTERVAL_HOURS: int = int(os.getenv("NPTEL_SYNC_INTERVAL_HOURS", "12"))
     FREECODECAMP_SYNC_INTERVAL_HOURS: int = int(os.getenv("FREECODECAMP_SYNC_INTERVAL_HOURS", "24"))
-    YOUTUBE_SYNC_INTERVAL_HOURS: int = int(os.getenv("YOUTUBE_SYNC_INTERVAL_HOURS", "6"))
+    # Live Opportunities & Session Cache Configuration
+    OPPORTUNITY_CACHE_TTL_SECONDS: int = int(os.getenv("OPPORTUNITY_CACHE_TTL_SECONDS", "1800"))
+    SCHOLARSHIP_CACHE_TTL_SECONDS: int = int(os.getenv("SCHOLARSHIP_CACHE_TTL_SECONDS", "3600"))
+    LIVE_SOURCE_TIMEOUT_SECONDS: float = float(os.getenv("LIVE_SOURCE_TIMEOUT_SECONDS", "1.5"))
+    MAX_OPPORTUNITY_RESPONSE_SECONDS: float = float(os.getenv("MAX_OPPORTUNITY_RESPONSE_SECONDS", "2.0"))
+
+    # Dedicated AI Assessment Service (Archive 2)
+    ASSESSMENT_SERVICE_URL: str = os.getenv("ASSESSMENT_SERVICE_URL", "http://localhost:3000")
+    ASSESSMENT_SERVICE_SECRET: str = os.getenv("ASSESSMENT_SERVICE_SECRET", "S8G7idwzNTn9gRlkfFwTVSDFPmmVubgWVxWcm88LZKB")
+
+    # Gemini AI Scheduling & Assessment Integration
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 settings = Settings()
+
 
 

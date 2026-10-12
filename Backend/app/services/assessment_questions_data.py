@@ -2257,5 +2257,1500 @@ ASSESSMENT_QUESTION_DATASETS = {
                 "difficulty": "Easy"
             }
         ]
+    },
+    "Git": {
+        "title": "Git & GitHub Version Control Assessment",
+        "description": "Comprehensive diagnostic covering branching strategies, merge conflicts, interactive rebase, reflog recovery, and collaborative GitHub workflows.",
+        "pass_score": 70,
+        "difficulty": "Intermediate",
+        "duration_minutes": 35,
+        "questions": [
+            {
+                "question_text": "What is the primary difference between `git merge` and `git rebase` when integrating feature branch changes into main?",
+                "options": {
+                    "A": "git merge preserves complete branch history by creating a dedicated merge commit, whereas git rebase rewires commit history linearly on top of the target branch",
+                    "B": "git merge deletes the source branch automatically",
+                    "C": "git rebase is only available in GitHub Enterprise",
+                    "D": "git merge cannot resolve file conflicts"
+                },
+                "correct_option": "A",
+                "explanation": "git merge creates a non-destructive 2-parent merge commit maintaining chronological context, while rebase replays commits linearly for a clean, flat commit log.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the purpose of Git's Staging Area (the Index)?",
+                "options": {
+                    "A": "An intermediate buffer that lets developers selectively review, format, and organize file modifications before committing them to the repository history",
+                    "B": "A temporary cloud storage folder hosted on GitHub",
+                    "C": "A backup directory created when a merge conflict occurs",
+                    "D": "The location where deleted Git branches are archived"
+                },
+                "correct_option": "A",
+                "explanation": "The staging area allows crafting granular, logical atomic commits by choosing exactly which line diffs and files to include via `git add`.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What happens when a repository enters a 'Detached HEAD' state in Git?",
+                "options": {
+                    "A": "HEAD points directly to a specific commit hash rather than to a named branch reference; any new commits created will be orphaned if you switch branches without creating a new branch",
+                    "B": "The Git repository is corrupted and must be re-cloned",
+                    "C": "The remote GitHub repository has rejected all push requests",
+                    "D": "The master branch has been deleted"
+                },
+                "correct_option": "A",
+                "explanation": "HEAD represents the current working commit. When pointing to a commit instead of a branch tip, commits made will lack a named branch pointer to retain them.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "Which command allows you to safely recover a lost commit hash or undo an accidental `git reset --hard`?",
+                "options": {
+                    "A": "git reflog",
+                    "B": "git log --lost",
+                    "C": "git restore --all",
+                    "D": "git checkout --rescue"
+                },
+                "correct_option": "A",
+                "explanation": "git reflog records every update to the HEAD pointer in local history, allowing checkout or cherry-picking of commits even after hard resets or branch deletions.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How does `git reset --soft HEAD~1` differ from `git reset --hard HEAD~1`?",
+                "options": {
+                    "A": "--soft moves HEAD back one commit while keeping changes staged in the index; --hard completely discards commit changes from both index and working tree",
+                    "B": "--soft pushes the changes to origin, --hard deletes the remote branch",
+                    "C": "--soft only works on untracked files",
+                    "D": "--hard requires an SSH key to execute"
+                },
+                "correct_option": "A",
+                "explanation": "git reset --soft only moves the branch pointer, leaving staged modifications intact for re-committing; --hard wipes working directory modifications permanently.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the function of `git cherry-pick <commit-hash>`?",
+                "options": {
+                    "A": "It copies and applies the specific diff changes of an existing commit from another branch into your current active branch as a new commit",
+                    "B": "It deletes a selected commit from remote history",
+                    "C": "It marks a commit as verified with GPG keys",
+                    "D": "It creates a pull request on GitHub"
+                },
+                "correct_option": "A",
+                "explanation": "Cherry-picking extracts the changeset from a specific commit on any branch and applies it cleanly as a new commit on HEAD.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How should you untrack a file that was accidentally committed, while keeping the physical file on your local disk?",
+                "options": {
+                    "A": "git rm --cached <file> and add it to .gitignore",
+                    "B": "Delete the file manually in Finder/File Explorer",
+                    "C": "git reset --hard <file>",
+                    "D": "git clean -f <file>"
+                },
+                "correct_option": "A",
+                "explanation": "git rm --cached removes the target file from Git tracking/index while preserving the file physically on the developer's filesystem.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the difference between `git fetch` and `git pull`?",
+                "options": {
+                    "A": "git fetch downloads remote objects and updates remote tracking branches without modifying your working tree; git pull runs git fetch followed immediately by git merge/rebase",
+                    "B": "git fetch only works on branches with 0 commits",
+                    "C": "git pull requires administrator permissions on GitHub",
+                    "D": "git fetch deletes stale local branches"
+                },
+                "correct_option": "A",
+                "explanation": "git fetch is a non-destructive read-only operation downloading new remote state; git pull performs fetch plus automatic integration into active branch.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "In a merge conflict, what do the Git conflict markers `<<<<<<< HEAD`, `=======`, and `>>>>>>> <branch>` signify?",
+                "options": {
+                    "A": "The content between <<<<<<< and ======= is your current branch's version; the content between ======= and >>>>>>> is the incoming branch's version",
+                    "B": "They denote binary syntax errors that cannot be edited",
+                    "C": "They represent lines of code that have been deleted by the compiler",
+                    "D": "They indicate GitHub Actions CI failure logs"
+                },
+                "correct_option": "A",
+                "explanation": "Conflict markers delineate the divergence: HEAD represents current branch edits, and the bottom block shows incoming changes to be reconciled.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "Why is `git revert <commit-hash>` preferred over `git reset --hard` when undoing mistakes on a shared public branch?",
+                "options": {
+                    "A": "git revert creates a new forward commit that inverts the targeted changes without rewriting or destroying existing branch history for other collaborators",
+                    "B": "git revert runs faster than git reset",
+                    "C": "git reset is not supported on macOS",
+                    "D": "git revert automatically approves all open pull requests"
+                },
+                "correct_option": "A",
+                "explanation": "Rewriting shared history with git reset requires force pushing and desynchronizes teammates; git revert appends a new inverse commit safely.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the purpose of Git `pre-commit` hooks in development workflows?",
+                "options": {
+                    "A": "Client-side scripts that run automatically prior to creating a commit to enforce linting, formatting, secret detection, and unit tests",
+                    "B": "Webhooks that notify Slack when a push succeeds",
+                    "C": "GitHub server rules that prevent merges without approvals",
+                    "D": "Cloud scripts that deploy code to AWS"
+                },
+                "correct_option": "A",
+                "explanation": "pre-commit hooks execute locally before commit creation, halting execution if linters, formatters, or test suites fail.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What command performs an interactive rebase allowing you to squash, reorder, or edit the last 4 commits?",
+                "options": {
+                    "A": "git rebase -i HEAD~4",
+                    "B": "git squash --last 4",
+                    "C": "git commit --amend 4",
+                    "D": "git merge --squash HEAD~4"
+                },
+                "correct_option": "A",
+                "explanation": "git rebase -i opens an interactive editor where commits can be squashed (s), reworded (r), dropped (d), or reordered.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the difference between `git stash pop` and `git stash apply`?",
+                "options": {
+                    "A": "git stash pop applies the latest stashed changes and immediately removes them from the stash list; git stash apply restores the changes while keeping the stash entry",
+                    "B": "git stash apply creates a new git branch automatically",
+                    "C": "git stash pop permanently deletes working directory modifications without restoring",
+                    "D": "git stash apply requires internet access"
+                },
+                "correct_option": "A",
+                "explanation": "pop restores and deletes the stash item in one step; apply restores the diff while leaving the stash available for reuse on other branches.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How does `git bisect` assist in identifying which commit introduced a software bug?",
+                "options": {
+                    "A": "It uses binary search between a known good commit and a known bad commit, automatically checking out intermediate commits to test and pinpoint the regression",
+                    "B": "It runs static code analysis to suggest variable names",
+                    "C": "It compares two pull requests side by side",
+                    "D": "It splits large git commits into smaller files"
+                },
+                "correct_option": "A",
+                "explanation": "git bisect performs logarithmic binary search across commit history, quickly identifying the exact commit where tests transitioned from passing to failing.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "What is a Fast-Forward (`--ff`) merge in Git?",
+                "options": {
+                    "A": "A merge where the target branch has not diverged, allowing Git to simply move the branch pointer forward to the tip of the incoming branch without a merge commit",
+                    "B": "A merge executed using multiple CPU cores",
+                    "C": "A merge that skips conflict checking",
+                    "D": "An automatic rebase performed by GitHub Actions"
+                },
+                "correct_option": "A",
+                "explanation": "When no intermediate commits exist on the base branch, Git simply moves the branch pointer forward without creating a distinct merge commit.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the distinction between an Annotated Tag (`git tag -a`) and a Lightweight Tag in Git?",
+                "options": {
+                    "A": "Annotated tags are stored as full Git objects containing tagger name, email, date, GPG signature, and message; lightweight tags are merely pointers/bookmarks to commit hashes",
+                    "B": "Lightweight tags can only be created by repository administrators",
+                    "C": "Annotated tags expire after 30 days",
+                    "D": "Lightweight tags cannot be pushed to remote repositories"
+                },
+                "correct_option": "A",
+                "explanation": "Annotated tags are immutable database objects with full authorship metadata and messages, ideal for release versions (e.g., v1.0.0).",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What does `git clean -fd` do in a Git repository?",
+                "options": {
+                    "A": "Forcefully deletes all untracked files (-f) and untracked directories (-d) from the working tree",
+                    "B": "Compresses the .git folder to save hard disk space",
+                    "C": "Deletes all branches merged into main",
+                    "D": "Formats all code files according to prettier rules"
+                },
+                "correct_option": "A",
+                "explanation": "`git clean -fd` clears untracked files and folders that are not ignored by .gitignore, resetting the workspace to a pristine state.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "In GitHub pull request management, what is a 'Squash and Merge' strategy?",
+                "options": {
+                    "A": "Combines all individual commits from a feature branch into a single cohesive commit before appending it to the main branch",
+                    "B": "Deletes the repository after merging",
+                    "C": "Zips all repository files into a tarball archive",
+                    "D": "Replaces all commit messages with the PR number only"
+                },
+                "correct_option": "A",
+                "explanation": "Squash and merge condenses noisy intermediate work-in-progress commits into one clean commit on the target branch.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What are Git Submodules used for?",
+                "options": {
+                    "A": "Keeping a Git repository as a subdirectory of another Git repository, pinned to a specific commit hash from an external repository",
+                    "B": "Splitting a monolithic database into microservices",
+                    "C": "Compiling CSS into Sass",
+                    "D": "Encrypting secret environment variables"
+                },
+                "correct_option": "A",
+                "explanation": "Submodules allow integrating external libraries or shared codebases as nested repositories tracked at exact commit hashes.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "How do Branch Protection rules in GitHub ensure code quality in collaborative engineering teams?",
+                "options": {
+                    "A": "By requiring passing CI status checks, linear commit history, GPG signed commits, and mandatory peer review approvals before code can be merged into main",
+                    "B": "By disabling the git push command on developer laptops",
+                    "C": "By encrypting all code on GitHub servers",
+                    "D": "By restricting git clone to verified IP addresses"
+                },
+                "correct_option": "A",
+                "explanation": "Branch protection rules prevent direct unreviewed pushes to production branches and gate merges on passing CI checks and PR approvals.",
+                "difficulty": "Easy"
+            }
+        ]
+    },
+    "Python": {
+        "title": "Python Core & Advanced Architecture Assessment",
+        "description": "Comprehensive diagnostic covering memory model, GIL, async/await, generators, decorators, OOP, and concurrent data pipelines.",
+        "pass_score": 70,
+        "difficulty": "Intermediate",
+        "duration_minutes": 35,
+        "questions": [
+            {
+                "question_text": "What is the Global Interpreter Lock (GIL) in CPython and what is its primary operational consequence?",
+                "options": {
+                    "A": "A mutex that prevents multiple native threads from executing Python bytecodes simultaneously in a single process, limiting CPU-bound multithreading",
+                    "B": "A security feature that prevents unauthorized network requests",
+                    "C": "A database lock used by SQLite",
+                    "D": "A memory garbage collector that runs only on program shutdown"
+                },
+                "correct_option": "A",
+                "explanation": "CPython's GIL ensures thread safety in reference counting memory management by restricting bytecode execution to one thread at a time.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the key advantage of using a Generator function (with `yield`) over returning a standard list?",
+                "options": {
+                    "A": "Generators evaluate lazily and yield one item at a time, consuming O(1) memory regardless of sequence size compared to O(N) list allocation",
+                    "B": "Generators run on separate CPU cores automatically",
+                    "C": "Generators can only contain string values",
+                    "D": "Generators are immutable tuples"
+                },
+                "correct_option": "A",
+                "explanation": "Generators produce items on demand (lazy evaluation), maintaining state with minimal memory footprint for large or infinite streams.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the danger of using a mutable default argument like `def append_item(val, items=[])` in Python?",
+                "options": {
+                    "A": "The default list is instantiated only once when the function is defined; subsequent calls without the argument will share and mutate the exact same list instance",
+                    "B": "Python raises a SyntaxError at runtime",
+                    "C": "The list items are converted to tuples automatically",
+                    "D": "It causes immediate stack overflow"
+                },
+                "correct_option": "A",
+                "explanation": "Default parameter objects are created at function definition time. Using a mutable object causes shared state across successive invocations.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How does `is` differ from `==` in Python equality comparisons?",
+                "options": {
+                    "A": "`is` checks object identity (whether both variables point to the exact same memory address); `==` checks value equivalence by invoking `__eq__`",
+                    "B": "`==` checks memory addresses, `is` checks data types",
+                    "C": "`is` is deprecated in Python 3",
+                    "D": "They are completely interchangeable aliases"
+                },
+                "correct_option": "A",
+                "explanation": "`is` tests whether `id(a) == id(b)` (identical memory reference), whereas `==` evaluates structural value equality.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What protocol must an object implement to be used in a `with` context management statement?",
+                "options": {
+                    "A": "The `__enter__()` and `__exit__()` dunder methods",
+                    "B": "The `__iter__()` and `__next__()` methods",
+                    "C": "The `__get__()` and `__set__()` descriptor methods",
+                    "D": "The `__open__()` and `__close__()` methods"
+                },
+                "correct_option": "A",
+                "explanation": "The Context Manager protocol requires `__enter__()` to set up resource state and `__exit__()` to guarantee cleanup (even during exceptions).",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the purpose of `@functools.wraps(func)` inside a custom Python decorator?",
+                "options": {
+                    "A": "Preserving the original function's metadata (docstring, function name, module, parameter annotations) on the wrapper function",
+                    "B": "Encrypting the decorator wrapper code",
+                    "C": "Making the decorated function execute asynchronously",
+                    "D": "Restricting the decorator to class methods only"
+                },
+                "correct_option": "A",
+                "explanation": "Without `@wraps`, the decorated function assumes the wrapper's name `wrapper` and loses its original `__name__` and `__doc__` attributes.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "In Python object-oriented programming, what is the Method Resolution Order (MRO) algorithm used for multiple inheritance?",
+                "options": {
+                    "A": "C3 Superclass Linearization algorithm",
+                    "B": "Breadth-First Binary Search",
+                    "C": "Depth-First Graph Traversal with loops",
+                    "D": "Randomized Hash Collision Order"
+                },
+                "correct_option": "A",
+                "explanation": "Python utilizes the C3 Linearization algorithm to determine a monotonic, deterministic class precedence order in multiple inheritance hierarchies.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "How do Python `dataclasses` (introduced in Python 3.7) improve boilerplate class definitions?",
+                "options": {
+                    "A": "They automatically generate `__init__`, `__repr__`, `__eq__`, and type annotations based on defined class field attributes",
+                    "B": "They connect classes directly to PostgreSQL databases",
+                    "C": "They compile Python code into C extensions",
+                    "D": "They eliminate all memory allocation"
+                },
+                "correct_option": "A",
+                "explanation": "The `@dataclass` decorator inspects type annotations and synthesizes standard dunder boilerplate methods automatically.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the primary difference between `asyncio.gather()` and sequentially `await`-ing coroutines?",
+                "options": {
+                    "A": "`asyncio.gather()` schedules multiple coroutines concurrently on the event loop, awaiting all results in parallel; sequential awaiting runs them one after another",
+                    "B": "`asyncio.gather()` creates multi-threaded processes on the OS",
+                    "C": "`asyncio.gather()` only works with HTTP requests",
+                    "D": "Sequential awaiting is non-blocking while gather is blocking"
+                },
+                "correct_option": "A",
+                "explanation": "gather concurrently drives multiple I/O coroutines on a single event loop thread, resolving when all concurrent tasks complete.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the difference between `copy.copy()` (shallow copy) and `copy.deepcopy()` in Python?",
+                "options": {
+                    "A": "Shallow copy creates a new container but references the original nested objects; deepcopy recursively duplicates all child objects into fresh memory instances",
+                    "B": "Shallow copy only works on strings",
+                    "C": "Deep copy deletes the original object after copying",
+                    "D": "Shallow copy converts objects to JSON"
+                },
+                "correct_option": "A",
+                "explanation": "Shallow copy duplicates only top-level object structure; deep copy traverses the object graph to recursively create new object copies.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What does the LEGB rule describe in Python variable name resolution?",
+                "options": {
+                    "A": "The scope lookup order: Local -> Enclosing (nonlocal) -> Global (module) -> Built-in",
+                    "B": "Linear Error Generation Branching in exception handling",
+                    "C": "List Evaluation Garbage Batching in memory pools",
+                    "D": "Lambda Expression Generator Binding"
+                },
+                "correct_option": "A",
+                "explanation": "When resolving an identifier, Python searches the Local scope first, followed by Enclosing functions, Global namespace, and finally Built-ins.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "Which `collections` module data structure provides O(1) time complexity for appending and popping from both ends?",
+                "options": {
+                    "A": "collections.deque",
+                    "B": "collections.defaultdict",
+                    "C": "collections.Counter",
+                    "D": "collections.OrderedDict"
+                },
+                "correct_option": "A",
+                "explanation": "`deque` (double-ended queue) is implemented as a doubly-linked list of blocks, providing O(1) appends and pops from left and right.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the purpose of `__slots__` in a Python class definition?",
+                "options": {
+                    "A": "Restricting instance attributes to a fixed set, which eliminates the per-instance `__dict__` overhead and drastically reduces memory consumption",
+                    "B": "Creating multi-threaded CPU worker slots",
+                    "C": "Defining database foreign key relations",
+                    "D": "Hiding private methods from reflection"
+                },
+                "correct_option": "A",
+                "explanation": "`__slots__` tells Python not to create a dynamic attribute dictionary `__dict__` for instances, conserving significant memory when instantiating millions of objects.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "In Python exception handling, when is the `else` block executed in a `try...except...else...finally` statement?",
+                "options": {
+                    "A": "Only when no exception is raised inside the `try` block",
+                    "B": "Whenever an exception occurs",
+                    "C": "Always, regardless of exceptions",
+                    "D": "Only when the `finally` block fails"
+                },
+                "correct_option": "A",
+                "explanation": "The `else` clause in a try block runs exclusively when the try suite executes to completion without encountering any exceptions.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the function of the `@property` decorator in Python classes?",
+                "options": {
+                    "A": "Allowing a class method to be accessed like an attribute while enabling getter, setter, and deleter encapsulation logic",
+                    "B": "Making a method static and independent of instance state",
+                    "C": "Converting the class into a JSON schema",
+                    "D": "Making the attribute public across all threads"
+                },
+                "correct_option": "A",
+                "explanation": "`@property` creates a managed descriptor attribute, executing custom validation or computation methods when read or modified as an attribute.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the difference between `*args` and `**kwargs` in Python function signatures?",
+                "options": {
+                    "A": "`*args` captures arbitrary positional arguments as a tuple; `**kwargs` captures arbitrary keyword arguments as a dictionary",
+                    "B": "`*args` is for strings, `**kwargs` is for integers",
+                    "C": "`*args` passes variables by reference, `**kwargs` by value",
+                    "D": "`**kwargs` is only used in class constructors"
+                },
+                "correct_option": "A",
+                "explanation": "`*args` gathers non-keyword variable arguments into a tuple, while `**kwargs` bundles key-value arguments into a dict.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How does Python handle cyclic reference memory cleanup?",
+                "options": {
+                    "A": "Through a generational cyclic garbage collector that periodically identifies and frees unreachable reference cycles not collected by reference counting",
+                    "B": "Cyclic references crash the interpreter immediately",
+                    "C": "By converting all cyclic references into weak references",
+                    "D": "By requiring manual free() calls from developers"
+                },
+                "correct_option": "A",
+                "explanation": "While reference counting handles most deallocations instantaneously, Python's `gc` module detects and collects isolated circular graphs.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "What is a `pytest` Fixture and how is it used?",
+                "options": {
+                    "A": "A reusable setup and teardown function decorated with `@pytest.fixture` that injects test dependencies, databases, or mock clients into test functions",
+                    "B": "A static assert statement",
+                    "C": "A compiler plugin that accelerates test execution",
+                    "D": "A tool that generates fake test reports"
+                },
+                "correct_option": "A",
+                "explanation": "Fixtures provide explicit, modular, and dependency-injected test environments with optional `yield` statements for teardown cleanup.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the difference between `__str__` and `__repr__` in Python classes?",
+                "options": {
+                    "A": "`__repr__` aims to be unambiguous and developer-oriented (often valid Python code to recreate the object); `__str__` is a readable string representation for end-users",
+                    "B": "`__str__` is only used in debugging",
+                    "C": "`__repr__` returns an integer hash",
+                    "D": "They must always return identical strings"
+                },
+                "correct_option": "A",
+                "explanation": "The official goal of `__repr__` is unambiguous representation for logging and debugging; `__str__` provides human-friendly output.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is Python's `type` and what does `type(name, bases, dict)` do?",
+                "options": {
+                    "A": "The built-in metaclass that constructs and instantiates new classes dynamically at runtime",
+                    "B": "A function that checks if a variable is a float",
+                    "C": "A compiler directive for C extensions",
+                    "D": "A keyword that imports external modules"
+                },
+                "correct_option": "A",
+                "explanation": "Classes in Python are instances of the `type` metaclass; calling `type(name, bases, dict)` dynamically constructs a new class object.",
+                "difficulty": "Hard"
+            }
+        ]
+    },
+    "FastAPI": {
+        "title": "FastAPI Production Backend Architecture Assessment",
+        "description": "Comprehensive diagnostic covering asynchronous endpoints, Pydantic schemas, dependency injection, middleware, JWT auth, and OpenAPI standards.",
+        "pass_score": 70,
+        "difficulty": "Intermediate",
+        "duration_minutes": 35,
+        "questions": [
+            {
+                "question_text": "In FastAPI, how does the framework execute synchronous endpoint handlers (`def endpoint()`) compared to asynchronous handlers (`async def endpoint()`)?",
+                "options": {
+                    "A": "`async def` endpoints run directly on the main event loop thread; standard `def` endpoints are automatically offloaded to an external threadpool (anyio worker threads) to prevent blocking the event loop",
+                    "B": "Standard `def` endpoints are executed using multi-processing",
+                    "C": "FastAPI rejects non-async endpoints with a 500 error",
+                    "D": "There is zero difference in runtime execution"
+                },
+                "correct_option": "A",
+                "explanation": "FastAPI automatically runs synchronous `def` functions in a separate threadpool, allowing blocking synchronous code without choking the main asyncio event loop.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the role of Pydantic models in FastAPI request and response handling?",
+                "options": {
+                    "A": "Validating incoming JSON payloads, enforcing data types, sanitizing inputs, generating OpenAPI schemas, and serializing outbound response structures",
+                    "B": "Managing database connection pooling for PostgreSQL",
+                    "C": "Rendering HTML templates on the server",
+                    "D": "Encrypting network traffic using SSL certificates"
+                },
+                "correct_option": "A",
+                "explanation": "Pydantic provides type enforcement, automated parsing and validation errors, schema documentation, and response data serialization.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How does FastAPI's Dependency Injection system (`Depends()`) operate?",
+                "options": {
+                    "A": "It resolves, instantiates, and injects shared components (database sessions, authenticated users, permissions, caching) hierarchically into route handlers before executing the route",
+                    "B": "It downloads npm packages at runtime",
+                    "C": "It acts as a global singleton across multiple server processes",
+                    "D": "It replaces standard Python function arguments with global variables"
+                },
+                "correct_option": "A",
+                "explanation": "`Depends` builds an internal dependency graph, executing shared prerequisites, validating security credentials, and yielding resources like database sessions with clean teardown.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How do you define a database session dependency with automatic cleanup/rollback in FastAPI?",
+                "options": {
+                    "A": "Using a generator function with `try...finally`: `db = SessionLocal(); try: yield db finally: db.close()`",
+                    "B": "By opening a new database connection inside every SQL query",
+                    "C": "By storing the db connection in global variables",
+                    "D": "By creating a static class method without closing"
+                },
+                "correct_option": "A",
+                "explanation": "FastAPI supports dependency generators with `yield`: code before `yield` executes before the route, and code in `finally` guarantees connection closure after the response is sent.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the purpose of `response_model_exclude_unset=True` in a FastAPI route decorator?",
+                "options": {
+                    "A": "It excludes fields from the serialized JSON response if they were not explicitly set when the Pydantic model was created, omitting default values",
+                    "B": "It hides the response from Swagger UI documentation",
+                    "C": "It removes all null values from database tables",
+                    "D": "It prevents clients from caching the HTTP response"
+                },
+                "correct_option": "A",
+                "explanation": "`response_model_exclude_unset` ensures only attributes explicitly populated on the model instance are emitted in the response payload.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How are Background Tasks defined and triggered in FastAPI?",
+                "options": {
+                    "A": "By declaring a `background_tasks: BackgroundTasks` parameter in the route handler and calling `background_tasks.add_task(func, *args)`",
+                    "B": "By using the Python `threading.Thread().start()` method directly",
+                    "C": "By deploying a separate Celery cluster for every single endpoint",
+                    "D": "By running cron jobs on the Linux operating system"
+                },
+                "correct_option": "A",
+                "explanation": "FastAPI provides built-in `BackgroundTasks` to execute non-blocking operations (e.g., sending emails, logging) after the HTTP response has been delivered to the client.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the purpose of `APIRouter` in modular FastAPI applications?",
+                "options": {
+                    "A": "Structuring endpoints into logical, modular domain groups with shared URL prefixes, tags, dependencies, and responses before mounting them on the main `FastAPI()` app",
+                    "B": "Managing physical network router hardware",
+                    "C": "Compiling frontend single-page applications",
+                    "D": "Configuring DNS records for the server"
+                },
+                "correct_option": "A",
+                "explanation": "`APIRouter` enables clean domain segregation across multiple files, grouping related endpoints under common prefixes like `/api/v1/internships`.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do you enforce OAuth2 Bearer token authentication in a FastAPI endpoint?",
+                "options": {
+                    "A": "Using `oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')` and requiring `token: str = Depends(oauth2_scheme)` in protected endpoints",
+                    "B": "By checking the user's IP address against a whitelist",
+                    "C": "By verifying cookie session IDs in a MySQL database",
+                    "D": "By disabling CORS middleware completely"
+                },
+                "correct_option": "A",
+                "explanation": "`OAuth2PasswordBearer` extracts the `Authorization: Bearer <token>` header, handles 401 Unauthorized errors automatically, and integrates with OpenAPI documentation.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What does `CORSMiddleware` in FastAPI manage?",
+                "options": {
+                    "A": "Cross-Origin Resource Sharing headers, allowing specific frontend domains (origins), methods, and headers to communicate with the API from different domains/ports",
+                    "B": "Encrypting database hard disks",
+                    "C": "Compressing images uploaded by users",
+                    "D": "Validating email address formats"
+                },
+                "correct_option": "A",
+                "explanation": "CORSMiddleware intercepts cross-origin preflight `OPTIONS` requests and appends `Access-Control-Allow-Origin` headers for browser security.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the recommended modern mechanism for managing startup and shutdown lifecycle events in FastAPI (replacing legacy `@app.on_event`)?",
+                "options": {
+                    "A": "Using the `lifespan` parameter on `FastAPI(lifespan=lifespan)` with an `@asynccontextmanager` generator function",
+                    "B": "Writing custom bash startup scripts",
+                    "C": "Calling functions inside `__init__.py`",
+                    "D": "Using Python `signal` handlers"
+                },
+                "correct_option": "A",
+                "explanation": "The `lifespan` context manager handles startup logic before `yield` and graceful shutdown/teardown logic after `yield` cleanly.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How does `UploadFile` in FastAPI differ from using raw `bytes` for file upload parameters?",
+                "options": {
+                    "A": "`UploadFile` streams data as a SpooledTemporaryFile in memory/disk without reading the whole file into RAM at once; `bytes` reads the entire payload directly into memory",
+                    "B": "`UploadFile` only accepts JPEG images",
+                    "C": "`bytes` automatically scans files for viruses",
+                    "D": "`UploadFile` requires an Amazon S3 bucket to function"
+                },
+                "correct_option": "A",
+                "explanation": "`UploadFile` uses a spooled temporary file with asynchronous `read()`, `write()`, and `seek()` methods, preventing out-of-memory crashes on large file uploads.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What status code does FastAPI automatically return when a client sends invalid request data failing Pydantic schema validation?",
+                "options": {
+                    "A": "422 Unprocessable Entity",
+                    "B": "400 Bad Request",
+                    "C": "500 Internal Server Error",
+                    "D": "404 Not Found"
+                },
+                "correct_option": "A",
+                "explanation": "FastAPI returns HTTP 422 with a structured JSON list of validation errors pinpointing exact field locations and failure reasons.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do you define a Path parameter with type constraints and descriptions in FastAPI?",
+                "options": {
+                    "A": "Using `Path(..., ge=1, title='Resource ID', description='Unique numeric identifier')`",
+                    "B": "Using standard Python regex strings only",
+                    "C": "By parsing `request.url` manually",
+                    "D": "By setting SQL schema constraints in PostgreSQL"
+                },
+                "correct_option": "A",
+                "explanation": "`Path()` provides rich OpenAPI metadata, numeric validations (`ge`, `le`, `gt`, `lt`), and regex validation directly on URL path segments.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How can you stream Server-Sent Events (SSE) or chunked data in FastAPI?",
+                "options": {
+                    "A": "Using `StreamingResponse(generator(), media_type='text/event-stream')`",
+                    "B": "Using standard `JSONResponse()` with a while loop",
+                    "C": "By writing directly to sys.stdout",
+                    "D": "By disabling HTTP keep-alive headers"
+                },
+                "correct_option": "A",
+                "explanation": "`StreamingResponse` takes an async or sync iterator/generator and streams chunks progressively over an open HTTP connection.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "How do you test FastAPI endpoints asynchronously with `pytest`?",
+                "options": {
+                    "A": "Using `httpx.AsyncClient(transport=ASGITransport(app=app), base_url='http://test')` and `await client.get(...)`",
+                    "B": "By starting a live uvicorn server in a separate terminal",
+                    "C": "By using urllib in synchronous mode only",
+                    "D": "Testing async endpoints is not supported in pytest"
+                },
+                "correct_option": "A",
+                "explanation": "`httpx.AsyncClient` interacts directly with the FastAPI ASGI application in-process without network overhead or port binding.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the purpose of `HTTPException` in FastAPI?",
+                "options": {
+                    "A": "Raising explicit HTTP error responses with status codes (e.g. 404, 401, 403), custom headers, and structured detail messages that abort request execution cleanly",
+                    "B": "Logging Python stack traces to disk",
+                    "C": "Crashing the Uvicorn server process",
+                    "D": "Retrying failed database queries"
+                },
+                "correct_option": "A",
+                "explanation": "Raising `HTTPException` triggers FastAPI's built-in exception handler to render an HTTP error response immediately.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How does FastAPI generate interactive API documentation automatically?",
+                "options": {
+                    "A": "By extracting Pydantic models, type hints, and route docstrings into an OpenAPI 3.0 JSON specification, served via Swagger UI (`/docs`) and ReDoc (`/redoc`)",
+                    "B": "By scanning comments written in markdown files",
+                    "C": "By using an AI agent running in the background",
+                    "D": "By recording live network traffic"
+                },
+                "correct_option": "A",
+                "explanation": "FastAPI compiles type annotations and Pydantic schemas into an authoritative OpenAPI standard schema visualized by interactive Swagger UI.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do you handle custom global exceptions across an entire FastAPI application?",
+                "options": {
+                    "A": "Using `@app.exception_handler(CustomException)` and returning a custom `JSONResponse`",
+                    "B": "By wrapping every endpoint in `try...except` blocks manually",
+                    "C": "By modifying Uvicorn source code",
+                    "D": "By restarting the server on error"
+                },
+                "correct_option": "A",
+                "explanation": "Application exception handlers catch designated exception types raised anywhere in route handlers or dependencies and convert them to uniform JSON responses.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the function of `Header()` and `Cookie()` in FastAPI route signatures?",
+                "options": {
+                    "A": "Declaring parameters that are automatically parsed, validated, and extracted from incoming HTTP request headers and cookies",
+                    "B": "Setting response cookie headers on the client",
+                    "C": "Encrypting browser session data",
+                    "D": "Configuring reverse proxy servers"
+                },
+                "correct_option": "A",
+                "explanation": "`Header` and `Cookie` are parameter extractors that read named values directly from HTTP request headers and cookie jars.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do WebSockets work in FastAPI?",
+                "options": {
+                    "A": "Declaring `@app.websocket('/ws')` with `async def websocket_endpoint(websocket: WebSocket)`, calling `await websocket.accept()`, and exchanging messages via `receive_text()` / `send_text()`",
+                    "B": "Using standard HTTP polling every 5 seconds",
+                    "C": "WebSockets require external Node.js servers",
+                    "D": "By sending email notifications to clients"
+                },
+                "correct_option": "A",
+                "explanation": "FastAPI natively supports ASGI WebSockets with full async lifecycle management (`accept`, `receive_text`, `send_json`, `close`).",
+                "difficulty": "Medium"
+            }
+        ]
+    },
+    "React Native": {
+        "title": "React Native Architecture & Cross-Platform Mobile Assessment",
+        "description": "Comprehensive diagnostic covering React Native architecture, Hermes, Expo, React Navigation, state management, native bridges, and offline storage.",
+        "pass_score": 70,
+        "difficulty": "Intermediate",
+        "duration_minutes": 35,
+        "questions": [
+            {
+                "question_text": "What is the primary architectural improvement of React Native's New Architecture (Fabric and TurboModules) over the legacy Bridge?",
+                "options": {
+                    "A": "It replaces asynchronous JSON serialization over a single C++ bridge with synchronous JavaScript Interface (JSI) direct memory invocations and Fabric native rendering",
+                    "B": "It runs the entire mobile application inside a hidden Android WebView",
+                    "C": "It removes JavaScript and compiles code directly into pure assembly",
+                    "D": "It eliminates the need for Android and iOS build tools"
+                },
+                "correct_option": "A",
+                "explanation": "JSI allows JavaScript to hold direct references to C++ host objects and invoke native methods synchronously without JSON bridge serialization bottlenecks.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "How does `FlatList` optimize memory consumption when rendering lists with thousands of items?",
+                "options": {
+                    "A": "By virtualizing list items, rendering only items within the visible viewport (plus window render buffer) and unmounting off-screen views",
+                    "B": "By storing all list elements in an external SQLite database",
+                    "C": "By converting all images to SVG vectors automatically",
+                    "D": "By capping list rendering to a maximum of 20 items"
+                },
+                "correct_option": "A",
+                "explanation": "FlatList uses window virtualization to render visible items lazily and recycle off-screen views to maintain a minimal memory footprint.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "Which layout engine does React Native use to calculate flexbox dimensions and layout coordinates across iOS and Android?",
+                "options": {
+                    "A": "WebKit Layout Engine",
+                    "B": "Yoga Layout Engine",
+                    "C": "Skia 2D Canvas",
+                    "D": "Blink Engine"
+                },
+                "correct_option": "B",
+                "explanation": "Yoga is Meta's cross-platform C++ layout engine implementing W3C Flexbox specifications across mobile platforms.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the primary operational advantage of the Hermes JavaScript engine in React Native mobile apps?",
+                "options": {
+                    "A": "Bytecode precompilation ahead-of-time (AOT) during build, reducing Time to Interactive (TTI), startup latency, and memory footprint",
+                    "B": "Automatic multi-threading for all JavaScript array methods",
+                    "C": "Direct compilation of Python into iOS IPA files",
+                    "D": "Replacing all React components with native C++ classes"
+                },
+                "correct_option": "A",
+                "explanation": "Hermes precompiles JavaScript into optimized bytecode at build time, eliminating JIT warm-up time and significantly speeding up cold application start.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "When handling secure user credentials (such as JWT refresh tokens) on mobile devices, what is the best practice storage mechanism in React Native?",
+                "options": {
+                    "A": "Standard `AsyncStorage`",
+                    "B": "`react-native-keychain` / `expo-secure-store` backed by iOS Keychain and Android KeyStore",
+                    "C": "Plain text JSON files in the app cache directory",
+                    "D": "Global JavaScript Redux variables"
+                },
+                "correct_option": "B",
+                "explanation": "AsyncStorage is unencrypted on disk. Hardware-backed secure storage (iOS Keychain / Android KeyStore) encrypts data using device cryptographic enclaves.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How does React Navigation's `Stack.Navigator` differ fundamentally from `Tab.Navigator` in screen lifecycle management?",
+                "options": {
+                    "A": "Stack navigators push and pop screens on top of a visual stack preserving back navigation history, while tab navigators switch active root views while keeping tab states mounted or lazy-loaded",
+                    "B": "Stack navigators only work on iOS, while Tab navigators work only on Android",
+                    "C": "Tab navigators destroy screen state on every tab press",
+                    "D": "Stack navigators require a remote server connection"
+                },
+                "correct_option": "A",
+                "explanation": "Stack navigation pushes route frames onto a history stack, whereas bottom/top tab navigators maintain parallel active routes across tabs.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How should expensive animations be executed in React Native to prevent dropping frames on the JavaScript thread?",
+                "options": {
+                    "A": "Using `useNativeDriver: true` in the Animated API or running animations via `react-native-reanimated` worklets directly on the UI/Render thread",
+                    "B": "By setting `setTimeout` intervals in the JavaScript event loop",
+                    "C": "By using CSS `@keyframes` in inline style objects",
+                    "D": "By running multiple Web Workers"
+                },
+                "correct_option": "A",
+                "explanation": "The native driver serializes animation configurations to the native UI thread, ensuring 60/120 FPS animations continue smoothly even if the JS thread is busy with business logic.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "What is the role of `AppState` API in React Native mobile development?",
+                "options": {
+                    "A": "Listening to transitions between `active`, `background`, and `inactive` application lifecycle states to pause timers, sync data, or blur sensitive screens",
+                    "B": "Managing global Redux or Zustand state variables",
+                    "C": "Checking device battery percentage and Wi-Fi signal",
+                    "D": "Controlling SQL database transactions"
+                },
+                "correct_option": "A",
+                "explanation": "AppState provides lifecycle notifications when the user minimizes the app, receives a phone call, or brings the app back to the foreground.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "In Expo managed workflow, how do Config Plugins (`app.config.js` / `app.json`) enable custom native iOS and Android configurations without ejecting?",
+                "options": {
+                    "A": "By executing build-time AST and XML modifications on native `AndroidManifest.xml`, `Info.plist`, and Gradle files during `expo prebuild`",
+                    "B": "By downloading precompiled APK files from remote servers",
+                    "C": "By injecting JavaScript runtime proxies into the browser",
+                    "D": "By disabling native permission checks"
+                },
+                "correct_option": "A",
+                "explanation": "Expo Config Plugins apply programmatic modifications to native Android/iOS source files during the continuous prebuild generation phase.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "Which React Native component should be used to provide responsive touch feedback with platform-native ripple effects on Android and opacity fading on iOS?",
+                "options": {
+                    "A": "`Pressable` with conditional `android_ripple` or dynamic style states",
+                    "B": "`Button`",
+                    "C": "`View`",
+                    "D": "`Text`"
+                },
+                "correct_option": "A",
+                "explanation": "`Pressable` is the modern core component replacing TouchableOpacity, offering state-based styling and native Android ripple configuration.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the primary purpose of `InteractionManager.runAfterInteractions()` in React Native?",
+                "options": {
+                    "A": "Deferring long-running JavaScript tasks until active touch gestures or page transitions/animations have finished, avoiding animation jank",
+                    "B": "Restarting the mobile application",
+                    "C": "Handling database crash recoveries",
+                    "D": "Managing user touch authentication"
+                },
+                "correct_option": "A",
+                "explanation": "InteractionManager allows background processing or heavy data sorting to be queued until UI animations and transitions complete smoothly.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How do deep links and universal links work in React Native navigation?",
+                "options": {
+                    "A": "By configuring a URL prefix scheme (`myapp://` or `https://mydomain.com`) and mapping path patterns to navigation stack routes in `linking` config",
+                    "B": "By opening a Safari or Chrome browser tab inside the app",
+                    "C": "By sending SMS text messages to the device",
+                    "D": "By rebooting the smartphone"
+                },
+                "correct_option": "A",
+                "explanation": "React Navigation's linking configuration maps incoming URI routes directly to nested screen navigators and extracts URL path/query parameters.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "Why is MMKV significantly faster than standard `AsyncStorage` in React Native?",
+                "options": {
+                    "A": "MMKV uses memory-mapped files (`mmap`) and synchronous C++ JSI bindings directly in process memory instead of asynchronous SQLite/SharedPreferences serialized bridge calls",
+                    "B": "MMKV uploads all data to cloud storage servers",
+                    "C": "MMKV compresses data using ZIP compression",
+                    "D": "MMKV runs only on Apple devices"
+                },
+                "correct_option": "A",
+                "explanation": "Tencent MMKV utilizes `mmap` to synchronize memory pages with disk storage directly and exposes synchronous getters/setters via JSI.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "What is the purpose of `Dimensions.addEventListener` vs `useWindowDimensions` hook in modern React Native?",
+                "options": {
+                    "A": "`useWindowDimensions` automatically triggers component re-renders on screen rotation or window resizing without manual event listener cleanup",
+                    "B": "`useWindowDimensions` only works in Expo Snack",
+                    "C": "`Dimensions` API has been deprecated and deleted from React Native",
+                    "D": "`useWindowDimensions` measures device weight"
+                },
+                "correct_option": "A",
+                "explanation": "`useWindowDimensions` is the modern React hook that subscribes to window size updates and triggers clean re-renders when screen orientation changes.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do you handle keyboard overlap over text inputs on mobile forms in React Native?",
+                "options": {
+                    "A": "Wrapping form inputs in `KeyboardAvoidingView` with platform-specific behavior (`padding` for iOS, `height` for Android) inside a `ScrollView`",
+                    "B": "By disabling the device touch keyboard",
+                    "C": "By setting screen resolution to 100%",
+                    "D": "By locking the screen orientation"
+                },
+                "correct_option": "A",
+                "explanation": "`KeyboardAvoidingView` dynamically calculates keyboard height and shifts form views upward so inputs remain visible.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is Metro in the React Native development ecosystem?",
+                "options": {
+                    "A": "The JavaScript bundler for React Native that resolves module imports, compiles JSX/TypeScript, and serves HMR bundle files to devices",
+                    "B": "The native iOS compiler in Xcode",
+                    "C": "A cloud testing service for mobile apps",
+                    "D": "An Android emulator software"
+                },
+                "correct_option": "A",
+                "explanation": "Metro is the dedicated JavaScript bundler developed by Meta for React Native, responsible for fast asset resolution and sub-second Fast Refresh.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "When building an offline-first mobile application, how should network synchronization be architected?",
+                "options": {
+                    "A": "Mutations are applied immediately to local storage (optimistic UI), queued in an offline sync queue, and replayed with conflict resolution when network connectivity is restored",
+                    "B": "Block all user interactions with a spinner until Wi-Fi is available",
+                    "C": "Discard all user actions created offline",
+                    "D": "Send network requests every 100 milliseconds indefinitely"
+                },
+                "correct_option": "A",
+                "explanation": "Offline-first architectures use local persistent stores as the single source of truth, queueing outbound mutations with idempotent replay IDs.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "What is the function of ProGuard and R8 in Android React Native release builds?",
+                "options": {
+                    "A": "Code shrinking, dead-code elimination, resource obfuscation, and optimization to reduce release APK/AAB bundle size",
+                    "B": "Generating automated unit test reports",
+                    "C": "Translating JavaScript into Kotlin",
+                    "D": "Managing Google Play Store user reviews"
+                },
+                "correct_option": "A",
+                "explanation": "R8 and ProGuard inspect Java/Kotlin bytecode, remove unused classes/methods, and obfuscate identifiers for security and size reduction.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How do background tasks (e.g. background location, data sync) function across iOS and Android in React Native?",
+                "options": {
+                    "A": "Using `expo-background-fetch` / `expo-task-manager` or Android `WorkManager` and iOS `BGAppRefreshTask` registered in native headless JS tasks",
+                    "B": "By keeping the JavaScript event loop running in an infinite `while(true)` loop",
+                    "C": "Background tasks are prohibited on all smartphones",
+                    "D": "By sending push notifications to oneself"
+                },
+                "correct_option": "A",
+                "explanation": "Native OS schedulers wake headless JS tasks for brief execution windows governed by battery and system resource constraints.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "What is the difference between EAS Build and local `npx react-native run-android` in Expo / React Native workflows?",
+                "options": {
+                    "A": "EAS Build compiles production native binaries (AAB/IPA) in dedicated cloud environments with signing credentials, while local runs generate debug builds on local developer SDKs",
+                    "B": "EAS Build only compiles HTML files",
+                    "C": "Local runs cannot connect to real Android phones",
+                    "D": "EAS Build replaces JavaScript with C#"
+                },
+                "correct_option": "A",
+                "explanation": "Expo Application Services (EAS) provides standardized cloud CI/CD build pipelines that compile production-ready signed binaries for App Store and Play Store distribution.",
+                "difficulty": "Medium"
+            }
+        ]
+    },
+    "RESTful APIs": {
+        "title": "RESTful API Architecture & Endpoint Design Assessment",
+        "description": "Comprehensive diagnostic covering REST architectural constraints, HTTP semantics, idempotency, rate limiting, authentication, OpenAPI, and caching.",
+        "pass_score": 70,
+        "difficulty": "Intermediate",
+        "duration_minutes": 35,
+        "questions": [
+            {
+                "question_text": "What are the six core architectural constraints of the REST (Representational State Transfer) architectural style?",
+                "options": {
+                    "A": "Client-Server, Statelessness, Cacheability, Layered System, Code on Demand (optional), and Uniform Interface",
+                    "B": "JSON, SQL, WebSockets, Docker, Kubernetes, and Microservices",
+                    "C": "GET, POST, PUT, DELETE, PATCH, and OPTIONS",
+                    "D": "Authentication, Authorization, Encryption, Logging, Monitoring, and Alerting"
+                },
+                "correct_option": "A",
+                "explanation": "Roy Fielding's dissertation defines these six constraints as the fundamental foundation of scalable REST architecture.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "Which HTTP methods are defined as idempotent according to the RFC 7231 HTTP specification?",
+                "options": {
+                    "A": "GET, HEAD, PUT, DELETE, and OPTIONS",
+                    "B": "POST and PATCH",
+                    "C": "Only GET",
+                    "D": "POST, PUT, and PATCH"
+                },
+                "correct_option": "A",
+                "explanation": "An idempotent HTTP method can be called multiple times with identical parameters without altering server resource state beyond the initial execution.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "Which HTTP status code should be returned when a resource is successfully created via `POST` with a `Location` header pointing to the new resource?",
+                "options": {
+                    "A": "200 OK",
+                    "B": "201 Created",
+                    "C": "202 Accepted",
+                    "D": "204 No Content"
+                },
+                "correct_option": "B",
+                "explanation": "HTTP 201 Created indicates successful resource instantiation and is accompanied by a Location header referencing the new URI.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the key difference between HTTP `PUT` and `PATCH` methods in REST API resource updates?",
+                "options": {
+                    "A": "`PUT` replaces the entire target resource representation, while `PATCH` applies a partial set of modifications to the resource",
+                    "B": "`PUT` is only used for files, while `PATCH` is used for JSON",
+                    "C": "`PATCH` is strictly idempotent, while `PUT` is not",
+                    "D": "`PUT` deletes the resource before writing"
+                },
+                "correct_option": "A",
+                "explanation": "PUT conveys a complete replacement entity; PATCH conveys a delta document describing specific field modifications.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "Which HTTP status code signifies that incoming request JSON syntax is valid, but fails domain business validation rules (e.g. invalid email format)?",
+                "options": {
+                    "A": "400 Bad Request",
+                    "B": "422 Unprocessable Entity",
+                    "C": "500 Internal Server Error",
+                    "D": "405 Method Not Allowed"
+                },
+                "correct_option": "B",
+                "explanation": "HTTP 422 Unprocessable Entity denotes that the server understands the content type and syntax, but semantic validation rules failed.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How does Cursor-Based Pagination outperform Offset-Based Pagination (`OFFSET 10000 LIMIT 20`) in high-volume database tables?",
+                "options": {
+                    "A": "Cursor pagination queries indexed keysets (`WHERE id > :cursor_id ORDER BY id LIMIT :limit`), avoiding costly full-index scans and preventing data drift during real-time inserts",
+                    "B": "Cursor pagination caches all records in Redis automatically",
+                    "C": "Cursor pagination converts SQL queries into NoSQL queries",
+                    "D": "Offset pagination only works on MySQL"
+                },
+                "correct_option": "A",
+                "explanation": "OFFSET N forces database engines to scan and discard N rows, causing $O(N)$ execution degradation. Keyset cursor pagination runs in constant $O(1)$ index lookup time.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "What is the purpose of HTTP `ETag` (Entity Tag) headers and conditional requests (`If-None-Match`) in RESTful APIs?",
+                "options": {
+                    "A": "Enabling web caches and mobile clients to validate cache freshness and return `304 Not Modified` without transferring redundant payload data",
+                    "B": "Encrypting passwords during transit",
+                    "C": "Tracking user advertising profiles",
+                    "D": "Compressing images with WebP"
+                },
+                "correct_option": "A",
+                "explanation": "ETags serve as content hash tokens. If the server ETag matches the client's `If-None-Match`, a lightweight 304 response avoids redundant bandwidth usage.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is a CORS preflight request, and when does the browser trigger it before making an API call?",
+                "options": {
+                    "A": "An `OPTIONS` HTTP request sent automatically by browsers for cross-origin requests containing custom headers, credentials, or non-simple methods (PUT, DELETE, PATCH)",
+                    "B": "A DNS lookup request sent before connecting to Wi-Fi",
+                    "C": "A certificate check for SSL encryption",
+                    "D": "A background WebSocket ping"
+                },
+                "correct_option": "A",
+                "explanation": "Preflight OPTIONS requests check `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, and headers before executing non-simple cross-origin mutations.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "Which algorithm is commonly implemented in API gateways (e.g. Kong, Nginx, Redis) to enforce rate limiting with burst tolerance?",
+                "options": {
+                    "A": "Token Bucket or Leaky Bucket Algorithm",
+                    "B": "Dijkstra's Shortest Path Algorithm",
+                    "C": "Binary Search Algorithm",
+                    "D": "QuickSort Algorithm"
+                },
+                "correct_option": "A",
+                "explanation": "Token Bucket regulates average request rates while permitting controlled bursts of traffic up to the bucket capacity limit.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the difference between `401 Unauthorized` and `403 Forbidden` HTTP response codes?",
+                "options": {
+                    "A": "`401` indicates missing or invalid authentication credentials, while `403` means the client is authenticated but lacks required permissions to access the resource",
+                    "B": "`403` means the server is offline",
+                    "C": "`401` is only used for admin accounts",
+                    "D": "There is zero functional difference"
+                },
+                "correct_option": "A",
+                "explanation": "401 represents unauthenticated identity (please log in); 403 represents unauthorized permission (identity verified, but access denied).",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is HATEOAS (Hypermedia As The Engine Of Application State) in Level 3 REST maturity?",
+                "options": {
+                    "A": "API responses include dynamic hypermedia links (`_links`) guiding client applications on what subsequent actions and transitions are permissible",
+                    "B": "An automated testing framework for HTML forms",
+                    "C": "A GraphQL query generator",
+                    "D": "A database migration script"
+                },
+                "correct_option": "A",
+                "explanation": "HATEOAS makes APIs self-describing by embedding link relations that allow clients to discover state transitions dynamically.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "How should API versioning be implemented to maintain backwards compatibility for existing mobile and web clients?",
+                "options": {
+                    "A": "URI path versioning (`/api/v1/resource`), Custom Request Headers (`Accept: application/vnd.company.v1+json`), or Query Parameters (`?version=1`)",
+                    "B": "By modifying database table column names directly in production",
+                    "C": "By changing server domain names weekly",
+                    "D": "By deleting deprecated endpoints immediately"
+                },
+                "correct_option": "A",
+                "explanation": "Explicit API versioning contracts allow new features and schema changes to evolve without breaking legacy client applications in the field.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the primary role of an Idempotency Key in POST financial or order creation APIs?",
+                "options": {
+                    "A": "Preventing duplicate order processing or duplicate charges when clients retry failed network requests with the same unique idempotency token",
+                    "B": "Encrypting the customer credit card number",
+                    "C": "Speeding up database indexing by 50%",
+                    "D": "Generating PDF receipts automatically"
+                },
+                "correct_option": "A",
+                "explanation": "APIs check idempotency keys in cache/storage; if an identical key is received within a TTL window, the stored prior response is returned without re-executing payment mutations.",
+                "difficulty": "Hard"
+            },
+            {
+                "question_text": "Which HTTP status code should be returned when a client attempts to access an endpoint with an unsupported HTTP method (e.g. `POST` on a read-only endpoint)?",
+                "options": {
+                    "A": "405 Method Not Allowed with an `Allow` response header listing supported verbs",
+                    "B": "404 Not Found",
+                    "C": "501 Not Implemented",
+                    "D": "400 Bad Request"
+                },
+                "correct_option": "A",
+                "explanation": "HTTP 405 Method Not Allowed informs the client that the route exists, but the requested HTTP method is disallowed, advertising valid verbs in the Allow header.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is OpenAPI (formerly Swagger) and why is it essential in modern REST API development?",
+                "options": {
+                    "A": "A vendor-neutral, machine-readable specification language (JSON/YAML) describing endpoints, request parameters, response schemas, and authentication schemes",
+                    "B": "A proprietary database engine developed by Oracle",
+                    "C": "A front-end CSS framework for React",
+                    "D": "A JavaScript unit testing tool"
+                },
+                "correct_option": "A",
+                "explanation": "OpenAPI provides a single source of truth contract for documentation generation, automated client SDK generation, and contract testing.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How does Gzip / Brotli content encoding optimize REST API data transport?",
+                "options": {
+                    "A": "The server compresses outgoing JSON responses and sets `Content-Encoding: gzip/br`, reducing network payload size and latency over mobile networks",
+                    "B": "It encrypts JSON with 256-bit AES keys",
+                    "C": "It removes whitespace and comments from JavaScript code",
+                    "D": "It converts JSON to XML format"
+                },
+                "correct_option": "A",
+                "explanation": "HTTP compression reduces text/JSON payload size by 60-80%, significantly reducing network transit times on cellular data connections.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the security risk of exposing database primary auto-increment integer IDs (`/users/42`) in public REST APIs?",
+                "options": {
+                    "A": "Enumeration / Insecure Direct Object Reference (IDOR) attacks where malicious actors guess sequential IDs to scrape or manipulate other users' data",
+                    "B": "Database memory leaks caused by integer division",
+                    "C": "Server CPU overheating",
+                    "D": "Inability to sort records by date"
+                },
+                "correct_option": "A",
+                "explanation": "Sequential IDs allow predictable resource enumeration. Best practice is utilizing non-sequential UUIDv4, ULID, or opaque slug tokens in public URLs.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is a Webhook in modern REST API architectures?",
+                "options": {
+                    "A": "An asynchronous HTTP callback where the server makes a `POST` request to a client-configured URL when a specific event occurs, replacing continuous polling",
+                    "B": "A physical ethernet cable connection",
+                    "C": "A browser popup alert window",
+                    "D": "A database backup cron job"
+                },
+                "correct_option": "A",
+                "explanation": "Webhooks provide real-time event-driven notifications (e.g. payment completed, build finished) without requiring continuous client polling.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "When should an API return HTTP `204 No Content`?",
+                "options": {
+                    "A": "When an HTTP request (such as `DELETE` or `PUT`) succeeds, and the server intentionally returns an empty response body",
+                    "B": "When a search query returns zero matching records",
+                    "C": "When the database is empty",
+                    "D": "When the user is logged out"
+                },
+                "correct_option": "A",
+                "explanation": "HTTP 204 indicates that the action was successfully fulfilled and no response body payload is required or returned.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How does the `Retry-After` HTTP header assist client error recovery during `429 Too Many Requests` or `503 Service Unavailable` responses?",
+                "options": {
+                    "A": "It instructs the client exactly how many seconds or at what date/time to wait before safely retrying the request",
+                    "B": "It automatically reboots the client application",
+                    "C": "It cancels the user's subscription",
+                    "D": "It increases the client's rate limit quota"
+                },
+                "correct_option": "A",
+                "explanation": "Retry-After prevents client stampedes by specifying the required backoff cooldown period before the next retry attempt.",
+                "difficulty": "Medium"
+            }
+        ]
+    },
+    "Mobile App Developer": {
+        "title": "Mobile App Developer Core Diagnostic",
+        "description": "Foundational diagnostic evaluating cross-platform mobile app development, React Native, mobile UI, state management, and device integration.",
+        "pass_score": 70,
+        "difficulty": "Foundation",
+        "duration_minutes": 45,
+        "questions": [
+            {
+                "question_text": "Which language is primarily used for cross-platform application logic in React Native development?",
+                "options": {
+                    "A": "JavaScript / TypeScript",
+                    "B": "PHP",
+                    "C": "Ruby",
+                    "D": "Rust"
+                },
+                "correct_option": "A",
+                "explanation": "React Native applications are authored using JavaScript and TypeScript, executing natively across iOS and Android.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the primary function of Expo in modern mobile app development?",
+                "options": {
+                    "A": "A framework and platform for universal React applications providing curated SDKs, development build tools, and OTA updates",
+                    "B": "A database engine for mobile phones",
+                    "C": "A web browser extension for debugging CSS",
+                    "D": "An Android emulator hardware device"
+                },
+                "correct_option": "A",
+                "explanation": "Expo provides comprehensive developer tooling, native module wrappers, and build pipelines for React Native apps.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "Which component is used in React Native to provide smooth scrolling over vertically scrollable content?",
+                "options": {
+                    "A": "`ScrollView`",
+                    "B": "`Div`",
+                    "C": "`Span`",
+                    "D": "`Section`"
+                },
+                "correct_option": "A",
+                "explanation": "ScrollView provides a scrolling container for bounded sets of native views and components.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do you apply styling to elements in React Native?",
+                "options": {
+                    "A": "Using `StyleSheet.create()` and passing style objects to component `style` props",
+                    "B": "Writing external CSS files with `.css` extensions",
+                    "C": "Using HTML `<style>` tags",
+                    "D": "Applying SASS preprocessor scripts"
+                },
+                "correct_option": "A",
+                "explanation": "React Native uses StyleSheet objects mapped directly to Yoga layout properties.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is React Navigation in React Native applications?",
+                "options": {
+                    "A": "The standard routing and navigation library for switching screens and managing navigation stacks in React Native",
+                    "B": "A GPS satellite mapping library",
+                    "C": "An animated web browser",
+                    "D": "A database connection driver"
+                },
+                "correct_option": "A",
+                "explanation": "React Navigation is the de facto navigation framework for standalone mobile applications.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do you access native device camera features in an Expo React Native application?",
+                "options": {
+                    "A": "Using `expo-camera` or `react-native-vision-camera` native module packages with proper runtime permissions",
+                    "B": "Writing raw assembly code in the terminal",
+                    "C": "Camera access is impossible on smartphones",
+                    "D": "By opening a desktop browser"
+                },
+                "correct_option": "A",
+                "explanation": "`expo-camera` exposes native camera hardware with preview frames and barcode scanning capabilities.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the purpose of `SafeAreaView` in mobile UI development?",
+                "options": {
+                    "A": "Applying padding to avoid hardware notches, status bars, and home indicator bars on modern iPhone and Android screens",
+                    "B": "Protecting the smartphone against virus infections",
+                    "C": "Encrypting the mobile application source code",
+                    "D": "Locking the smartphone screen"
+                },
+                "correct_option": "A",
+                "explanation": "SafeAreaView ensures content is positioned within physical device safe boundaries.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "Which hook in React is used to manage local component state?",
+                "options": {
+                    "A": "`useState`",
+                    "B": "`useHistory`",
+                    "C": "`useRouter`",
+                    "D": "`useDatabase`"
+                },
+                "correct_option": "A",
+                "explanation": "`useState` provides reactive state storage and dispatch updaters.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do mobile applications consume external data from backend REST APIs?",
+                "options": {
+                    "A": "Using standard `fetch()` API or `axios` HTTP client with async/await handling",
+                    "B": "By connecting directly to MySQL ports on port 3306",
+                    "C": "By reading local hard disk files only",
+                    "D": "By sending SMS text commands"
+                },
+                "correct_option": "A",
+                "explanation": "Mobile apps communicate with backend servers over HTTPS using fetch or Axios.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the purpose of `AsyncStorage` in React Native?",
+                "options": {
+                    "A": "An unencrypted, asynchronous, persistent key-value storage system for storing basic user preferences locally",
+                    "B": "A high-speed cloud database server",
+                    "C": "A multi-threaded CPU emulator",
+                    "D": "A tool for compiling Swift code"
+                },
+                "correct_option": "A",
+                "explanation": "AsyncStorage persists simple key-value string pairs across app launches.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the difference between Hot Reloading and Fast Refresh in React Native?",
+                "options": {
+                    "A": "Fast Refresh preserves React component state while instantly reflecting code changes in sub-second intervals",
+                    "B": "Hot reloading deletes all app data on every file save",
+                    "C": "Fast refresh requires a full device reboot",
+                    "D": "There is zero difference"
+                },
+                "correct_option": "A",
+                "explanation": "Fast Refresh combines hot reloading with component state preservation and resilient error recovery.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "How do you test a React Native application on a physical smartphone during development with Expo?",
+                "options": {
+                    "A": "By scanning the development server QR code using the Expo Go mobile application or using an Expo Development Build",
+                    "B": "By emailing the JavaScript file to your phone",
+                    "C": "By uploading the app to Google Play Store every time you write a line of code",
+                    "D": "By opening the code in WhatsApp"
+                },
+                "correct_option": "A",
+                "explanation": "Expo Go and Dev Client load the JavaScript bundle over Wi-Fi/USB instantly onto physical devices.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is the purpose of `useEffect` in functional React Native components?",
+                "options": {
+                    "A": "Performing side effects such as data fetching, event subscriptions, and timer management after component rendering",
+                    "B": "Creating HTML tables",
+                    "C": "Styling native button colors",
+                    "D": "Formatting dates"
+                },
+                "correct_option": "A",
+                "explanation": "`useEffect` coordinates asynchronous side effects and cleanup lifecycle subscriptions.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "Which component should be used in React Native for user text input?",
+                "options": {
+                    "A": "`TextInput`",
+                    "B": "`Input`",
+                    "C": "`Textarea`",
+                    "D": "`Field`"
+                },
+                "correct_option": "A",
+                "explanation": "TextInput is the fundamental core component for entering text via virtual keyboard.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "How do you handle gestures like swiping, pinch-to-zoom, and dragging in React Native?",
+                "options": {
+                    "A": "Using `react-native-gesture-handler` and `react-native-reanimated` for 60fps native thread gesture recognition",
+                    "B": "By attaching HTML `onclick` handlers",
+                    "C": "By polling touch screen coordinates every millisecond",
+                    "D": "Gestures cannot be handled on mobile devices"
+                },
+                "correct_option": "A",
+                "explanation": "`react-native-gesture-handler` runs gesture state machines directly on the native platform thread.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is an IPA file in mobile development?",
+                "options": {
+                    "A": "The iOS application archive package format distributed to iPhone and iPad devices",
+                    "B": "An Internet Protocol Address format",
+                    "C": "An Android installation package",
+                    "D": "A database index file"
+                },
+                "correct_option": "A",
+                "explanation": "IPA is the standard packaged binary format for iOS applications.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is an APK / AAB file in Android development?",
+                "options": {
+                    "A": "Android Package (APK) and Android App Bundle (AAB) formats used to package and distribute Android applications",
+                    "B": "An Apple Keynote presentation file",
+                    "C": "A sound recording format",
+                    "D": "A database schema migration file"
+                },
+                "correct_option": "A",
+                "explanation": "AAB is the publishing format for Google Play; APK is the packaged installation package format for Android.",
+                "difficulty": "Easy"
+            },
+            {
+                "question_text": "What is OTA (Over-The-Air) update capability in mobile app frameworks like Expo EAS Update?",
+                "options": {
+                    "A": "Pushing bug fixes and UI updates directly to user devices by replacing the JavaScript bundle without submitting a new binary to App Stores",
+                    "B": "Charging mobile phones wirelessly",
+                    "C": "Sending radio signals over FM frequencies",
+                    "D": "Reinstalling the smartphone operating system"
+                },
+                "correct_option": "A",
+                "explanation": "OTA updates allow instant deployment of JavaScript and asset changes directly to active user devices.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "Why should console.log statements be minimized or stripped in production React Native release builds?",
+                "options": {
+                    "A": "Console logging is synchronous over the native bridge in some mobile configurations and can degrade runtime UI performance",
+                    "B": "Console logs cause the phone screen to turn black",
+                    "C": "Console logs increase battery charging speed",
+                    "D": "Console logs delete local databases"
+                },
+                "correct_option": "A",
+                "explanation": "Excessive logging adds serialization overhead across native boundaries and can expose sensitive application data in system logs.",
+                "difficulty": "Medium"
+            },
+            {
+                "question_text": "What is the primary role of Git in professional mobile development teams?",
+                "options": {
+                    "A": "Tracking code revisions, managing feature branches, facilitating code reviews via Pull Requests, and enabling automated CI/CD builds",
+                    "B": "Compiling Swift code to Java",
+                    "C": "Managing Google Play Store pricing",
+                    "D": "Designing vector icons in Figma"
+                },
+                "correct_option": "A",
+                "explanation": "Git provides distributed version control, enabling collaborative development, release branching, and CI/CD automation.",
+                "difficulty": "Easy"
+            }
+        ]
     }
 }
+

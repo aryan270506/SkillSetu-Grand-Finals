@@ -35,7 +35,7 @@ class GroqKeyInfo:
 
 class GroqKeyManager:
     _instance = None
-    _lock = threading.Lock()
+    _lock = threading.RLock()
 
     def __new__(cls):
         with cls._lock:
@@ -105,7 +105,7 @@ class GroqKeyManager:
         max_attempts: Optional[int] = None
     ) -> Dict[str, Any]:
         if max_attempts is None:
-            max_attempts = len(self.keys)
+            max_attempts = min(2, len(self.keys))
             
         attempts = 0
         used_keys = set()
@@ -117,8 +117,7 @@ class GroqKeyManager:
                 raise Exception("groq_temporarily_unavailable: AI generation is temporarily unavailable. Please try again later.")
             
             if key_info.key_id in used_keys:
-                if len(used_keys) >= len([k for k in self.keys if k.status == GroqKeyStatus.AVAILABLE]) + len(used_keys):
-                    break
+                break
                     
             used_keys.add(key_info.key_id)
             attempts += 1

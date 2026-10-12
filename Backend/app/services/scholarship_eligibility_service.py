@@ -1,56 +1,68 @@
-import logging
 import json
-from typing import Dict, Any, List, Optional
+import logging
+from typing import Dict, Any, List, Optional, Set
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app import models
 
-logger = logging.getLogger("skillsetu_scholarships")
+logger = logging.getLogger("skillsetu_scholarship_eligibility")
+
+
+def _get_prop(obj: Any, key: str, default: Any = None) -> Any:
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 
 
 class ScholarshipEligibilityService:
     """
-    Deterministic & Explainable Scholarship Eligibility Evaluation Engine.
-    Evaluates multi-dimensional criteria (CGPA, Income, Category, State, Gender, PwD, Degree, Branch).
-    Outcomes: 'ELIGIBLE', 'POSSIBLY_ELIGIBLE', 'NOT_ELIGIBLE'.
+    Deterministic Multi-Dimensional Scholarship Eligibility Engine.
+    Operates on live in-memory scholarship records without persisting scraped data to PostgreSQL.
+    Zero LLM hallucinations - 100% deterministic rule verification.
     """
 
     @classmethod
     def evaluate_student_eligibility(
         cls,
         student: models.StudentUser,
-        scholarship: models.Scholarship,
-        rule: Optional[models.ScholarshipEligibilityRule] = None,
+        scholarship: Any,
+        rule: Optional[Any] = None,
         simulated_overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """
-        Wrapper supporting explicit rule injection for standalone and test evaluations.
-        """
         if rule is not None:
-            scholarship.eligibility_rules = rule
+            if hasattr(scholarship, "eligibility_rules"):
+                scholarship.eligibility_rules = rule
+            elif isinstance(scholarship, dict):
+                scholarship["rules"] = rule
+            else:
+                try:
+                    setattr(scholarship, "eligibility_rules", rule)
+                except Exception:
+                    pass
         return cls.evaluate_student_scholarship_eligibility(student, scholarship, simulated_overrides=simulated_overrides)
 
     @classmethod
     def evaluate_student_scholarship_eligibility(
         cls,
         student: models.StudentUser,
-        scholarship: models.Scholarship,
+        scholarship: Any,
         simulated_overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Evaluates deterministic eligibility of student against a scholarship's rules.
-        Supports in-memory simulation overrides (e.g. from UI simulator).
+        Evaluates a student profile against structured scholarship rules.
+        Supports both model objects and live dictionary structures.
         """
-        rules: Optional[models.ScholarshipEligibilityRule] = getattr(scholarship, "eligibility_rules", None)
-
-        checkpoints: List[Dict[str, Any]] = []
-        missing_info: List[str] = []
-        hard_failures: List[str] = []
+        rules = _get_prop(scholarship, "eligibility_rules") or _get_prop(scholarship, "rules") or scholarship
+        checkpoints = []
+        hard_failures = []
+        missing_info = []
 
         overrides = simulated_overrides or {}
 
         # 1. CGPA / Percentage
-        student_cgpa_str = overrides.get("cgpa") or getattr(student, "cgpa_or_percentage", None) or getattr(student, "cgpa", None)
+        student_cgpa_str = overrides.get("cgpa") or _get_prop(student, "cgpa_or_percentage") or _get_prop(student, "cgpa")
         student_cgpa = None
         if student_cgpa_str:
             try:
@@ -60,25 +72,26 @@ class ScholarshipEligibilityService:
             except Exception:
                 student_cgpa = None
 
-        if rules and getattr(rules, "min_cgpa", None):
-            min_cgpa = float(rules.min_cgpa)
+        min_cgpa = _get_prop(rules, "min_cgpa")
+        if min_cgpa is not None and float(min_cgpa) > 0.0:
+            min_cgpa_val = float(min_cgpa)
             if student_cgpa is not None:
-                passed = student_cgpa >= min_cgpa
+                passed = student_cgpa >= min_cgpa_val
                 checkpoints.append({
                     "criterion": "Academic CGPA",
-                    "required": f"≥ {min_cgpa:.1f}",
+                    "required": f"≥ {min_cgpa_val:.1f}",
                     "student_value": f"{student_cgpa:.1f}",
                     "passed": passed,
                     "status": "PASSED" if passed else "FAILED",
-                    "reason": "Meets CGPA cutoff" if passed else f"Below minimum cutoff of {min_cgpa:.1f}"
+                    "reason": "Meets CGPA cutoff" if passed else f"Below minimum cutoff of {min_cgpa_val:.1f}"
                 })
                 if not passed:
-                    hard_failures.append(f"CGPA ({student_cgpa:.1f}) is below minimum requirement of {min_cgpa:.1f}")
+                    hard_failures.append(f"CGPA ({student_cgpa:.1f}) is below minimum requirement of {min_cgpa_val:.1f}")
             else:
                 missing_info.append("cgpa_or_percentage")
                 checkpoints.append({
                     "criterion": "Academic CGPA",
-                    "required": f"≥ {min_cgpa:.1f}",
+                    "required": f"≥ {min_cgpa_val:.1f}",
                     "student_value": "Not provided",
                     "passed": None,
                     "status": "UNKNOWN",
@@ -86,30 +99,31 @@ class ScholarshipEligibilityService:
                 })
 
         # 2. Annual Family Household Income
-        student_income = overrides.get("annual_family_income") if "annual_family_income" in overrides else getattr(student, "annual_family_income", None)
-        if rules and getattr(rules, "max_annual_family_income", None):
-            max_inc = float(rules.max_annual_family_income)
+        student_income = overrides.get("annual_family_income") if "annual_family_income" in overrides else _get_prop(student, "annual_family_income")
+        max_income = _get_prop(rules, "max_annual_family_income")
+        if max_income is not None and float(max_income) > 0.0:
+            max_inc_val = float(max_income)
             if student_income is not None:
                 try:
                     inc_val = float(student_income)
-                    passed = inc_val <= max_inc
+                    passed = inc_val <= max_inc_val
                     checkpoints.append({
                         "criterion": "Annual Family Income",
-                        "required": f"≤ ₹{max_inc:,.0f}",
+                        "required": f"≤ ₹{max_inc_val:,.0f}",
                         "student_value": f"₹{inc_val:,.0f}",
                         "passed": passed,
                         "status": "PASSED" if passed else "FAILED",
-                        "reason": "Income is within eligible ceiling" if passed else f"Income exceeds maximum limit of ₹{max_inc:,.0f}"
+                        "reason": "Income is within eligible ceiling" if passed else f"Income exceeds maximum limit of ₹{max_inc_val:,.0f}"
                     })
                     if not passed:
-                        hard_failures.append(f"Annual household income (₹{inc_val:,.0f}) exceeds the ceiling of ₹{max_inc:,.0f}")
+                        hard_failures.append(f"Annual household income (₹{inc_val:,.0f}) exceeds ceiling of ₹{max_inc_val:,.0f}")
                 except Exception:
                     missing_info.append("annual_family_income")
             else:
                 missing_info.append("annual_family_income")
                 checkpoints.append({
                     "criterion": "Annual Family Income",
-                    "required": f"≤ ₹{max_inc:,.0f}",
+                    "required": f"≤ ₹{max_inc_val:,.0f}",
                     "student_value": "Not declared",
                     "passed": None,
                     "status": "UNKNOWN",
@@ -117,10 +131,11 @@ class ScholarshipEligibilityService:
                 })
 
         # 3. Social Category / Reservation Quota
-        student_cat = overrides.get("social_category") or getattr(student, "social_category", None)
-        if rules and getattr(rules, "eligible_categories", None):
+        student_cat = overrides.get("social_category") or _get_prop(student, "social_category")
+        eligible_cats = _get_prop(rules, "eligible_categories")
+        if eligible_cats:
             try:
-                allowed_cats = json.loads(rules.eligible_categories) if isinstance(rules.eligible_categories, str) else rules.eligible_categories
+                allowed_cats = json.loads(eligible_cats) if isinstance(eligible_cats, str) else eligible_cats
             except Exception:
                 allowed_cats = ["All"]
 
@@ -130,7 +145,7 @@ class ScholarshipEligibilityService:
                     checkpoints.append({
                         "criterion": "Social Category",
                         "required": f"Reserved for {', '.join(allowed_cats)}",
-                        "student_value": student_cat,
+                        "student_value": str(student_cat),
                         "passed": passed,
                         "status": "PASSED" if passed else "FAILED",
                         "reason": f"Eligible category ({student_cat})" if passed else f"Category {student_cat} not in quota"
@@ -149,10 +164,11 @@ class ScholarshipEligibilityService:
                     })
 
         # 4. Gender
-        student_gender = overrides.get("gender") or getattr(student, "gender", None)
-        if rules and getattr(rules, "eligible_genders", None):
+        student_gender = overrides.get("gender") or _get_prop(student, "gender")
+        eligible_genders = _get_prop(rules, "eligible_genders")
+        if eligible_genders:
             try:
-                allowed_genders = json.loads(rules.eligible_genders) if isinstance(rules.eligible_genders, str) else rules.eligible_genders
+                allowed_genders = json.loads(eligible_genders) if isinstance(eligible_genders, str) else eligible_genders
             except Exception:
                 allowed_genders = ["All"]
 
@@ -181,99 +197,119 @@ class ScholarshipEligibilityService:
                     })
 
         # 5. Domicile State
-        student_state = overrides.get("domicile_state") or getattr(student, "domicile_state", None) or getattr(student, "location", None)
-        if rules and getattr(rules, "eligible_states", None):
+        student_state = overrides.get("domicile_state") or _get_prop(student, "domicile_state")
+        eligible_states = _get_prop(rules, "eligible_states")
+        if eligible_states:
             try:
-                allowed_states = json.loads(rules.eligible_states) if isinstance(rules.eligible_states, str) else rules.eligible_states
+                allowed_states = json.loads(eligible_states) if isinstance(eligible_states, str) else eligible_states
             except Exception:
                 allowed_states = ["All"]
 
-            if "All" not in allowed_states and "PAN-INDIA" not in [str(s).upper() for s in allowed_states]:
+            if "All" not in allowed_states and "ANY" not in [str(s).upper() for s in allowed_states]:
                 if student_state:
-                    passed = any(str(student_state).lower() in str(st).lower() or str(st).lower() in str(student_state).lower() for st in allowed_states)
+                    passed = any(str(student_state).lower() == str(st).lower() for st in allowed_states)
                     checkpoints.append({
                         "criterion": "Domicile State",
-                        "required": f"Resident of {', '.join(allowed_states)}",
-                        "student_value": student_state,
+                        "required": f"Residents of {', '.join(allowed_states)}",
+                        "student_value": str(student_state),
                         "passed": passed,
                         "status": "PASSED" if passed else "FAILED",
-                        "reason": f"Resident of eligible state ({student_state})" if passed else f"State {student_state} not eligible"
+                        "reason": "Domicile criteria verified" if passed else f"State ({student_state}) not eligible"
                     })
                     if not passed:
-                        hard_failures.append(f"Scheme restricted to residents of {', '.join(allowed_states)}")
+                        hard_failures.append(f"Restricted to residents of {', '.join(allowed_states)}")
                 else:
                     missing_info.append("domicile_state")
                     checkpoints.append({
                         "criterion": "Domicile State",
-                        "required": f"Resident of {', '.join(allowed_states)}",
+                        "required": f"Residents of {', '.join(allowed_states)}",
                         "student_value": "Not declared",
                         "passed": None,
                         "status": "UNKNOWN",
-                        "reason": "Specify domicile state in profile."
+                        "reason": "Declare your home domicile state in profile."
                     })
 
         # 6. PwD
-        student_pwd = overrides.get("is_pwd") if "is_pwd" in overrides else getattr(student, "is_pwd", False)
-        if rules and getattr(rules, "requires_pwd", False):
+        req_pwd = _get_prop(rules, "requires_pwd", False)
+        if req_pwd:
+            student_pwd = overrides.get("is_pwd") if "is_pwd" in overrides else _get_prop(student, "is_pwd", False)
             passed = bool(student_pwd)
             checkpoints.append({
-                "criterion": "PwD Category",
-                "required": "Persons with Disabilities (PwD) quota",
+                "criterion": "Specially-Abled (PwD) Quota",
+                "required": "Requires verified PwD status (≥ 40% disability)",
                 "student_value": "Yes" if student_pwd else "No",
                 "passed": passed,
                 "status": "PASSED" if passed else "FAILED",
-                "reason": "PwD status verified" if passed else "Scheme reserved for PwD candidates"
+                "reason": "PwD scheme criteria satisfied" if passed else "Scheme exclusive to specially-abled candidates"
             })
             if not passed:
-                hard_failures.append("Scheme reserved for specially-abled students with valid medical certificate")
+                hard_failures.append("Scheme exclusively reserved for specially-abled students")
 
-        # Determine overall eligibility status
+        # Determine Overall Status
         if hard_failures:
             overall_status = "NOT_ELIGIBLE"
-            match_percentage = 0.0
+            match_pct = 0.0
         elif missing_info:
             overall_status = "POSSIBLY_ELIGIBLE"
-            passed_count = sum(1 for c in checkpoints if c.get("passed") is True)
-            total_checks = len(checkpoints)
-            match_percentage = round((passed_count / total_checks) * 100, 1) if total_checks > 0 else 70.0
+            match_pct = 50.0
         else:
             overall_status = "ELIGIBLE"
-            match_percentage = 100.0
+            match_pct = 100.0
 
-        days_remaining = None
-        is_closing_soon = False
-        if getattr(scholarship, "application_deadline", None):
-            now = datetime.now(timezone.utc)
-            deadline = scholarship.application_deadline
-            if deadline.tzinfo is None:
-                deadline = deadline.replace(tzinfo=timezone.utc)
-            delta = deadline - now
-            days_remaining = max(0, delta.days)
-            is_closing_soon = 0 <= days_remaining <= 7
+        # Calculate days remaining
+        deadline_obj = _get_prop(scholarship, "application_deadline")
+        days_rem = None
+        if deadline_obj:
+            try:
+                if isinstance(deadline_obj, str):
+                    d_parsed = datetime.fromisoformat(deadline_obj.replace("Z", "+00:00"))
+                else:
+                    d_parsed = deadline_obj
+                now_utc = datetime.now(timezone.utc)
+                if d_parsed.tzinfo is None:
+                    d_parsed = d_parsed.replace(tzinfo=timezone.utc)
+                delta = d_parsed - now_utc
+                days_rem = max(0, delta.days)
+            except Exception:
+                days_rem = None
+
+        award_val = _get_prop(scholarship, "award_amount")
+        award_num = float(award_val) if award_val else None
+
+        award_desc = _get_prop(scholarship, "award_description")
+        if not award_desc and award_num:
+            award_desc = f"₹{int(award_num):,} {_get_prop(scholarship, 'award_frequency', 'per year')}"
+
+        sch_id = _get_prop(scholarship, "id") or _get_prop(scholarship, "scholarship_id")
+        source = _get_prop(scholarship, "source", "nsp")
+        source_id = str(_get_prop(scholarship, "source_id", sch_id or ""))
+
+        deadline_str = deadline_obj.isoformat() if hasattr(deadline_obj, "isoformat") else (str(deadline_obj) if deadline_obj else None)
 
         return {
-            "scholarship_id": getattr(scholarship, "id", None),
-            "id": getattr(scholarship, "id", None),
-            "name": getattr(scholarship, "name", ""),
-            "provider": getattr(scholarship, "provider", ""),
-            "description": getattr(scholarship, "description", ""),
-            "academic_year": getattr(scholarship, "academic_year", "2026-27"),
-            "scholarship_type": getattr(scholarship, "scholarship_type", "Merit & Need-based"),
-            "award_amount": str(getattr(scholarship, "award_amount", "")),
-            "award_frequency": getattr(scholarship, "award_frequency", "per year"),
-            "award_description": getattr(scholarship, "award_description", ""),
-            "application_url": getattr(scholarship, "application_url", ""),
-            "application_deadline": scholarship.application_deadline.isoformat() if getattr(scholarship, "application_deadline", None) else None,
-            "days_remaining": days_remaining,
-            "is_closing_soon": is_closing_soon,
-            "match_percentage": match_percentage,
+            "scholarship_id": sch_id,
+            "id": sch_id,
+            "source": source,
+            "source_id": source_id,
+            "name": _get_prop(scholarship, "name", ""),
+            "provider": _get_prop(scholarship, "provider", ""),
+            "description": _get_prop(scholarship, "description", ""),
+            "academic_year": _get_prop(scholarship, "academic_year", "2026-27"),
+            "scholarship_type": _get_prop(scholarship, "scholarship_type", "Merit & Need-based"),
+            "award_amount": award_num,
+            "award_frequency": _get_prop(scholarship, "award_frequency", "per year"),
+            "award_description": award_desc,
+            "application_url": _get_prop(scholarship, "application_url") or _get_prop(scholarship, "source_url"),
+            "application_deadline": deadline_str,
+            "days_remaining": days_rem,
             "eligibility_status": overall_status,
+            "match_percentage": match_pct,
             "missing_profile_fields": missing_info,
+            "missing_info": missing_info,
             "evaluation_checkpoints": checkpoints,
             "checkpoints": checkpoints,
             "hard_failures": hard_failures,
-            "source": getattr(scholarship, "source", "Official Portal"),
-            "source_url": getattr(scholarship, "source_url", None)
+            "source_url": _get_prop(scholarship, "source_url")
         }
 
     @classmethod
@@ -281,57 +317,128 @@ class ScholarshipEligibilityService:
         cls,
         student: models.StudentUser,
         db: Session,
-        limit: int = 20,
+        limit: int = 50,
+        page: int = 1,
         type_filter: Optional[str] = None,
-        search_query: Optional[str] = None
+        category_filter: Optional[str] = None,
+        state_filter: Optional[str] = None,
+        search_query: Optional[str] = None,
+        session_id: Optional[str] = None,
+        force_refresh: bool = False
     ) -> Dict[str, Any]:
         """
-        Returns all active scholarships evaluated against the student profile,
-        along with summary dashboard metric counts and deadline radar.
+        Fetches live scholarships in-memory within a 2-second budget, evaluates deterministic eligibility,
+        and returns catalog and dashboard metrics without persisting to PostgreSQL.
         """
-        query = db.query(models.Scholarship).filter(models.Scholarship.is_active == True)
-        if type_filter and type_filter != "All":
-            query = query.filter(models.Scholarship.scholarship_type.ilike(f"%{type_filter}%"))
-        if search_query:
-            q_clean = f"%{search_query.strip()}%"
-            query = query.filter(
-                models.Scholarship.name.ilike(q_clean) |
-                models.Scholarship.provider.ilike(q_clean) |
-                models.Scholarship.description.ilike(q_clean)
+        from app.services.live_opportunities.live_engine import LiveOpportunityEngine
+        raw_scholarships = LiveOpportunityEngine.get_live_scholarships(session_id=session_id, force_refresh=force_refresh, limit=None)
+
+
+        saved_tuples: Set[tuple] = set()
+        saved_ids: Set[str] = set()
+        applied_tuples: Set[tuple] = set()
+        applied_ids: Set[str] = set()
+
+        if student and student.id:
+            saved_recs = db.query(models.SavedScholarship).filter(models.SavedScholarship.student_id == student.id).all()
+            for s in saved_recs:
+                if s.source and s.source_id:
+                    saved_tuples.add((s.source, str(s.source_id)))
+                    saved_ids.add(str(s.source_id))
+                if s.scholarship_id:
+                    saved_tuples.add(("legacy", str(s.scholarship_id)))
+                    saved_ids.add(str(s.scholarship_id))
+
+            app_recs = db.query(models.ScholarshipApplication).filter(models.ScholarshipApplication.student_id == student.id).all()
+            for a in app_recs:
+                if a.source and a.source_id:
+                    applied_tuples.add((a.source, str(a.source_id)))
+                    applied_ids.add(str(a.source_id))
+                if a.scholarship_id:
+                    applied_tuples.add(("legacy", str(a.scholarship_id)))
+                    applied_ids.add(str(a.scholarship_id))
+
+        evaluations = []
+        for s in raw_scholarships:
+            name = _get_prop(s, "name", "")
+            provider = _get_prop(s, "provider", "")
+            desc = _get_prop(s, "description", "")
+            sch_type = _get_prop(s, "scholarship_type", "")
+            rules = _get_prop(s, "rules") or {}
+
+            if type_filter and type_filter != "All" and type_filter != "all":
+                if type_filter.lower() not in sch_type.lower():
+                    continue
+            if category_filter and category_filter != "All" and category_filter != "all":
+                allowed_cats = rules.get("eligible_categories", ["All"])
+                if "All" not in allowed_cats and not any(category_filter.lower() in str(c).lower() for c in allowed_cats):
+                    continue
+            if state_filter and state_filter != "All" and state_filter != "all":
+                allowed_states = rules.get("eligible_states", ["All"])
+                if "All" not in allowed_states and not any(state_filter.lower() in str(st).lower() for st in allowed_states):
+                    continue
+            if search_query:
+                sq = search_query.lower().strip()
+                if sq not in name.lower() and sq not in provider.lower() and sq not in desc.lower():
+                    continue
+
+            eval_res = cls.evaluate_student_scholarship_eligibility(student, s)
+            src = _get_prop(s, "source", "nsp")
+            src_id = str(_get_prop(s, "source_id", ""))
+            full_id = str(_get_prop(s, "id", ""))
+            
+            is_saved = (
+                (src, src_id) in saved_tuples or
+                (src, full_id) in saved_tuples or
+                src_id in saved_ids or
+                full_id in saved_ids or
+                ("legacy", src_id) in saved_tuples or
+                ("legacy", full_id) in saved_tuples
             )
+            has_applied = (
+                (src, src_id) in applied_tuples or
+                (src, full_id) in applied_tuples or
+                src_id in applied_ids or
+                full_id in applied_ids or
+                ("legacy", src_id) in applied_tuples or
+                ("legacy", full_id) in applied_tuples
+            )
+            eval_res["is_saved"] = is_saved
+            eval_res["has_applied"] = has_applied
 
-        scholarships = query.order_by(models.Scholarship.application_deadline.asc().nullslast()).all()
-        evaluations = [cls.evaluate_student_scholarship_eligibility(student, s) for s in scholarships]
+            evaluations.append(eval_res)
 
-        saved_ids = {s.scholarship_id for s in db.query(models.SavedScholarship).filter(models.SavedScholarship.student_id == student.id).all()} if student and student.id else set()
-        applied_ids = {a.scholarship_id for a in db.query(models.ScholarshipApplication).filter(models.ScholarshipApplication.student_id == student.id).all()} if student and student.id else set()
-
-        for e in evaluations:
-            sid = e.get("scholarship_id") or e.get("id")
-            e["is_saved"] = sid in saved_ids
-            e["has_applied"] = sid in applied_ids
-
-        saved_count = len(saved_ids)
-        applied_count = len(applied_ids)
+        saved_count = len(saved_tuples)
+        applied_count = len(applied_tuples)
         eligible_count = sum(1 for e in evaluations if e["eligibility_status"] == "ELIGIBLE")
-        open_intake_count = sum(1 for e in evaluations if e.get("days_remaining", 0) and e["days_remaining"] > 0)
+        possibly_eligible_count = sum(1 for e in evaluations if e["eligibility_status"] == "POSSIBLY_ELIGIBLE")
+        open_intake_count = sum(1 for e in evaluations if e.get("days_remaining", 0) is not None and e["days_remaining"] > 0)
         recommended_count = sum(1 for e in evaluations if e["eligibility_status"] in ["ELIGIBLE", "POSSIBLY_ELIGIBLE"])
 
         radar_items = [
             e for e in evaluations
-            if e.get("days_remaining") is not None and e["days_remaining"] <= 30
+            if e.get("days_remaining") is not None and e["days_remaining"] <= 45 and e["days_remaining"] > 0
         ]
         radar_items.sort(key=lambda x: x["days_remaining"])
 
+        # Pagination
+        start_idx = (page - 1) * limit if page > 0 else 0
+        end_idx = start_idx + limit
+        paginated_items = evaluations[start_idx:end_idx]
+
         return {
             "status": "success",
-            "count": len(evaluations[:limit]),
-            "data": evaluations[:limit],
-            "items": evaluations[:limit],
+            "total_count": len(evaluations),
+            "count": len(paginated_items),
+            "data": paginated_items,
+            "items": paginated_items,
             "metrics": {
                 "recommended": recommended_count,
                 "eligible": eligible_count,
+                "possibly_eligible": possibly_eligible_count,
+                "possiblyEligible": possibly_eligible_count,
                 "open_intake": open_intake_count,
+                "openIntake": open_intake_count,
                 "saved": saved_count,
                 "applied": applied_count
             },

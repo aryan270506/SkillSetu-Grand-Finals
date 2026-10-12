@@ -58,8 +58,10 @@ def test_career_intelligence_same_esco_skills(db_session: Session):
         assert "current_score" in sk
         assert "target_score" in sk
         assert "gap" in sk
-        assert "canonical_status" in sk
-        assert sk["canonical_status"] in {"verified", "learning_active", "developing", "needs_improvement"}
+        assert sk["canonical_status"] in {
+            "verified", "learning_active", "developing", "needs_improvement",
+            "assessment_required", "certificate_required", "evidence_required", "failed_assessment"
+        }
 
 
 def test_career_intelligence_same_course_ids_across_views(db_session: Session):

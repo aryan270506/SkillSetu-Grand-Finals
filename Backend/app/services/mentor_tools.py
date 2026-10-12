@@ -500,54 +500,31 @@ class MentorToolRegistry:
         location_filter = (args.get("location") or "").lower().strip()
         work_pref_filter = (args.get("work_preference") or "").lower().strip()
 
-        db_query = db.query(models.InternshipListing).options(
-            joinedload(models.InternshipListing.required_skills)
-        ).filter(models.InternshipListing.is_active == True)
+        from app.services.live_opportunities.live_engine import LiveOpportunityEngine
+        live_listings = LiveOpportunityEngine.get_live_internships()
 
-        if query:
-            db_query = db_query.filter(
-                or_(
-                    models.InternshipListing.title.ilike(f"%{query}%"),
-                    models.InternshipListing.company_name.ilike(f"%{query}%"),
-                    models.InternshipListing.description.ilike(f"%{query}%")
-                )
-            )
+        filtered = []
+        for l in live_listings:
+            t = str(l.get("title", "")).lower()
+            c = str(l.get("company_name", l.get("company", ""))).lower()
+            d = str(l.get("description", "")).lower()
+            loc = str(l.get("location", "")).lower()
+            wp = str(l.get("work_preference", "")).lower()
 
-        if career_filter:
-            db_query = db_query.filter(
-                or_(
-                    models.InternshipListing.career_id.ilike(f"%{career_filter}%"),
-                    models.InternshipListing.title.ilike(f"%{career_filter}%")
-                )
-            )
+            if query and (query not in t and query not in c and query not in d):
+                continue
+            if career_filter and (career_filter not in t and career_filter not in d):
+                continue
+            if location_filter and location_filter != "remote" and location_filter not in loc:
+                continue
+            if work_pref_filter and work_pref_filter not in wp:
+                continue
 
-        if location_filter and location_filter != "remote":
-            db_query = db_query.filter(models.InternshipListing.location_name.ilike(f"%{location_filter}%"))
-
-        if work_pref_filter:
-            db_query = db_query.filter(models.InternshipListing.work_preference.ilike(f"%{work_pref_filter}%"))
-
-        listings = db_query.limit(8).all()
-
-        results = []
-        for l in listings:
-            req_skills = [s.skill_name for s in l.required_skills]
-            results.append({
-                "id": l.id,
-                "title": l.title,
-                "company_name": l.company_name,
-                "location": l.location_name,
-                "work_preference": l.work_preference,
-                "stipend": l.stipend,
-                "duration": l.duration,
-                "description": l.description,
-                "required_skills": req_skills,
-                "apply_url": l.apply_url
-            })
+            filtered.append(l)
 
         return {
-            "count": len(results),
-            "internships": results
+            "count": len(filtered[:8]),
+            "internships": filtered[:8]
         }
 
     # -------------------------------------------------------------
@@ -555,24 +532,23 @@ class MentorToolRegistry:
     # -------------------------------------------------------------
     @classmethod
     def _tool_calculate_internship_match(cls, args: Dict[str, Any], student_id: int, context: Dict[str, Any], db: Session) -> Dict[str, Any]:
-        internship_id = args.get("internship_id")
+        internship_id = str(args.get("internship_id", ""))
         if not internship_id:
             return {"error": "internship_id argument is required"}
 
-        listing = (
-            db.query(models.InternshipListing)
-            .options(joinedload(models.InternshipListing.required_skills))
-            .filter(models.InternshipListing.id == internship_id)
-            .first()
-        )
-        if not listing:
-            return {"error": f"Internship with ID {internship_id} not found."}
+        from app.services.live_opportunities.live_engine import LiveOpportunityEngine
+        live_listings = LiveOpportunityEngine.get_live_internships()
+        listing = next((l for l in live_listings if str(l.get("id")) == internship_id or str(l.get("source_id")) == internship_id), None)
 
         student = db.query(models.StudentUser).filter(models.StudentUser.id == student_id).first()
-        if student:
-            from app.services.internship_matching_service import InternshipMatchingService
+        if not student:
+            return {"error": "Student not found"}
+
+        from app.services.internship_matching_service import InternshipMatchingService
+        if listing:
             return InternshipMatchingService.evaluate_student_internship_match(student, listing, db)
-        return cls._compute_deterministic_match(listing, context)
+
+        return {"error": f"Internship with ID {internship_id} not found."}
 
     # -------------------------------------------------------------
     # Tool: get_recommended_internships
@@ -584,114 +560,15 @@ class MentorToolRegistry:
         student = db.query(models.StudentUser).filter(models.StudentUser.id == student_id).first()
         if student:
             from app.services.internship_matching_service import InternshipMatchingService
+            from app.services.live_opportunities.live_engine import LiveOpportunityEngine
             ranked = InternshipMatchingService.get_ranked_recommendations(student, db, limit=limit)
-            total_active = db.query(models.InternshipListing).filter(models.InternshipListing.is_active == True).count()
+            all_live = LiveOpportunityEngine.get_live_internships()
             return {
                 "recommended_internships": ranked,
-                "total_available": total_active
+                "total_available": len(all_live)
             }
 
-        all_listings = (
-            db.query(models.InternshipListing)
-            .options(joinedload(models.InternshipListing.required_skills))
-            .filter(models.InternshipListing.is_active == True)
-            .all()
-        )
-
-        ranked = []
-        for listing in all_listings:
-            match_data = cls._compute_deterministic_match(listing, context)
-            ranked.append(match_data)
-
-        # Sort by match score desc
-        ranked.sort(key=lambda x: x["match_score"], reverse=True)
-
-        return {
-            "recommended_internships": ranked[:limit],
-            "total_available": len(all_listings)
-        }
-
-    @classmethod
-    def _compute_deterministic_match(cls, listing: models.InternshipListing, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Computes 100% deterministic explainable match score between student and internship.
-        """
-        verified_skills_list = [v.get("skill_name", "").lower() for v in context.get("skills", {}).get("verified", [])]
-        developing_skills_list = [d.get("skill_name", "").lower() for d in context.get("skills", {}).get("developing", [])]
-        all_student_skills = set(verified_skills_list + developing_skills_list)
-
-        req_skills = listing.required_skills or []
-        req_names = [r.skill_name for r in req_skills]
-
-        matched_skills = []
-        partial_skills = []
-        missing_skills = []
-
-        for r_name in req_names:
-            rn_clean = r_name.lower().strip()
-            # Match directly or substring
-            is_matched = any(rn_clean == s or rn_clean in s or s in rn_clean for s in verified_skills_list)
-            is_partial = any(rn_clean == s or rn_clean in s or s in rn_clean for s in developing_skills_list)
-
-            if is_matched:
-                matched_skills.append(r_name)
-            elif is_partial:
-                partial_skills.append(r_name)
-            else:
-                missing_skills.append(r_name)
-
-        # Weighting
-        # Skills: 50%
-        if req_names:
-            skill_score = (len(matched_skills) * 1.0 + len(partial_skills) * 0.5) / len(req_names)
-        else:
-            skill_score = 1.0
-
-        # Career Alignment: 25%
-        target_career = (context.get("career", {}).get("targetCareer") or "").lower()
-        listing_career = (listing.career_id or "").lower()
-        listing_title = (listing.title or "").lower()
-        if listing_career in target_career or target_career in listing_career or any(w in listing_title for w in target_career.split()):
-            career_score = 1.0
-        else:
-            career_score = 0.5
-
-        # Work Preference / Location: 15%
-        pref_locs = [p.lower() for p in context.get("preferences", {}).get("preferredLocations", [])]
-        pref_work = [w.lower() for w in context.get("preferences", {}).get("workPreferences", [])]
-        loc_score = 1.0 if (listing.work_preference == "remote" or any(l in listing.location_name.lower() for l in pref_locs)) else 0.6
-        wp_score = 1.0 if (listing.work_preference in pref_work or not pref_work) else 0.7
-
-        # ATS / Resume Base Score: 10%
-        resume_score = float(context.get("resume", {}).get("resumeScore", 75)) / 100.0
-
-        total_match = round(
-            (skill_score * 50) +
-            (career_score * 25) +
-            (loc_score * 10) +
-            (wp_score * 5) +
-            (resume_score * 10),
-            1
-        )
-
-        recommendation = "Apply now!" if total_match >= 80 else ("Strong candidate, learn missing skills while applying." if total_match >= 65 else "Build prerequisites before applying.")
-
-        return {
-            "internship_id": listing.id,
-            "title": listing.title,
-            "company_name": listing.company_name,
-            "company_logo": listing.company_logo,
-            "match_score": total_match,
-            "location": listing.location_name,
-            "work_preference": listing.work_preference,
-            "stipend": listing.stipend,
-            "duration": listing.duration,
-            "matched_skills": matched_skills,
-            "partial_skills": partial_skills,
-            "missing_skills": missing_skills,
-            "recommendation": recommendation,
-            "apply_url": listing.apply_url
-        }
+        return {"recommended_internships": [], "total_available": 0}
 
     # -------------------------------------------------------------
     # Tool: search_courses & find_courses_for_skill_gap

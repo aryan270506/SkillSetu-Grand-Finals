@@ -180,6 +180,72 @@ def record_verified_assessment_evidence(
         )
         db.add(new_rec)
         db.commit()
+        db.refresh(new_rec)
+        return new_rec
+
+
+def record_verified_project_evidence(
+    db: Session,
+    student_id: int,
+    skill_name: str,
+    score_pct: int,
+    challenge_id: str,
+    repository_url: str = ""
+) -> StudentSkillEvidence:
+    """
+    Record verified practical project codebase evidence for a submitted challenge.
+    """
+    from datetime import datetime, timezone
+    
+    esco_skill = db.query(EscoSkill).filter(func.lower(EscoSkill.preferred_label) == skill_name.lower().strip()).first()
+    esco_id = esco_skill.id if esco_skill else None
+    
+    source_id = f"project:{challenge_id}"
+    metadata_json = json.dumps({
+        "challenge_id": challenge_id,
+        "score_pct": score_pct,
+        "repository_url": repository_url
+    })
+    
+    now_utc = datetime.now(timezone.utc)
+    
+    existing = (
+        db.query(StudentSkillEvidence)
+        .filter(
+            StudentSkillEvidence.student_id == student_id,
+            func.lower(StudentSkillEvidence.skill_name) == skill_name.lower().strip(),
+            StudentSkillEvidence.source_type == "verified_project"
+        )
+        .first()
+    )
+    
+    evidence_score = max(0.0, min(1.0, score_pct / 100.0))
+    
+    if existing:
+        if evidence_score > (existing.evidence_score or 0.0):
+            existing.evidence_score = evidence_score
+            existing.confidence_score = 1.0
+            existing.source_id = source_id
+            existing.evidence_metadata = metadata_json
+            existing.updated_at = now_utc
+            db.commit()
+        return existing
+    else:
+        new_rec = StudentSkillEvidence(
+            student_id=student_id,
+            esco_skill_id=esco_id,
+            skill_name=skill_name,
+            source_type="verified_project",
+            source_id=source_id,
+            evidence_score=evidence_score,
+            confidence_score=1.0,
+            evidence_metadata=metadata_json,
+            created_at=now_utc,
+            updated_at=now_utc
+        )
+        db.add(new_rec)
+        db.commit()
+        db.refresh(new_rec)
         return new_rec
 
 
@@ -198,7 +264,7 @@ def record_learning_progress_evidence(
     Record or update learning evidence when a student makes progress or completes a course.
     """
     course = db.query(Course).options(joinedload(Course.skills), joinedload(Course.provider)).filter(Course.id == course_id).first()
-    if not course:
+    if not course and not skill_name:
         return []
 
     clean_progress = max(0.0, min(100.0, progress_percent))
@@ -225,21 +291,22 @@ def record_learning_progress_evidence(
     if skill_name and skill_name.strip():
         skills_to_record.append(skill_name.strip())
 
-    for cs in (course.skills or []):
-        if cs.skill_name and cs.skill_name.strip() not in skills_to_record:
-            skills_to_record.append(cs.skill_name.strip())
+    if course and course.skills:
+        for cs in course.skills:
+            if cs.skill_name and cs.skill_name.strip() not in skills_to_record:
+                skills_to_record.append(cs.skill_name.strip())
 
     if not skills_to_record:
-        skills_to_record.append(course.title)
+        skills_to_record.append(course.title if course else "Target Skill Course")
 
-    source_id = f"course:{course.id}"
+    source_id = f"course:{course.id if course else course_id}"
     metadata_json = json.dumps({
-        "course_id": course.id,
-        "course_title": course.title,
-        "provider": course.provider.slug if course.provider else "unknown",
+        "course_id": course.id if course else course_id,
+        "course_title": course.title if course else (skill_name or "Course Completion"),
+        "provider": course.provider.slug if (course and course.provider) else "nptel",
         "progress_percent": clean_progress,
-        "duration": f"{course.duration} {course.duration_unit or 'weeks'}" if course.duration else None,
-        "certificate_available": bool(course.certificate_available)
+        "duration": f"{course.duration} {course.duration_unit or 'weeks'}" if (course and course.duration) else "Self-paced",
+        "certificate_available": bool(course.certificate_available) if course else True
     })
 
     now_utc = datetime.now(timezone.utc)

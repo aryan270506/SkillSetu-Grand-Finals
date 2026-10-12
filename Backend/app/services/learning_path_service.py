@@ -289,13 +289,31 @@ def generate_learning_path(
             matching_courses.sort(key=lambda x: (x[1], x[0].get("recommendation_score", 0.0)), reverse=True)
             chosen_rc = matching_courses[0][0]
         else:
-            # Fallback to top unselected recommendation
-            unselected = [rc for rc in recommended_courses if rc["course_id"] not in seen_course_ids]
-            if unselected:
-                chosen_rc = unselected[0]
-            elif recommended_courses:
-                chosen_rc = recommended_courses[0]
+            # Direct database lookup for courses explicitly tagged with this skill
+            db_skill_match = (
+                db.query(CourseSkill)
+                .join(Course, Course.id == CourseSkill.course_id)
+                .filter(
+                    CourseSkill.skill_name.ilike(f"%{norm_gap}%"),
+                    ~CourseSkill.course_id.in_(seen_course_ids)
+                )
+                .first()
+            )
+            if db_skill_match and db_skill_match.course:
+                c_obj = db_skill_match.course
+                c_all_skills = [cs.skill_name for cs in (c_obj.skills or [])]
+                chosen_rc = {
+                    "course_id": c_obj.id,
+                    "title": c_obj.title,
+                    "description": c_obj.description,
+                    "provider": c_obj.provider.slug if c_obj.provider else "nptel",
+                    "provider_name": c_obj.provider.name if c_obj.provider else "NPTEL",
+                    "url": c_obj.url,
+                    "all_skills": c_all_skills,
+                    "recommendation_score": 0.85
+                }
             else:
+                # If no course in catalog teaches this specific skill, move to next gap without polluting roadmap
                 unaddressed_gaps.pop(0)
                 continue
 

@@ -1,4 +1,43 @@
-import { DEFAULT_MOCK_PROFILE } from '../Profile/Profile';
+import { EMPTY_PROFILE } from '../Profile/Profile';
+
+export const formatCareerTitle = (raw) => {
+  if (!raw) return '';
+  const str = String(raw).trim();
+  if (!str) return '';
+
+  const knownMap = {
+    'car_fullstack_developer': 'Full Stack Developer',
+    'car_backend_developer': 'Backend Developer',
+    'car_frontend_developer': 'Frontend Developer',
+    'car_mobile_app_developer': 'Mobile App Developer',
+    'car_cloud_engineer': 'Cloud Architect / Engineer',
+    'car_cybersecurity_analyst': 'Cybersecurity Analyst',
+    'car_ui_ux_designer': 'UI/UX Designer',
+    'car_product_manager': 'Product Manager',
+    'car_embedded_engineer': 'Embedded Systems Engineer',
+    'car_qa_automation_engineer': 'QA / Automation Engineer',
+    'car_data_scientist': 'Data Scientist / AI Engineer',
+    'car_devops_engineer': 'DevOps Engineer',
+    'car_ai_ml_engineer': 'AI / ML Engineer',
+    'car_software_engineer': 'Software Engineer'
+  };
+
+  const lower = str.toLowerCase();
+  if (knownMap[lower]) {
+    return knownMap[lower];
+  }
+
+  if (lower.startsWith('car_')) {
+    return str
+      .replace(/^car_/i, '')
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  return str;
+};
 
 const renderVal = (val) => {
   if (val === null || val === undefined) return '';
@@ -6,9 +45,10 @@ const renderVal = (val) => {
   return String(val);
 };
 
+
 export const createInitialProfile = (user, existingProfileData = null) => {
   if (!user || !user.email) {
-    return existingProfileData || DEFAULT_MOCK_PROFILE;
+    return existingProfileData || EMPTY_PROFILE;
   }
 
   const pInfo = existingProfileData?.personalInfo || {};

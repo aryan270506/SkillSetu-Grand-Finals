@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Interview — Past Interviews</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">AI Interview</a>
+    <nav><a href="/">New Interview</a><a href="/reports.html">Past Interviews</a></nav>
+  </header>
+
+  <main class="container">
+    <h1>Past interviews</h1>
+    <p class="sub">All recorded interviews and their evaluations.</p>
+    <div class="card">
+      <table class="list">
+        <thead><tr><th>Candidate</th><th>Date</th><th>Status</th><th>Score</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5" class="sub">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    fetch('/api/interviews').then((r) => r.json()).then((list) => {
+      document.getElementById('rows').innerHTML = list.length ? list.map((i) => `
+        <tr>
+          <td>${esc(i.name)}</td>
+          <td>${new Date(i.createdAt).toLocaleString()}</td>
+          <td>${esc(i.status.replace('_', ' '))}</td>
+          <td>${i.overallScore != null ? Number(i.overallScore).toFixed(1) + ' / 10' : '—'}</td>
+          <td><a href="/${i.status === 'completed' ? 'report' : 'interview'}.html?id=${i.id}">${i.status === 'completed' ? 'View report' : 'Continue'}</a></td>
+        </tr>`).join('') : '<tr><td colspan="5" class="sub">No interviews yet.</td></tr>';
+    });
+  </script>
+</body>
+</html>

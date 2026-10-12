@@ -65,22 +65,23 @@ export async function fetchMentorHistory(email, conversationId = null) {
       },
     });
 
-    const data = await res.json();
-    if (res.ok && data) {
-      return {
-        conversationId: data.conversation_id,
-        messages: (data.messages || []).map(m => ({
-          id: m.id || Math.random(),
-          sender: m.sender || 'ai',
-          text: m.text || m.content || '',
-          richContent: m.richContent || null,
-          timestamp: m.timestamp || 'Recently',
-        })),
-      };
+    if (res.ok) {
+      const data = await res.json();
+      if (data) {
+        return {
+          conversationId: data.conversation_id,
+          messages: (data.messages || []).map(m => ({
+            id: m.id || Math.random(),
+            sender: m.sender || 'ai',
+            text: m.text || m.content || '',
+            richContent: m.richContent || null,
+            timestamp: m.timestamp || 'Recently',
+          })),
+        };
+      }
     }
     return null;
   } catch (err) {
-    console.error('[MentorService] fetch history error:', err);
     return null;
   }
 }
@@ -103,13 +104,12 @@ export async function resetMentorConversation(email) {
       }),
     });
 
-    const data = await res.json();
-    if (res.ok && data) {
-      return data;
+    if (res.ok) {
+      const data = await res.json();
+      return data || null;
     }
     return null;
   } catch (err) {
-    console.error('[MentorService] reset error:', err);
     return null;
   }
 }
@@ -128,9 +128,11 @@ export async function fetchSuggestedPrompts(email) {
       },
     });
 
-    const data = await res.json();
-    if (res.ok && data?.suggested_prompts) {
-      return data.suggested_prompts;
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.suggested_prompts && Array.isArray(data.suggested_prompts) && data.suggested_prompts.length > 0) {
+        return data.suggested_prompts;
+      }
     }
     return [
       "What internships match my profile?",
@@ -140,7 +142,6 @@ export async function fetchSuggestedPrompts(email) {
       "Am I ready for a technical interview?"
     ];
   } catch (err) {
-    console.error('[MentorService] fetch suggested prompts error:', err);
     return [
       "What internships match my profile?",
       "What skills am I missing?",

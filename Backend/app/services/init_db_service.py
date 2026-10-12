@@ -564,26 +564,16 @@ def seed_canonical_career_skills(db: Session):
 
 def seed_internships_if_empty(db: Session):
     """
-    Seeds verified real-world tech internship listings with required skills if table is empty.
+    Live opportunity architecture: No scraped or external opportunities are persisted into PostgreSQL.
     """
-    if db.query(models.InternshipListing.id).first() is not None:
-        return
-
-    logger.info("🌱 Seeding verified tech internship listings...")
-    from app.services.ingestion.sync_engine import OpportunitySyncEngine
-    OpportunitySyncEngine.run_internship_sync(db, include_external=False)
+    pass
 
 
 def seed_scholarships_if_empty(db: Session):
     """
-    Seeds verified government and foundation scholarships with deterministic eligibility rules if table is empty.
+    Live opportunity architecture: No scraped or external scholarships are persisted into PostgreSQL.
     """
-    if db.query(models.Scholarship.id).first() is not None:
-        return
-
-    logger.info("🌱 Seeding verified government & foundation scholarships...")
-    from app.services.ingestion.sync_engine import OpportunitySyncEngine
-    OpportunitySyncEngine.run_scholarship_sync(db)
+    pass
 
 
 def init_system_on_startup(force_reseed: bool = False):
@@ -593,7 +583,7 @@ def init_system_on_startup(force_reseed: bool = False):
     2. Ingests ESCO dataset if not present.
     3. Seeds default course providers.
     4. Seeds canonical career mappings.
-    5. Seeds curated internships.
+    5. Seeds default admin account if empty.
     6. Downloads/warms up the embedding model.
     """
     logger.info("🚀 SkillSetu Backend Initialization starting...")
@@ -646,17 +636,13 @@ def init_system_on_startup(force_reseed: bool = False):
             db.commit()
             logger.info("✅ Default admin user (admin@skillsetu.com) seeded.")
 
-        # 7. Seed internships & scholarships only if empty
-        seed_internships_if_empty(db)
-        seed_scholarships_if_empty(db)
-
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Error during data seeding: {e}")
     finally:
         db.close()
 
-    # 8. Pre-download / warm up AI embedding model
+    # 7. Pre-download / warm up AI embedding model
     warmup_ai_embedding_model()
     
     logger.info("🎉 SkillSetu Backend initialization completed successfully!")
