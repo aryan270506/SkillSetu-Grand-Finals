@@ -101,17 +101,31 @@ export function EventCard({ tone = 'info', icon = 'Calendar', type, date, title,
 // items: [{ key, content: ReactNode, done?: bool }]
 // ---------------------------------------------------------------------------
 export function Timeline({ items = [], gap = space.lg, style }) {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!safeItems.length) return null;
+  const numGap = typeof gap === 'number' ? gap : space.lg;
   return (
-    <View style={[{ gap }, style]}>
-      {items.map((it, idx) => {
-        const last = idx === items.length - 1;
+    <View style={[{ gap: numGap }, style]}>
+      {safeItems.map((it, idx) => {
+        if (!it) return null;
+        const last = idx === safeItems.length - 1;
+        const key = it.key ?? idx;
+        const isDone = !!it.done;
+        const content = it.content ?? (React.isValidElement(it) ? it : null);
         return (
-          <View key={it.key || idx} style={{ flexDirection: 'row' }}>
+          <View key={key} style={{ flexDirection: 'row' }}>
             <View style={styles.timelineRail}>
-              <View style={[styles.timelineDot, it.done ? { backgroundColor: colors.connector } : { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.connector }]} />
-              {!last ? <View style={[styles.timelineLine, { bottom: -gap }]} /> : null}
+              <View
+                style={[
+                  styles.timelineDot,
+                  isDone
+                    ? { backgroundColor: colors.connector }
+                    : { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.connector },
+                ]}
+              />
+              {!last ? <View style={[styles.timelineLine, { bottom: -numGap }]} /> : null}
             </View>
-            <View style={{ flex: 1 }}>{it.content}</View>
+            <View style={{ flex: 1 }}>{content}</View>
           </View>
         );
       })}

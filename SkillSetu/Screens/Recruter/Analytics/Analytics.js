@@ -547,22 +547,34 @@ export default function Analytics({ user, onNavigateTab }) {
           <Pill label={`${integ.failed ?? 0} failed`} tone="danger" />
         </Row>
       </Card>
-      {(reports.schedule_timeline || []).length ? (
+      {(Array.isArray(reports.schedule_timeline) && reports.schedule_timeline.length > 0) ? (
         <Card>
           <Txt variant="h3" tone="ink">Schedule</Txt>
           <Timeline
             gap={space.sm}
             style={{ marginTop: space.sm }}
-            items={reports.schedule_timeline.map((c, i) => ({
-              key: `${c.round_key || c.round || i}`,
-              done: c.status === 'COMPLETED',
-              content: (
-                <View style={styles.cell}>
-                  <Txt variant="small" weight={700} tone="ink">{c.display_name || c.round_name || c.label || c.round}</Txt>
-                  <Txt variant="caption" tone="muted">{[c.scheduled_date || c.start_date || c.date, c.start_time && `${c.start_time}${c.end_time ? `–${c.end_time}` : ''}`, c.duration_display || (c.duration_minutes && `${c.duration_minutes} min`), c.schedule_type].filter(Boolean).join(' · ')}</Txt>
-                </View>
-              ),
-            }))}
+            items={reports.schedule_timeline.filter(Boolean).map((c, i) => {
+              const label = typeof (c.display_name || c.round_name || c.label || c.round) === 'object'
+                ? JSON.stringify(c.display_name || c.round_name || c.label || c.round)
+                : (c.display_name || c.round_name || c.label || c.round || `Round ${i + 1}`);
+              return {
+                key: `${c.round_key || c.round_name || c.round || i}`,
+                done: c.status === 'COMPLETED',
+                content: (
+                  <View style={styles.cell}>
+                    <Txt variant="small" weight={700} tone="ink">{label}</Txt>
+                    <Txt variant="caption" tone="muted">
+                      {[
+                        c.scheduled_date || c.start_date || c.date,
+                        c.start_time && `${c.start_time}${c.end_time ? `–${c.end_time}` : ''}`,
+                        c.duration_display || (c.duration_minutes && `${c.duration_minutes} min`),
+                        c.schedule_type,
+                      ].filter(Boolean).join(' · ')}
+                    </Txt>
+                  </View>
+                ),
+              };
+            })}
           />
         </Card>
       ) : null}

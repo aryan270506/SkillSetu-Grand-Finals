@@ -77,6 +77,8 @@ class Interviewer(Agent):
 
 
 async def entrypoint(ctx: agents.JobContext):
+    await ctx.connect()
+
     interview_id = ctx.room.name.removeprefix("interview-")
     http = aiohttp.ClientSession(base_url=SERVER_URL, headers=HEADERS)
     pending: set[asyncio.Task] = set()
@@ -116,7 +118,6 @@ async def entrypoint(ctx: agents.JobContext):
             audio_input=AudioInputOptions(noise_cancellation=noise_cancellation.BVC()),
         ),
     )
-    await ctx.connect()
     await session.generate_reply(instructions=f"Greet {session_data['name']} and begin the interview.")
 
 
