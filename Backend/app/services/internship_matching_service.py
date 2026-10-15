@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, List, Optional, Set, Tuple
 from sqlalchemy.orm import Session
 from app import models
 from app.services.esco_service import load_student_evidence_from_db

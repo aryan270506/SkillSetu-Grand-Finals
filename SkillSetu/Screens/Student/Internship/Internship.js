@@ -1,15 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import {
   fetchRecommendedInternships,
@@ -27,19 +17,35 @@ import {
   enrollInCourse,
 } from '../services/careerIntelligenceService';
 import { fetchStudentApplications } from '../services/applicationService';
-
-import { CLAY_COLORS, CLAY_FONTS, CLAY_RADII, CLAY_SHADOWS, ensureClayGlobalStyles } from './components/DesignTokens';
-import AmbientBackground from './components/AmbientBackground';
-import OpportunityHeader from './components/OpportunityHeader';
-import OpportunityHero from './components/OpportunityHero';
-import OpportunityFilters from './components/OpportunityFilters';
-import TopRecommendedSection from './components/TopRecommendedSection';
-import OpportunityCard from './components/OpportunityCard';
-import PipelineSidebar from './components/PipelineSidebar';
-import OpportunityLoadingSkeleton from './components/OpportunityLoadingSkeleton';
-import OpportunityErrorState from './components/OpportunityErrorState';
-import OpportunityModals from './components/OpportunityModals';
-import OpportunityFooter from './components/OpportunityFooter';
+import { extractQuestionOptions } from '../Skill/components/AssessmentSheet';
+import {
+  Avatar,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  EventCard,
+  FeatureCard,
+  Field,
+  Icon,
+  IconButton,
+  Inset,
+  Page,
+  Pill,
+  ProgressBar,
+  Ring,
+  Row,
+  SearchField,
+  SectionTitle,
+  SegmentedTabs,
+  Sheet,
+  Skeleton,
+  Stack,
+  StatTrio,
+  Txt,
+} from '../../../ui/components';
+import { colors, radii, space, webOnly } from '../../../ui/theme';
+import { pickFile } from '../../../ui/pickFile';
 
 export default function Internship({ user, profileData, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -113,10 +119,6 @@ export default function Internship({ user, profileData, onNavigate }) {
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadError, setUploadError] = useState(null);
 
-  // Ensure Google Fonts and high-fidelity claymorphic keyframes
-  useEffect(() => {
-    ensureClayGlobalStyles();
-  }, []);
 
   // Helper to reliably test if a job is an authentic recruiter-verified posting
   const isJobVerified = (job) => {
@@ -232,7 +234,7 @@ export default function Internship({ user, profileData, onNavigate }) {
       verifiedCount: serverMetrics?.verified ?? verified,
       unverifiedCount: serverMetrics?.unverified ?? unverified,
       totalCount: serverMetrics?.total_opportunities ?? total,
-      avgMatch: internships.length ? Math.round(totalScore / internships.length) : (serverMetrics?.intelligence_score || 94),
+      avgMatch: internships.length ? Math.round(totalScore / internships.length) : (serverMetrics?.intelligence_score ?? null),
     };
   }, [internships, totalOpportunities, serverMetrics]);
 
@@ -642,379 +644,547 @@ export default function Internship({ user, profileData, onNavigate }) {
     setReadinessTab('ALL');
   };
 
+
+  // ---------------------------------------------------------------------------
+  // View helpers
+  // ---------------------------------------------------------------------------
+  const thresholdOf = (job) => job.application_threshold ?? job.minimum_match_threshold ?? 80;
+  const isReady = (job) => job.readiness_status === 'READY_TO_APPLY' || ((job.match_score || 0) >= thresholdOf(job) && job.hard_eligible !== false);
+  const companyOf = (job) => job.company || job.company_name || 'Company';
+  const stripHtml = (html) =>
+    String(html || '')
+      .replace(/<\s*br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|li|h\d)>/gi, '\n')
+      .replace(/<li>/gi, '• ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  const [certIssuer, setCertIssuer] = useState('');
+  const [certFile, setCertFile] = useState(null);
+
+  const pickCertificate = async () => {
+    const file = await pickFile({ accept: '.pdf,.png,.jpg,.jpeg' });
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => setCertFile({ name: file.name, base64: e.target.result });
+    reader.readAsDataURL(file);
+  };
+
+  const runnerQuestions = activeAssessment?.questions || [];
+  const runnerQ = runnerQuestions[assessmentCurrentIdx];
+  const runnerOptions = extractQuestionOptions(runnerQ);
+
+  const readinessTabs = [
+    { id: 'ALL', label: 'All', badge: metrics.totalCount },
+    { id: 'READY', label: 'Ready to apply', badge: metrics.readyCount },
+    { id: 'NEEDS_DEV', label: 'Needs work', badge: metrics.devCount },
+    { id: 'SAVED', label: 'Saved', icon: 'Bookmark' },
+  ];
+
+  // ---------------------------------------------------------------------------
+  // Job card
+  // ---------------------------------------------------------------------------
+  const renderJob = (job, featured) => {
+    const ready = isReady(job);
+    const score = Math.round(job.match_score || 0);
+    const verified = isJobVerified(job);
+    const skills = job.skills || [];
+    const body = (
+      <>
+        <Row gap={space.sm} align="flex-start">
+          <Avatar name={companyOf(job)} uri={job.company_logo || undefined} size={48} />
+          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+            <Txt variant={featured ? 'h2' : 'h3'} tone="ink" numberOfLines={2}>{job.title}</Txt>
+            <Txt variant="small" tone="muted" numberOfLines={1}>
+              {companyOf(job)} · {job.work_mode || job.work_preference || (job.is_remote ? 'Remote' : 'On-site')}{job.location ? ` · ${job.location}` : ''}
+            </Txt>
+          </Stack>
+          <Ring value={score} size={56} stroke={6} tone={ready ? 'success' : 'warning'} track={featured ? 'rgba(255,255,255,0.6)' : undefined}>
+            <Txt variant="small" weight={700} tone="ink">{score}%</Txt>
+          </Ring>
+        </Row>
+        <Row wrap gap={6} style={{ marginTop: space.md }}>
+          <Pill label={verified ? 'Verified recruiter' : 'External listing'} tone={verified ? 'success' : 'neutral'} icon={verified ? 'ShieldCheck' : 'Globe'} size="sm" />
+          {job.stipend ? <Pill label={job.stipend} tone="warning" icon="Wallet" size="sm" /> : null}
+          {job.application_deadline ? <Pill label={`Due ${new Date(job.application_deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`} icon="Calendar" size="sm" /> : null}
+          {skills.slice(0, 4).map((s) => <Pill key={s} label={s} tone="info" size="sm" />)}
+          {skills.length > 4 ? <Pill label={`+${skills.length - 4}`} size="sm" /> : null}
+        </Row>
+        <Row justify="space-between" style={{ marginTop: space.lg }} wrap gap={8}>
+          <Pill label={ready ? 'Ready to apply' : `Need ${thresholdOf(job)}% to apply`} tone={ready ? 'success' : 'neutral'} icon={ready ? 'CircleCheck' : 'Clock'} />
+          <Row gap={8}>
+            <IconButton icon="Bookmark" variant={job.is_saved ? 'dark' : 'soft'} onPress={() => handleToggleSave(job)} disabled={savingId === job.id} accessibilityLabel={job.is_saved ? 'Unsave' : 'Save'} />
+            <IconButton icon="Ellipsis" onPress={() => handleViewDetails(job)} accessibilityLabel="Details" />
+            {ready ? (
+              <Button label="Apply" size="sm" iconRight="ArrowUpRight" onPress={() => handleApply(job)} loading={applyingId === job.id} />
+            ) : (
+              <Button label="Improve match" size="sm" variant="secondary" icon="Route" onPress={() => openPlanModal(job)} />
+            )}
+          </Row>
+        </Row>
+      </>
+    );
+    return featured ? (
+      <FeatureCard key={job.id} tilt={isDesktop}>{body}</FeatureCard>
+    ) : (
+      <Card key={job.id} style={styles.jobCard}>{body}</Card>
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // Aside: application pipeline
+  // ---------------------------------------------------------------------------
+  const pipeline = (
+    <>
+      <SectionTitle title="Pipeline" emoji="📮" />
+      <StatTrio
+        items={[
+          { value: applications.length, label: 'Applied', tone: 'info' },
+          { value: applications.filter((a) => /SHORTLIST|INTERVIEW|ROUND/i.test(a.application_status || a.statusClass || '')).length, label: 'Rounds', tone: 'success' },
+          { value: internships.filter((j) => j.is_saved).length, label: 'Saved', dashed: true },
+        ]}
+      />
+      {applications.slice(0, 5).map((a, i) => (
+        <EventCard
+          key={a.id || i}
+          tone={/SHORTLIST|INTERVIEW|ROUND/i.test(a.application_status || '') ? 'success' : /REJECT/i.test(a.application_status || '') ? 'danger' : 'info'}
+          icon="Briefcase"
+          type={a.status || 'Applied'}
+          date={a.dateApplied ? a.dateApplied.replace(/, \d{4}$/, '') : ''}
+          title={`${a.role || 'Internship'} · ${a.company || ''}`}
+          body={a.nextAction}
+          onPress={() => onNavigate && onNavigate('Applications')}
+        />
+      ))}
+      {applications.length ? (
+        <Button label="All applications" variant="secondary" iconRight="ArrowRight" onPress={() => onNavigate && onNavigate('Applications')} block />
+      ) : (
+        <View style={styles.emptyEvents}>
+          <EmptyState icon="Send" title="No applications yet" message="Apply to a ready role and it will be tracked here." />
+        </View>
+      )}
+    </>
+  );
+
+  const featured = !searchQuery.trim() && readinessTab === 'ALL' && !selectedTechStack && !verifiedFilter ? filteredJobs[0] : null;
+  const rest = featured ? filteredJobs.slice(1) : filteredJobs;
+
   return (
-    <View style={styles.screenContainer}>
-      <AmbientBackground />
+    <Page aside={pipeline}>
+      <SectionTitle
+        title="Internships"
+        emoji="💼"
+        subtitle={loading ? 'Finding roles that match your evidence…' : `${metrics.totalCount} opportunities · ${metrics.readyCount} ready for you`}
+        right={
+          <Row gap={8}>
+            <SearchField value={searchQuery} onChangeText={setSearchQuery} onSubmit={handleSearchSubmit} placeholder="Role, company or skill" style={{ width: isTablet ? 260 : '100%' }} />
+            <IconButton icon="RefreshCw" size={46} onPress={() => loadData(true)} disabled={refreshing} accessibilityLabel="Refresh" />
+          </Row>
+        }
+      />
 
-      <ScrollView contentContainerStyle={styles.contentScroll} showsVerticalScrollIndicator={false}>
-        {/* 1. Header with Breadcrumbs & Sync Action Pills */}
-        <OpportunityHeader
-          metrics={metrics}
-          applicationsCount={applications.length}
-          onNavigate={onNavigate}
-          onSyncLedger={() => loadData(true)}
-        />
+      <SegmentedTabs options={readinessTabs} value={readinessTab} onChange={setReadinessTab} scrollable={!isTablet} />
 
-        {/* 2. Claymorphic Hero with Readiness & Intelligence Stats */}
-        <OpportunityHero
-          user={user}
-          profileData={profileData}
-          metrics={metrics}
-        />
+      <Row wrap gap={8}>
+        <Chip label="Remote" icon="House" tone="info" selected={typeFilter === 'Remote'} onPress={() => setTypeFilter(typeFilter === 'Remote' ? '' : 'Remote')} />
+        <Chip label="Verified only" icon="ShieldCheck" selected={verifiedFilter === 'VERIFIED'} onPress={() => setVerifiedFilter(verifiedFilter === 'VERIFIED' ? '' : 'VERIFIED')} />
+        {['Best Match', 'Newest', 'Stipend (High to Low)'].map((s) => (
+          <Chip key={s} label={s} icon="Funnel" tone="accent" selected={sortOption === s} onPress={() => setSortOption(s)} />
+        ))}
+        {locationFilter || typeFilter || searchQuery || verifiedFilter || selectedTechStack || readinessTab !== 'ALL' ? (
+          <Button label="Clear" size="sm" variant="ghost" icon="X" onPress={handleClearFilters} />
+        ) : null}
+      </Row>
+      {availableTechStacks.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+          {availableTechStacks.slice(0, 24).map((t) => (
+            <Chip key={t} label={t} tone="success" selected={selectedTechStack === t} onPress={() => setSelectedTechStack(selectedTechStack === t ? '' : t)} />
+          ))}
+        </ScrollView>
+      ) : null}
 
-        {/* Loading / Error States */}
-        {loading ? (
-          <OpportunityLoadingSkeleton />
-        ) : error ? (
-          <OpportunityErrorState error={error} onRetry={() => loadData(true)} />
+      {loading ? (
+        <View style={styles.jobGrid}>
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} height={210} radius={radii.xl} style={styles.jobCard} />)}
+        </View>
+      ) : error ? (
+        <Card>
+          <EmptyState icon="CircleAlert" tone="danger" title="Couldn't load opportunities" message={error} action={<Button label="Retry" icon="RefreshCw" onPress={() => loadData(true)} />} />
+        </Card>
+      ) : filteredJobs.length ? (
+        <>
+          {featured ? renderJob(featured, true) : null}
+          <View style={styles.jobGrid}>{rest.map((j) => renderJob(j, false))}</View>
+          {hasMore ? <Button label="Load more" variant="secondary" onPress={handleLoadMore} loading={loadingMore} style={{ alignSelf: 'center' }} /> : null}
+        </>
+      ) : (
+        <Card>
+          <EmptyState icon="Briefcase" title="No roles match these filters" message="Try clearing filters or searching for a different skill." action={<Button label="Clear filters" onPress={handleClearFilters} />} />
+        </Card>
+      )}
+
+      {/* Details */}
+      <Sheet
+        visible={showDetailsModal && !!selectedDetailJob}
+        onClose={() => setShowDetailsModal(false)}
+        title={selectedDetailJob?.title}
+        subtitle={selectedDetailJob ? `${companyOf(selectedDetailJob)}${selectedDetailJob.location ? ` · ${selectedDetailJob.location}` : ''}` : ''}
+        icon="Briefcase"
+        tone="info"
+        width={760}
+        footer={
+          selectedDetailJob ? (
+            <>
+              <Button label={selectedDetailJob.is_saved ? 'Saved' : 'Save'} icon="Bookmark" variant="secondary" onPress={() => handleToggleSave(selectedDetailJob)} />
+              {isReady(selectedDetailJob) ? (
+                <Button label="Apply" iconRight="ArrowUpRight" onPress={() => { setShowDetailsModal(false); handleApply(selectedDetailJob); }} />
+              ) : (
+                <Button label="Improve match" icon="Route" onPress={() => { setShowDetailsModal(false); openPlanModal(selectedDetailJob); }} />
+              )}
+            </>
+          ) : null
+        }
+      >
+        {selectedDetailJob ? (
+          <>
+            <Row wrap gap={6}>
+              <Pill label={`${Math.round(selectedDetailJob.match_score || 0)}% match`} tone={isReady(selectedDetailJob) ? 'success' : 'warning'} icon="Target" />
+              {selectedDetailJob.stipend ? <Pill label={selectedDetailJob.stipend} tone="warning" icon="Wallet" /> : null}
+              <Pill label={isJobVerified(selectedDetailJob) ? 'Verified recruiter' : `Source: ${selectedDetailJob.source || 'external'}`} icon={isJobVerified(selectedDetailJob) ? 'ShieldCheck' : 'Globe'} />
+            </Row>
+            {(selectedDetailJob.missing_skills || []).length ? (
+              <Inset tone="warning">
+                <Txt variant="small" weight={700} color={colors.butterInk}>Missing skills</Txt>
+                <Row wrap gap={6} style={{ marginTop: 6 }}>
+                  {selectedDetailJob.missing_skills.map((s) => <Pill key={typeof s === 'string' ? s : s.skill_name} label={typeof s === 'string' ? s : s.skill_name} tone="peach" size="sm" />)}
+                </Row>
+              </Inset>
+            ) : null}
+            <Txt variant="body" tone="default" style={{ lineHeight: 22 }}>{stripHtml(selectedDetailJob.description) || 'No description provided.'}</Txt>
+          </>
+        ) : null}
+      </Sheet>
+
+      {/* Targeted development plan */}
+      <Sheet
+        visible={showPlanModal && !!selectedPlanJob}
+        onClose={() => setShowPlanModal(false)}
+        title="Your plan for this role"
+        subtitle={selectedPlanJob ? `${selectedPlanJob.title} · ${companyOf(selectedPlanJob)}` : ''}
+        icon="Route"
+        tone="accent"
+        width={760}
+      >
+        {selectedPlanJob ? (
+          <>
+            {planSuccessNotice ? (
+              <Inset tone="success"><Txt variant="small" weight={600} color={colors.mintInk}>{planSuccessNotice}</Txt></Inset>
+            ) : null}
+            <Card padding={space.lg}>
+              <Row justify="space-between">
+                <Txt variant="title" tone="ink">Your match</Txt>
+                <Txt variant="title" tone="ink">{Math.round(selectedPlanJob.match_score || 0)}% / {thresholdOf(selectedPlanJob)}%</Txt>
+              </Row>
+              <ProgressBar value={((selectedPlanJob.match_score || 0) / thresholdOf(selectedPlanJob)) * 100} tone="accent" style={{ marginTop: 8 }} />
+              <Txt variant="caption" tone="muted" style={{ marginTop: 6 }}>Reach the threshold to unlock Apply. Every course, test and project below adds verified evidence.</Txt>
+            </Card>
+            {(selectedPlanJob.skill_gaps || []).length ? (
+              <Stack gap={8}>
+                <Txt variant="h3" tone="ink">Skill gaps</Txt>
+                {selectedPlanJob.skill_gaps.map((sk) => (
+                  <Inset key={sk.skill_name} tone={sk.is_verified ? 'success' : 'neutral'}>
+                    <Row justify="space-between">
+                      <Txt variant="small" weight={700} tone="ink">{sk.skill_name}</Txt>
+                      <Pill label={sk.is_verified ? 'Verified' : `${Math.round(sk.current_score ?? sk.score ?? 0)}%`} tone={sk.is_verified ? 'success' : 'warning'} size="sm" />
+                    </Row>
+                    <Row wrap gap={6} style={{ marginTop: 6 }}>
+                      <Pill label={`Course ${sk.course?.completed ? '✓' : `${Math.round(sk.progress_percent || sk.course_progress || 0)}%`}`} size="sm" />
+                      <Pill label={`Test ${sk.test?.passed ? `✓ ${sk.test?.score}%` : '—'}`} size="sm" />
+                      <Pill label={`Project ${sk.assignment?.verified ? '✓' : '—'}`} size="sm" />
+                      <Pill label={`GitHub ${sk.github?.evidence ? '✓' : '—'}`} size="sm" />
+                    </Row>
+                  </Inset>
+                ))}
+              </Stack>
+            ) : null}
+            {(selectedPlanJob.recommended_courses || []).length ? (
+              <Stack gap={8}>
+                <Txt variant="h3" tone="ink">Courses</Txt>
+                {selectedPlanJob.recommended_courses.map((c) => {
+                  const cid = c.id || c.course_id || c.title;
+                  const done = /COMPLETE/i.test(c.status || '');
+                  return (
+                    <Card key={cid} padding={space.md}>
+                      <Txt variant="small" weight={700} tone="ink">{c.title}</Txt>
+                      <Txt variant="caption" tone="muted">{[c.provider, c.duration != null && c.duration !== '' ? (isNaN(Number(c.duration)) ? c.duration : `${c.duration} hrs`) : null].filter(Boolean).join(' · ')}</Txt>
+                      <Row gap={6} wrap style={{ marginTop: 8 }}>
+                        {done ? <Pill label="Completed" tone="success" icon="Check" size="sm" /> : (
+                          <>
+                            <Button label={/PROGRESS/i.test(c.status || '') ? 'Continue' : 'Enroll'} size="sm" onPress={() => handleEnrollCourse(c)} loading={enrollingCourseId === cid} />
+                            <Button label="Mark complete" size="sm" variant="secondary" onPress={() => handleCompleteCourse(c)} />
+                          </>
+                        )}
+                        <Button label="Upload certificate" size="sm" variant="ghost" icon="Upload" onPress={() => { setCertFile(null); setCertIssuer(c.provider || ''); handleStartUploadCertificate(c); }} />
+                      </Row>
+                    </Card>
+                  );
+                })}
+              </Stack>
+            ) : null}
+            {(selectedPlanJob.recommended_tests || []).length ? (
+              <Stack gap={8}>
+                <Txt variant="h3" tone="ink">Assessments</Txt>
+                {selectedPlanJob.recommended_tests.map((t, i) => (
+                  <Card key={t.id || i} padding={space.md}>
+                    <Row justify="space-between" gap={8}>
+                      <Stack gap={1} style={{ flex: 1 }}>
+                        <Txt variant="small" weight={700} tone="ink">{t.title || `${t.skill} assessment`}</Txt>
+                        <Txt variant="caption" tone="muted">{[t.question_count && `${t.question_count} questions`, t.duration].filter(Boolean).join(' · ')}</Txt>
+                      </Stack>
+                      <Button label="Start" size="sm" icon="Target" onPress={() => handleStartAssessment(t)} />
+                    </Row>
+                  </Card>
+                ))}
+              </Stack>
+            ) : null}
+            {(selectedPlanJob.recommended_projects || []).length ? (
+              <Stack gap={8}>
+                <Txt variant="h3" tone="ink">Projects</Txt>
+                {selectedPlanJob.recommended_projects.map((p, i) => (
+                  <Card key={p.id || i} padding={space.md}>
+                    <Row justify="space-between" gap={8}>
+                      <Stack gap={1} style={{ flex: 1 }}>
+                        <Txt variant="small" weight={700} tone="ink">{p.title}</Txt>
+                        {p.xp ? <Txt variant="caption" tone="muted">+{p.xp} XP</Txt> : null}
+                      </Stack>
+                      <Button label="Start" size="sm" icon="Rocket" onPress={() => handleStartProject(p)} />
+                    </Row>
+                  </Card>
+                ))}
+              </Stack>
+            ) : null}
+          </>
+        ) : null}
+      </Sheet>
+
+      {/* Applied confirmation */}
+      <Sheet
+        visible={showAppliedModal && !!appliedJob}
+        onClose={() => setShowAppliedModal(false)}
+        title="Application started"
+        subtitle={appliedJob ? `${appliedJob.title} · ${companyOf(appliedJob)}` : ''}
+        icon="Send"
+        tone="success"
+        width={520}
+        footer={
+          <>
+            <Button label="Keep browsing" variant="secondary" onPress={() => setShowAppliedModal(false)} />
+            <Button label="View applications" onPress={() => { setShowAppliedModal(false); onNavigate && onNavigate('Applications'); }} />
+          </>
+        }
+      >
+        <Txt variant="body" tone="muted">
+          {appliedJob && isJobVerified(appliedJob)
+            ? 'Your verified profile was sent to the recruiter. Track progress in Applications.'
+            : 'We opened the employer’s application page in a new tab. Finish there — we track it in Applications.'}
+        </Txt>
+      </Sheet>
+
+      {/* Assessment runner */}
+      <Sheet
+        visible={showAssessmentModal}
+        onClose={closeAssessmentModal}
+        title={activeAssessment?.title || 'Assessment'}
+        subtitle={runnerQuestions.length ? `${runnerQuestions.length} questions` : ''}
+        icon="Target"
+        tone="info"
+        footer={
+          assessmentResult ? (
+            <Button label="Back to plan" onPress={closeAssessmentModal} />
+          ) : runnerQuestions.length && !assessmentError ? (
+            <>
+              <Button label="Previous" variant="secondary" icon="ArrowLeft" onPress={() => setAssessmentCurrentIdx((i) => Math.max(0, i - 1))} disabled={assessmentCurrentIdx === 0} />
+              {assessmentCurrentIdx >= runnerQuestions.length - 1 ? (
+                <Button label="Submit" icon="Send" onPress={handleSubmitAssessment} loading={assessmentSubmitting} />
+              ) : (
+                <Button label="Next" iconRight="ArrowRight" onPress={() => setAssessmentCurrentIdx((i) => Math.min(runnerQuestions.length - 1, i + 1))} />
+              )}
+            </>
+          ) : null
+        }
+      >
+        {assessmentLoading ? (
+          <Stack gap={10}><Skeleton height={22} width="60%" /><Skeleton height={56} /><Skeleton height={56} /></Stack>
+        ) : assessmentResult ? (
+          <Stack gap={space.md} style={{ alignItems: 'center' }}>
+            <Ring value={assessmentResult.score ?? 0} size={124} stroke={12} tone={assessmentResult.passed ? 'success' : 'warning'}>
+              <Txt variant="display" tone="ink">{assessmentResult.score != null ? `${Math.round(assessmentResult.score)}%` : '—'}</Txt>
+            </Ring>
+            <Pill label={assessmentResult.passed ? 'Passed' : 'Not passed yet'} tone={assessmentResult.passed ? 'success' : 'warning'} />
+            {assessmentResult.correct_count != null ? <Txt variant="body" tone="muted">{assessmentResult.correct_count} correct answers</Txt> : null}
+            {assessmentResult.updated_evidence != null ? <Txt variant="small" tone="muted">Evidence {assessmentResult.previous_evidence ?? 0}% → {assessmentResult.updated_evidence}%</Txt> : null}
+          </Stack>
+        ) : assessmentError ? (
+          <EmptyState icon="CircleAlert" tone="warning" title="Assessment unavailable" message={assessmentError} />
+        ) : runnerQ ? (
+          <Stack gap={space.md}>
+            <Txt variant="overline" tone="subtle">Question {assessmentCurrentIdx + 1} of {runnerQuestions.length}</Txt>
+            <ProgressBar value={((assessmentCurrentIdx + 1) / runnerQuestions.length) * 100} tone="info" />
+            <Txt variant="h3" tone="ink">{runnerQ.question_text || runnerQ.question}</Txt>
+            <Stack gap={8}>
+              {runnerOptions.map((opt) => {
+                const selected = assessmentAnswers[runnerQ.id] === opt.key;
+                return (
+                  <Pressable key={opt.key} onPress={() => handleSelectOption(runnerQ.id, opt.key)} style={({ hovered }) => [styles.option, webOnly({ cursor: 'pointer' }), selected ? { backgroundColor: colors.sky, borderColor: colors.skyStrong } : hovered ? { backgroundColor: colors.surfaceMuted } : null]}>
+                    <View style={[styles.optKey, selected ? { backgroundColor: colors.ink } : null]}>
+                      <Txt variant="small" weight={700} color={selected ? '#fff' : colors.text}>{opt.key}</Txt>
+                    </View>
+                    <Txt variant="body" tone="ink" style={{ flex: 1 }}>{opt.text}</Txt>
+                  </Pressable>
+                );
+              })}
+            </Stack>
+          </Stack>
+        ) : null}
+      </Sheet>
+
+      {/* Project runner */}
+      <Sheet
+        visible={showProjectModal}
+        onClose={closeProjectModal}
+        title={activeProject?.title || 'Project'}
+        subtitle="Submit a GitHub repository as evidence"
+        icon="Rocket"
+        tone="warning"
+        footer={
+          projectResult ? <Button label="Back to plan" onPress={closeProjectModal} /> : <Button label="Submit project" icon="Send" onPress={handleSubmitProject} loading={projectSubmitting} />
+        }
+      >
+        {projectResult ? (
+          <EmptyState icon="CircleCheck" tone="success" title="Project verified" message={projectResult.message || 'Your repository was recorded as evidence.'} />
         ) : (
           <>
-            {/* 3. Top Spotlight Section: Featured Recommendations on Left & Student Pipeline on Right */}
-            {featuredJobs.length > 0 && (
-              <View style={[styles.topSpotlightRow, isDesktop ? styles.desktopRow : styles.mobileColumn]}>
-                <View style={[styles.spotlightLeft, isDesktop ? { flex: 6.8 } : {}]}>
-                  <TopRecommendedSection
-                    featuredJobs={featuredJobs}
-                    onViewDetails={handleViewDetails}
-                    onOpenPlan={openPlanModal}
-                    onApply={handleApply}
-                    applyingId={applyingId}
-                  />
-                </View>
-                <View style={[styles.spotlightRight, isDesktop ? { flex: 3.2 } : {}]}>
-                  <PipelineSidebar
-                    applications={applications}
-                    user={user}
-                    profileData={profileData}
-                    featuredJobs={featuredJobs}
-                    onOpenPlan={openPlanModal}
-                    onNavigate={onNavigate}
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* 4. Search & Interactive Clay Filter Chips (100% Full Width) */}
-            <OpportunityFilters
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              onSearchSubmit={handleSearchSubmit}
-              readinessTab={readinessTab}
-              setReadinessTab={setReadinessTab}
-              verifiedFilter={verifiedFilter}
-              setVerifiedFilter={setVerifiedFilter}
-              selectedTechStack={selectedTechStack}
-              setSelectedTechStack={setSelectedTechStack}
-              availableTechStacks={availableTechStacks}
-              sortOption={sortOption}
-              setSortOption={setSortOption}
-              locationFilter={locationFilter}
-              setLocationFilter={setLocationFilter}
-              typeFilter={typeFilter}
-              setTypeFilter={setTypeFilter}
-              metrics={metrics}
-              totalCount={totalOpportunities || internships.length}
-              savedCount={internships.filter(j => j.is_saved).length}
-              onClearFilters={handleClearFilters}
-            />
-
-            {/* 5. All Verified & Discoverable Roles Section (100% Full Width Grid) */}
-            <View style={styles.allRolesSection}>
-              <View style={styles.sectionHeaderRow}>
-                <View>
-                  <Text style={styles.sectionTitle}>
-                    {verifiedFilter === 'VERIFIED'
-                      ? `Verified Partner Roles (${filteredJobs.length})`
-                      : verifiedFilter === 'UNVERIFIED'
-                        ? `External Feed Roles (${filteredJobs.length})`
-                        : `All Discoverable Roles (${filteredJobs.length})`}
-                  </Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Recruiter-configured match thresholds determine direct application readiness. Internships below threshold include actionable development roadmaps.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Opportunities Grid with 4-5 columns across 100% available width */}
-              <View style={[
-                styles.opportunityGrid,
-                Platform.OS === 'web' && {
-                  display: 'grid',
-                  gridTemplateColumns: isWideDesktop 
-                    ? 'repeat(5, minmax(0, 1fr))' 
-                    : isDesktop 
-                      ? 'repeat(4, minmax(0, 1fr))' 
-                      : isTablet 
-                        ? 'repeat(2, minmax(0, 1fr))' 
-                        : 'repeat(1, minmax(0, 1fr))',
-                  gap: isDesktop ? 18 : 14,
-                  width: '100%',
-                }
-              ]}>
-                {filteredJobs.length > 0 ? (
-                  filteredJobs.map((job) => (
-                    <OpportunityCard
-                      key={job.id}
-                      job={job}
-                      onViewDetails={handleViewDetails}
-                      onOpenPlan={openPlanModal}
-                      onApply={handleApply}
-                      onToggleSave={handleToggleSave}
-                      isSaving={savingId === job.id}
-                      isApplying={applyingId === job.id}
-                    />
-                  ))
-                ) : (
-                  <View style={styles.emptyStateCard}>
-                    <Text style={styles.emptyStateIcon}>🔍</Text>
-                    <Text style={styles.emptyStateTitle}>No opportunities matched your active filter criteria.</Text>
-                    <Text style={styles.emptyStateSubtitle}>
-                      Try clearing or relaxing your search query and tech filters to see more results.
-                    </Text>
-                    <Pressable
-                      style={({ pressed }) => [styles.resetFiltersBtn, pressed && styles.btnPressed]}
-                      onPress={handleClearFilters}
-                    >
-                      <Text style={styles.resetFiltersBtnText}>Reset All Filters</Text>
+            {loadingRepos ? (
+              <Skeleton height={60} />
+            ) : availableRepos.length ? (
+              <Stack gap={8}>
+                {availableRepos.map((r) => {
+                  const key = r.id || r.name;
+                  const sel = selectedRepoId === key;
+                  return (
+                    <Pressable key={key} onPress={() => { setSelectedRepoId(key); setProjectRepoUrl(r.html_url || r.url || ''); }} style={({ hovered }) => [styles.repoRow, webOnly({ cursor: 'pointer' }), sel ? { backgroundColor: colors.butter } : hovered ? { backgroundColor: colors.surfaceMuted } : null]}>
+                      <Icon name={sel ? 'CircleCheck' : 'Circle'} size={18} color={sel ? colors.butterInk : colors.textSubtle} />
+                      <Txt variant="small" weight={700} tone="ink" style={{ flex: 1 }}>{r.name}</Txt>
+                      {r.language ? <Pill label={r.language} size="sm" /> : null}
                     </Pressable>
-                  </View>
-                )}
-              </View>
-
-              {/* Load More Button */}
-              {hasMore && (
-                <View style={styles.loadMoreWrap}>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.loadMoreBtn,
-                      loadingMore && styles.loadMoreBtnDisabled,
-                      pressed && styles.btnPressed,
-                    ]}
-                    onPress={handleLoadMore}
-                    disabled={loadingMore}
-                  >
-                    {loadingMore ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
-                    ) : (
-                      <Text style={styles.loadMoreBtnText}>
-                        Load More Roles ({internships.length} of {totalOpportunities})
-                      </Text>
-                    )}
-                  </Pressable>
-                </View>
-              )}
-            </View>
+                  );
+                })}
+              </Stack>
+            ) : (
+              <Field label="Repository URL" icon="GitBranch" placeholder="https://github.com/you/project" autoCapitalize="none" value={projectRepoUrl} onChangeText={setProjectRepoUrl} />
+            )}
+            <Field label="Notes (optional)" multiline placeholder="What did you build? Anything reviewers should know?" value={projectNotes} onChangeText={setProjectNotes} />
+            {projectError ? <Txt variant="small" tone="danger">{projectError}</Txt> : null}
           </>
         )}
+      </Sheet>
 
-        {/* 6. Footer */}
-        <OpportunityFooter />
-      </ScrollView>
-
-      {/* 6. All Interactive Modals */}
-      <OpportunityModals
-        // Details Modal
-        selectedDetailJob={selectedDetailJob}
-        showDetailsModal={showDetailsModal}
-        setShowDetailsModal={setShowDetailsModal}
-        onApply={handleApply}
-        onOpenPlan={openPlanModal}
-        onToggleSave={handleToggleSave}
-        savingId={savingId}
-
-        // Roadmap Modal
-        selectedPlanJob={selectedPlanJob}
-        showPlanModal={showPlanModal}
-        setShowPlanModal={setShowPlanModal}
-        planSuccessNotice={planSuccessNotice}
-        enrollingCourseId={enrollingCourseId}
-        handleEnrollCourse={handleEnrollCourse}
-        handleCompleteCourse={handleCompleteCourse}
-        handleStartAssessment={handleStartAssessment}
-        handleStartProject={handleStartProject}
-        onNavigate={onNavigate}
-
-        // Assessment Runner Modal
-        showAssessmentModal={showAssessmentModal}
-        closeAssessmentModal={closeAssessmentModal}
-        activeAssessment={activeAssessment}
-        assessmentLoading={assessmentLoading}
-        assessmentSubmitting={assessmentSubmitting}
-        assessmentResult={assessmentResult}
-        assessmentAnswers={assessmentAnswers}
-        assessmentCurrentIdx={assessmentCurrentIdx}
-        setAssessmentCurrentIdx={setAssessmentCurrentIdx}
-        handleSelectOption={handleSelectOption}
-        handleSubmitAssessment={handleSubmitAssessment}
-        assessmentError={assessmentError}
-
-        // Project Runner Modal
-        showProjectModal={showProjectModal}
-        closeProjectModal={closeProjectModal}
-        activeProject={activeProject}
-        projectSubmitting={projectSubmitting}
-        projectResult={projectResult}
-        projectRepoUrl={projectRepoUrl}
-        setProjectRepoUrl={setProjectRepoUrl}
-        projectNotes={projectNotes}
-        setProjectNotes={setProjectNotes}
-        projectError={projectError}
-        availableRepos={availableRepos}
-        loadingRepos={loadingRepos}
-        selectedRepoId={selectedRepoId}
-        setSelectedRepoId={setSelectedRepoId}
-        handleSubmitProject={handleSubmitProject}
-
-        // Applied Confirmation Modal
-        showAppliedModal={showAppliedModal}
-        setShowAppliedModal={setShowAppliedModal}
-        appliedJob={appliedJob}
-
-        // Certificate Upload & Verification Modal
-        showUploadModal={showUploadModal}
-        activeUploadCourse={activeUploadCourse}
-        uploadingCertificate={uploadingCertificate}
-        uploadResult={uploadResult}
-        uploadError={uploadError}
-        handleStartUploadCertificate={handleStartUploadCertificate}
-        handleCloseUploadModal={handleCloseUploadModal}
-        handleSubmitCertificate={handleSubmitCertificate}
-      />
-    </View>
+      {/* Certificate upload */}
+      <Sheet
+        visible={showUploadModal && !!activeUploadCourse}
+        onClose={handleCloseUploadModal}
+        title="Upload certificate"
+        subtitle={activeUploadCourse?.title}
+        icon="Award"
+        tone="success"
+        width={560}
+        footer={
+          uploadResult ? (
+            <Button label="Done" onPress={handleCloseUploadModal} />
+          ) : (
+            <>
+              <Button label="Cancel" variant="secondary" onPress={handleCloseUploadModal} />
+              <Button
+                label="Verify certificate"
+                icon="ShieldCheck"
+                disabled={!certFile}
+                loading={uploadingCertificate}
+                onPress={() => handleSubmitCertificate({ name: certFile.name, base64: certFile.base64, issuer: certIssuer || activeUploadCourse?.provider || '' })}
+              />
+            </>
+          )
+        }
+      >
+        {uploadResult ? (
+          <EmptyState icon="CircleCheck" tone="success" title="Certificate recorded" message={uploadResult.message || 'Your certificate was added as skill evidence.'} />
+        ) : (
+          <>
+            <Pressable onPress={pickCertificate} style={[styles.dropzone, webOnly({ cursor: 'pointer' })]}>
+              <Icon name={certFile ? 'FileText' : 'Upload'} size={26} color={colors.mintInk} />
+              <Txt variant="bodyStrong" tone="ink">{certFile ? certFile.name : 'Choose a PDF or image'}</Txt>
+              <Txt variant="caption" tone="muted">{certFile ? 'Tap to choose a different file' : 'Completion certificate or statement of accomplishment'}</Txt>
+            </Pressable>
+            <Field label="Issuer" icon="Building" placeholder="e.g. NPTEL, Coursera, freeCodeCamp" value={certIssuer} onChangeText={setCertIssuer} />
+            {uploadError ? <Txt variant="small" tone="danger">{uploadError}</Txt> : null}
+          </>
+        )}
+      </Sheet>
+    </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  screenContainer: {
-    flex: 1,
-    backgroundColor: CLAY_COLORS.canvas,
-  },
-  contentScroll: {
-    padding: 24,
-    paddingBottom: 60,
-    maxWidth: 1680,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  topSpotlightRow: {
-    gap: 24,
-    marginBottom: 24,
-    width: '100%',
-  },
-  desktopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  mobileColumn: {
-    flexDirection: 'column',
-  },
-  spotlightLeft: {
-    width: '100%',
-  },
-  spotlightRight: {
-    width: '100%',
-  },
-  allRolesSection: {
-    marginTop: 8,
-    marginBottom: 32,
-    width: '100%',
-  },
-  sectionHeaderRow: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontFamily: CLAY_FONTS.heading,
-    fontSize: 22,
-    fontWeight: '900',
-    color: CLAY_COLORS.foreground,
-  },
-  sectionSubtitle: {
-    fontFamily: CLAY_FONTS.body,
-    fontSize: 13.5,
-    color: CLAY_COLORS.muted,
-    marginTop: 3,
-    maxWidth: 750,
-  },
-  opportunityGrid: {
-    width: '100%',
+  jobGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 18,
-    justifyContent: 'flex-start',
+    gap: space.md,
   },
-  emptyStateCard: {
-    width: '100%',
-    backgroundColor: '#ffffff',
-    borderRadius: CLAY_RADII.card,
-    padding: 40,
+  jobCard: {
+    flexGrow: 1,
+    flexBasis: 380,
+  },
+  emptyEvents: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.borderStrong,
+    borderRadius: radii.xl,
+  },
+  option: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(230, 225, 242, 0.85)',
-    ...CLAY_SHADOWS.card,
+    gap: 12,
+    padding: 14,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  emptyStateIcon: {
-    fontSize: 40,
-    marginBottom: 10,
-  },
-  emptyStateTitle: {
-    fontFamily: CLAY_FONTS.heading,
-    fontSize: 16,
-    fontWeight: '800',
-    color: CLAY_COLORS.foreground,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  emptyStateSubtitle: {
-    fontFamily: CLAY_FONTS.body,
-    fontSize: 13,
-    color: CLAY_COLORS.muted,
-    textAlign: 'center',
-    maxWidth: 400,
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  resetFiltersBtn: {
-    backgroundColor: CLAY_COLORS.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: CLAY_RADII.button,
-    ...CLAY_SHADOWS.buttonPrimary,
-    cursor: 'pointer',
-  },
-  resetFiltersBtnText: {
-    fontFamily: CLAY_FONTS.heading,
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  loadMoreWrap: {
-    marginTop: 24,
+  optKey: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadMoreBtn: {
-    backgroundColor: CLAY_COLORS.primary,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: CLAY_RADII.button,
+  repoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 260,
-    ...CLAY_SHADOWS.buttonPrimary,
-    cursor: 'pointer',
+    gap: 12,
+    padding: 12,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceMuted,
   },
-  loadMoreBtnDisabled: {
-    opacity: 0.7,
-  },
-  loadMoreBtnText: {
-    fontFamily: CLAY_FONTS.heading,
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  btnPressed: {
-    transform: [{ scale: 0.92 }],
-    ...CLAY_SHADOWS.buttonPressed,
+  dropzone: {
+    alignItems: 'center',
+    gap: 6,
+    padding: space.xl,
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.mintStrong,
+    backgroundColor: colors.mint,
   },
 });

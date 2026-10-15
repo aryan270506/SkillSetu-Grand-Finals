@@ -1,36 +1,31 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
-
-const COLORS = {
-  canvas: '#103422',
-  panel: '#efefe6',
-  paper: '#fffdf5',
-  ink: '#111318',
-  navy: '#171d35',
-  muted: '#74766f',
-  subtle: '#dedfd3',
-  green: '#1e7654',
-  greenDark: '#145238',
-  teal: '#2c6370',
-  mint: '#dff2e8',
-  blue: '#3b82f6',
-  amber: '#f59e0b',
-  rose: '#ffe3dc',
-  error: '#c2413b',
-  success: '#1c7c55',
-};
+import {
+  BrandMark,
+  Button,
+  Card,
+  ChipGroup,
+  FeatureCard,
+  Field,
+  Icon,
+  Inset,
+  Pill,
+  Row,
+  SegmentedTabs,
+  Stack,
+  Timeline,
+  Txt,
+} from '../../ui/components';
+import { colors, radii, shadows, space, webOnly } from '../../ui/theme';
+import { API_BASE, API_ORIGIN } from '../../ui/config';
 
 const initialAuthState = {
   role: 'student',
@@ -41,8 +36,9 @@ const initialAuthState = {
 
 export default function Login({ onLoginSuccess }) {
   const { width } = useWindowDimensions();
-  const isWide = width >= 920;
-  const isTablet = width >= 720;
+  const isWide = width >= 1060;
+  const isPhone = width < 640;
+  const isDesktop = width >= 1180;
   const [authMode, setAuthMode] = useState('login');
   const [authState, setAuthState] = useState(initialAuthState);
   const [name, setName] = useState('');
@@ -52,7 +48,6 @@ export default function Login({ onLoginSuccess }) {
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [isOtpVerified, setIsOtpVerified] = useState(false);
-  const [securePassword, setSecurePassword] = useState(true);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [focusedField, setFocusedField] = useState('');
   const [touched, setTouched] = useState({});
@@ -116,32 +111,11 @@ export default function Login({ onLoginSuccess }) {
     }));
   }
 
-  function useStudentDemo() {
-    setAuthMode('login');
-    updateRole('student');
-    setEmail('');
-    setPassword('');
-    setAuthState((current) => ({
-      ...current,
-      status: 'error',
-      error: 'Demo logins are disabled for students. Please sign up or log in with your registered account.',
-      message: '',
-    }));
-  }
 
-  function useRecruiterDemo() {
-    setAuthMode('login');
-    updateRole('recruiter');
-    setEmail('recruiter@techcorp.com');
-    setPassword('recruiter123');
-  }
 
-  function useAdminDemo() {
-    setAuthMode('login');
-    updateRole('admin');
-    setEmail('admin@skillsetu.com');
-    setPassword('admin123');
-  }
+
+
+
 
   function formatErrorMessage(detail, fallback) {
     if (!detail) return fallback;
@@ -190,35 +164,7 @@ export default function Login({ onLoginSuccess }) {
     setRecruiterErrors({});
   }
 
-  function handleGoogleLogin() {
-    setAuthState((current) => ({
-      ...current,
-      status: 'loading',
-      error: '',
-      message: '',
-    }));
 
-    setTimeout(() => {
-      setAuthState((current) => ({
-        ...current,
-        status: 'success',
-        error: '',
-        message:
-          authMode === 'signup'
-            ? 'Google signup is ready for your SkillSetu account.'
-            : 'Google sign in completed.',
-      }));
-      if (onLoginSuccess) {
-        setTimeout(() => {
-          onLoginSuccess({
-            role: authState.role,
-            email: email.trim() || 'google.user@skillsetu.com',
-            name: name.trim() || 'Google User',
-          });
-        }, 800);
-      }
-    }, 900);
-  }
 
   async function handleSendOtp() {
     setTouched((current) => ({ ...current, email: true }));
@@ -241,7 +187,7 @@ export default function Login({ onLoginSuccess }) {
     }));
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/student/send-otp', {
+      const response = await fetch(`${API_BASE}/student/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),
@@ -256,7 +202,7 @@ export default function Login({ onLoginSuccess }) {
           ...current,
           status: 'success',
           error: '',
-          message: `OTP sent to ${email.trim()} from abhoge5@gmail.com.`,
+          message: `OTP sent to ${email.trim()}.`,
         }));
       } else {
         setAuthState((current) => ({
@@ -270,7 +216,7 @@ export default function Login({ onLoginSuccess }) {
       setAuthState((current) => ({
         ...current,
         status: 'error',
-        error: 'Could not connect to backend server (http://127.0.0.1:8000).',
+        error: `Could not connect to backend server (${API_ORIGIN}).`,
         message: '',
       }));
     }
@@ -295,7 +241,7 @@ export default function Login({ onLoginSuccess }) {
     }));
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/student/verify-otp', {
+      const response = await fetch(`${API_BASE}/student/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), otp: otp.trim() }),
@@ -386,7 +332,7 @@ export default function Login({ onLoginSuccess }) {
     }));
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/recruiter/register', {
+      const response = await fetch(`${API_BASE}/recruiter/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -414,7 +360,7 @@ export default function Login({ onLoginSuccess }) {
         // DO NOT call onLoginSuccess
         // Switch to signin view after showing message so recruiter can log in after approval
         setTimeout(() => {
-          setAuthMode('signin');
+          setAuthMode('login');
         }, 3500);
       } else {
         setAuthState((current) => ({
@@ -447,7 +393,7 @@ export default function Login({ onLoginSuccess }) {
     // 1. Admin Authentication via PostgreSQL
     if (authState.role === 'admin' || cleanEmail.startsWith('admin@')) {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/v1/admin/login', {
+        const response = await fetch(`${API_BASE}/admin/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -494,7 +440,7 @@ export default function Login({ onLoginSuccess }) {
 
     if (authState.role === 'recruiter') {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/v1/recruiter/login', {
+        const response = await fetch(`${API_BASE}/recruiter/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -548,7 +494,7 @@ export default function Login({ onLoginSuccess }) {
     }));
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/student/login', {
+      const response = await fetch(`${API_BASE}/student/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password: password.trim() }),
@@ -645,7 +591,7 @@ export default function Login({ onLoginSuccess }) {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/student/register', {
+      const response = await fetch(`${API_BASE}/student/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -687,539 +633,413 @@ export default function Login({ onLoginSuccess }) {
     }
   }
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={[
-            styles.page,
-            !isTablet && styles.pageCompact,
+  const isAdminRole = authState.role === 'admin';
+  const roleOptions = isSignup
+    ? [
+        { id: 'student', label: 'Student', icon: 'GraduationCap' },
+        { id: 'recruiter', label: 'Recruiter', icon: 'Building' },
+      ]
+    : [
+        { id: 'student', label: 'Student', icon: 'GraduationCap' },
+        { id: 'recruiter', label: 'Recruiter', icon: 'Building' },
+        { id: 'admin', label: 'Admin', icon: 'ShieldCheck' },
+      ];
+
+  const heading = isSignup
+    ? isRecruiter
+      ? 'Hire with SkillSetu'
+      : 'Create your account'
+    : 'Welcome back';
+  const subheading = isSignup
+    ? isRecruiter
+      ? 'Register your organization. An admin verifies every recruiter account.'
+      : 'Verify your email, then start building your career roadmap.'
+    : 'Sign in to continue your journey.';
+
+  const blurAndTouch = (field) => () => setTouched((c) => ({ ...c, [field]: true }));
+
+  const authCard = (
+    <Card padding={isPhone ? space.lg : space.xxl} style={[shadows.raised, { width: '100%', maxWidth: 480, alignSelf: 'center' }]}>
+      <Stack gap={space.lg}>
+        <SegmentedTabs
+          options={[
+            { id: 'login', label: 'Sign in' },
+            { id: 'signup', label: 'Create account' },
           ]}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={[styles.card, !isWide && styles.cardStacked]}>
-            <View style={[styles.leftPanel, !isWide && styles.fullPanel]}>
-              <Brand />
+          value={isSignup ? 'signup' : 'login'}
+          onChange={(m) => {
+            if (m === 'signup' && authState.role === 'admin') updateRole('student');
+            switchAuthMode(m);
+          }}
+          fill
+          style={{ alignSelf: 'stretch' }}
+        />
 
-              <View
-                style={[
-                  styles.formWrap,
-                  isSignup && styles.formSignup,
-                  !isTablet && styles.formCompact,
-                ]}
-              >
-                <Text style={styles.title}>
-                  {!isSignup
-                    ? 'Welcome to SkillSetu'
-                    : isRecruiter
-                      ? 'Company Details'
-                      : 'Sign up to start your career journey'}
-                </Text>
-                <Text style={styles.subtitle}>
-                  {!isSignup
-                    ? 'Sign in to continue your career journey'
-                    : isRecruiter
-                      ? 'Connect with skilled candidates and find the right talent for your organization.'
-                      : 'Sign up to start your career journey'}
-                </Text>
+        <Stack gap={4}>
+          <Txt variant="h1" tone="ink">{heading}</Txt>
+          <Txt variant="body" tone="muted">{subheading}</Txt>
+        </Stack>
 
-                <View style={styles.roleRow}>
-                  <RoleOption
-                    label="As a Student"
-                    selected={authState.role === 'student'}
-                    onPress={() => updateRole('student')}
-                  />
-                  <RoleOption
-                    label="As a Recruiter"
-                    selected={authState.role === 'recruiter'}
-                    onPress={() => updateRole('recruiter')}
-                  />
-                  <RoleOption
-                    label="As Admin"
-                    selected={authState.role === 'admin'}
-                    onPress={() => updateRole('admin')}
-                  />
-                </View>
-
-                {/* Quick Demo Credentials Box */}
-                {!isSignup && (
-                  <View style={styles.demoBox}>
-                    <Text style={styles.demoTitle}>💡 Quick Demo Credentials:</Text>
-                    <View style={styles.demoButtonsRow}>
-                      <Pressable
-                        onPress={useStudentDemo}
-                        style={({ pressed }) => [
-                          styles.demoBtn,
-                          authState.role === 'student' && styles.demoBtnActive,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text style={styles.demoBtnRole}>🎓 Student</Text>
-                        <Text style={styles.demoBtnEmail}>student@skillsetu.com</Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={useRecruiterDemo}
-                        style={({ pressed }) => [
-                          styles.demoBtn,
-                          authState.role === 'recruiter' && styles.demoBtnActiveRecruiter,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text style={styles.demoBtnRole}>🏢 Recruiter</Text>
-                        <Text style={styles.demoBtnEmail}>recruiter@techcorp.com</Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={useAdminDemo}
-                        style={({ pressed }) => [
-                          styles.demoBtn,
-                          authState.role === 'admin' && styles.demoBtnActiveRecruiter,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text style={styles.demoBtnRole}>🔑 Admin</Text>
-                        <Text style={styles.demoBtnEmail}>admin@skillsetu.com</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
-
-                {authState.role !== 'recruiter' && (
-                  <>
-                    <Pressable
-                      disabled={isLoading}
-                      onPress={handleGoogleLogin}
-                      style={({ pressed }) => [
-                        styles.socialButton,
-                        pressed && !isLoading && styles.pressed,
-                        isLoading && styles.disabledButton,
-                      ]}
-                    >
-                      <GoogleIcon />
-                      <Text style={styles.socialText}>
-                        {isSignup ? 'Sign up with Google' : 'Continue with Google'}
-                      </Text>
-                    </Pressable>
-
-                    <View style={styles.dividerRow}>
-                      <View style={styles.divider} />
-                      <Text style={styles.orText}>OR</Text>
-                      <View style={styles.divider} />
-                    </View>
-                  </>
-                )}
-
-                {isRecruiter ? (
-                  <RecruiterSignup
-                    step={recruiterStep}
-                    errors={recruiterErrors}
-                    name={name}
-                    email={email}
-                    phone={phone}
-                    password={password}
-                    confirmPassword={confirmPassword}
-                    companyName={companyName}
-                    companyWebsite={companyWebsite}
-                    orgType={orgType}
-                    industry={industry}
-                    companySize={companySize}
-                    orgLocation={orgLocation}
-                    officialEmail={officialEmail}
-                    companyDomain={companyDomain}
-                    registrationDoc={registrationDoc}
-                    focusedField={focusedField}
-                    isLoading={isLoading}
-                    orgTypeOptions={ORG_TYPES}
-                    onName={(value) => {
-                      setName(value);
-                      resetFeedback();
-                    }}
-                    onEmail={(value) => {
-                      setEmail(value);
-                      resetFeedback();
-                    }}
-                    onPhone={(value) => {
-                      setPhone(value);
-                      resetFeedback();
-                    }}
-                    onPassword={(value) => {
-                      setPassword(value);
-                      resetFeedback();
-                    }}
-                    onConfirmPassword={(value) => {
-                      setConfirmPassword(value);
-                      resetFeedback();
-                    }}
-                    onCompanyName={(value) => {
-                      setCompanyName(value);
-                      resetFeedback();
-                    }}
-                    onCompanyWebsite={(value) => {
-                      setCompanyWebsite(value);
-                      resetFeedback();
-                    }}
-                    onOrgType={setOrgType}
-                    onIndustry={(value) => {
-                      setIndustry(value);
-                      resetFeedback();
-                    }}
-                    onCompanySize={setCompanySize}
-                    onOrgLocation={(value) => {
-                      setOrgLocation(value);
-                      resetFeedback();
-                    }}
-                    onOfficialEmail={(value) => {
-                      setOfficialEmail(value);
-                      resetFeedback();
-                    }}
-                    onCompanyDomain={(value) => {
-                      setCompanyDomain(value);
-                      resetFeedback();
-                    }}
-                    onRegistrationDoc={(value) => {
-                      setRegistrationDoc(value);
-                      resetFeedback();
-                    }}
-                    onFocus={(value) => setFocusedField(value)}
-                    onBlur={() => setFocusedField('')}
-                    onNext={handleRecruiterNext}
-                    onBack={handleRecruiterBack}
-                    onSubmit={handleRecruiterSubmit}
-                  />
-                ) : (
-                  <>
-                    {isSignup && (
-                      <>
-                        <FieldLabel text="Full Name" />
-                        <View
-                          style={[
-                            styles.inputBox,
-                            focusedField === 'name' && styles.inputFocused,
-                            errors.name && styles.inputError,
-                          ]}
-                        >
-                          <Text style={styles.fieldIcon}>N</Text>
-                          <TextInput
-                            value={name}
-                            onChangeText={(value) => {
-                              setName(value);
-                              resetFeedback();
-                            }}
-                            onFocus={() => setFocusedField('name')}
-                            onBlur={() => {
-                              setFocusedField('');
-                              setTouched((current) => ({
-                                ...current,
-                                name: true,
-                              }));
-                            }}
-                            style={styles.input}
-                            placeholder="Full Name"
-                            placeholderTextColor="#9a9d94"
-                            autoCapitalize="words"
-                            editable={!isLoading}
-                          />
-                        </View>
-                        {!!errors.name && (
-                          <Text style={styles.errorText}>{errors.name}</Text>
-                        )}
-                      </>
-                    )}
-
-                    <FieldLabel text="Email Address" />
-                    <View
-                      style={[
-                        styles.inputBox,
-                        isSignup && styles.inputWithButton,
-                        focusedField === 'email' && styles.inputFocused,
-                        errors.email && styles.inputError,
-                      ]}
-                    >
-                      <Text style={styles.fieldIcon}>@</Text>
-                      <TextInput
-                        value={email}
-                        onChangeText={(value) => {
-                          setEmail(value);
-                          resetFeedback();
-                        }}
-                        onFocus={() => setFocusedField('email')}
-                        onBlur={() => {
-                          setFocusedField('');
-                          setTouched((current) => ({
-                            ...current,
-                            email: true,
-                          }));
-                        }}
-                        style={styles.input}
-                        placeholder="Email Address"
-                        placeholderTextColor="#9a9d94"
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        editable={!isLoading}
-                      />
-                      {isSignup && (
-                        <Pressable
-                          disabled={isLoading}
-                          onPress={handleSendOtp}
-                          style={({ pressed }) => [
-                            styles.otpButton,
-                            pressed && !isLoading && styles.pressed,
-                            isLoading && styles.disabledButton,
-                          ]}
-                        >
-                          <Text style={styles.otpButtonText}>OTP</Text>
-                        </Pressable>
-                      )}
-                    </View>
-                    {!!errors.email && (
-                      <Text style={styles.errorText}>{errors.email}</Text>
-                    )}
-
-                    {isSignup && otpSent && (
-                      <>
-                        <FieldLabel text="OTP" />
-                        <View
-                          style={[
-                            styles.inputBox,
-                            focusedField === 'otp' && styles.inputFocused,
-                          ]}
-                        >
-                          <Text style={styles.fieldIcon}>#</Text>
-                          <TextInput
-                            value={otp}
-                            onChangeText={(value) => {
-                              setOtp(value);
-                              resetFeedback();
-                            }}
-                            onFocus={() => setFocusedField('otp')}
-                            onBlur={() => setFocusedField('')}
-                            style={styles.input}
-                            placeholder="Enter the OTP sent to your email"
-                            placeholderTextColor="#9a9d94"
-                            keyboardType="number-pad"
-                            editable={!isLoading}
-                          />
-                          <Pressable
-                            disabled={isLoading}
-                            onPress={handleVerifyOtp}
-                            style={({ pressed }) => [
-                              styles.otpButton,
-                              pressed && !isLoading && styles.pressed,
-                              isLoading && styles.disabledButton,
-                            ]}
-                          >
-                            <Text style={styles.otpButtonText}>Verify</Text>
-                          </Pressable>
-                        </View>
-                      </>
-                    )}
-
-                    <View style={styles.passwordHeader}>
-                      <FieldLabel text="Password" />
-                      <Pressable>
-                        <Text style={styles.forgot}>Forgot password?</Text>
-                      </Pressable>
-                    </View>
-                    <View
-                      style={[
-                        styles.inputBox,
-                        focusedField === 'password' && styles.inputFocused,
-                        errors.password && styles.inputError,
-                      ]}
-                    >
-                      <Text style={styles.fieldIcon}>#</Text>
-                      <TextInput
-                        value={password}
-                        onChangeText={(value) => {
-                          setPassword(value);
-                          resetFeedback();
-                        }}
-                        onFocus={() => setFocusedField('password')}
-                        onBlur={() => {
-                          setFocusedField('');
-                          setTouched((current) => ({
-                            ...current,
-                            password: true,
-                          }));
-                        }}
-                        style={styles.input}
-                        placeholder="Enter your password"
-                        placeholderTextColor="#9a9d94"
-                        secureTextEntry={securePassword}
-                        editable={!isLoading}
-                      />
-                      <Pressable
-                        hitSlop={12}
-                        disabled={isLoading}
-                        onPress={() =>
-                          setSecurePassword((current) => !current)
-                        }
-                      >
-                        <Text style={styles.eyeText}>
-                          {securePassword ? 'Show' : 'Hide'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                    {!!errors.password && (
-                      <Text style={styles.errorText}>{errors.password}</Text>
-                    )}
-
-                    {isSignup && (
-                      <>
-                        <FieldLabel text="Number" />
-                        <View
-                          style={[
-                            styles.inputBox,
-                            focusedField === 'phone' && styles.inputFocused,
-                            errors.phone && styles.inputError,
-                          ]}
-                        >
-                          <Text style={styles.fieldIcon}>+</Text>
-                          <TextInput
-                            value={phone}
-                            onChangeText={(value) => {
-                              setPhone(value);
-                              resetFeedback();
-                            }}
-                            onFocus={() => setFocusedField('phone')}
-                            onBlur={() => {
-                              setFocusedField('');
-                              setTouched((current) => ({
-                                ...current,
-                                phone: true,
-                              }));
-                            }}
-                            style={styles.input}
-                            placeholder="Enter your phone number"
-                            placeholderTextColor="#9a9d94"
-                            keyboardType="phone-pad"
-                            editable={!isLoading}
-                          />
-                        </View>
-                        {!!errors.phone && (
-                          <Text style={styles.errorText}>{errors.phone}</Text>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-
-                {!!authState.error && (
-                  <View style={styles.messageError}>
-                    <Text style={styles.messageErrorText}>
-                      {authState.error}
-                    </Text>
-                  </View>
-                )}
-
-                {authState.status === 'success' && (
-                  <View style={styles.messageSuccess}>
-                    <Text style={styles.messageSuccessText}>
-                      {authState.message ||
-                        `Signed in as ${authState.role === 'student'
-                          ? 'Student / Job Seeker'
-                          : 'Recruiter / Employer'
-                        }.`}
-                    </Text>
-                  </View>
-                )}
-
-                {isRecruiter && recruiterStep > 1 && (
-                  <Pressable
-                    disabled={isLoading}
-                    onPress={handleRecruiterBack}
-                    style={({ pressed }) => [
-                      styles.backButton,
-                      pressed && !isLoading && styles.pressed,
-                      isLoading && styles.disabledButton,
-                    ]}
-                  >
-                    <Text style={styles.backButtonText}>Back</Text>
-                  </Pressable>
-                )}
-
+        <Stack gap={8}>
+          <Txt variant="overline" tone="subtle">I am a</Txt>
+          <Row gap={8} wrap>
+            {roleOptions.map((r) => {
+              const active = authState.role === r.id;
+              return (
                 <Pressable
-                  disabled={isLoading}
-                  onPress={
-                    isRecruiter
-                      ? recruiterStep < 3
-                        ? handleRecruiterNext
-                        : handleRecruiterSubmit
-                      : isSignup
-                        ? handleCreateAccount
-                        : handleSignIn
-                  }
-                  style={({ pressed }) => [
-                    styles.signButton,
-                    pressed && !isLoading && styles.signButtonPressed,
-                    isLoading && styles.disabledSignButton,
+                  key={r.id}
+                  onPress={() => updateRole(r.id)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: active }}
+                  style={({ hovered }) => [
+                    styles.roleTile,
+                    webOnly({ cursor: 'pointer', transitionDuration: '160ms' }),
+                    active ? styles.roleTileActive : hovered ? { backgroundColor: colors.surfaceSunken } : null,
                   ]}
                 >
-                  {isLoading ? (
-                    <ActivityIndicator color="#fff5a4" />
-                  ) : (
-                    <Text style={styles.signButtonText}>
-                      {isRecruiter
-                        ? recruiterStep < 3
-                          ? `Continue to Step ${recruiterStep + 1}`
-                          : 'Create Recruiter Account'
-                        : isSignup
-                          ? 'Sign Up'
-                          : 'Login'}
-                    </Text>
-                  )}
+                  <Icon name={r.icon} size={17} color={active ? '#fff' : colors.text} />
+                  <Txt variant="small" weight={600} color={active ? '#fff' : colors.text}>{r.label}</Txt>
                 </Pressable>
+              );
+            })}
+          </Row>
+        </Stack>
 
-                <View style={styles.signupRow}>
-                  <Text style={styles.accountText}>
-                    {isSignup
-                      ? 'Already have an account?'
-                      : "Dont have an account?"}
-                  </Text>
-                  <Pressable
-                    onPress={() => switchAuthMode(isSignup ? 'login' : 'signup')}
-                  >
-                    <Text style={styles.signupText}>
-                      {isSignup ? ' Login' : ' Sign Up'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
+        {isRecruiter ? (
+          <RecruiterSignupForm
+            step={recruiterStep}
+            errors={recruiterErrors}
+            values={{ name, email, phone, password, confirmPassword, companyName, companyWebsite, orgType, industry, companySize, orgLocation, officialEmail, companyDomain, registrationDoc }}
+            setters={{
+              name: setName, email: setEmail, phone: setPhone, password: setPassword, confirmPassword: setConfirmPassword,
+              companyName: setCompanyName, companyWebsite: setCompanyWebsite, orgType: setOrgType, industry: setIndustry,
+              companySize: setCompanySize, orgLocation: setOrgLocation, officialEmail: setOfficialEmail,
+              companyDomain: setCompanyDomain, registrationDoc: setRegistrationDoc,
+            }}
+            orgTypeOptions={ORG_TYPES}
+            isLoading={isLoading}
+            onNext={handleRecruiterNext}
+            onBack={handleRecruiterBack}
+            onSubmit={handleRecruiterSubmit}
+            onAnyChange={resetFeedback}
+          />
+        ) : (
+          <Stack gap={space.md}>
+            {isSignup ? (
+              <Field
+                label="Full name"
+                icon="User"
+                value={name}
+                onChangeText={(v) => { setName(v); resetFeedback(); }}
+                onBlur={blurAndTouch('name')}
+                placeholder="Your full name"
+                autoCapitalize="words"
+                editable={!isLoading}
+                error={errors.name}
+              />
+            ) : null}
+
+            <Field
+              label={isAdminRole ? 'Admin email' : 'Email'}
+              icon="Mail"
+              value={email}
+              onChangeText={(v) => {
+                setEmail(v);
+                resetFeedback();
+                if (isSignup && (otpSent || isOtpVerified)) { setOtpSent(false); setIsOtpVerified(false); setOtp(''); }
+              }}
+              onBlur={blurAndTouch('email')}
+              placeholder="you@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!isLoading}
+              error={errors.email}
+              right={
+                isSignup ? (
+                  isOtpVerified ? (
+                    <Pill label="Verified" tone="success" icon="CircleCheck" size="sm" />
+                  ) : (
+                    <Button label={otpSent ? 'Resend' : 'Send OTP'} size="sm" variant="primary" onPress={handleSendOtp} disabled={isLoading} />
+                  )
+                ) : null
+              }
+            />
+
+            {isSignup && otpSent && !isOtpVerified ? (
+              <Inset tone="info" padding={space.md}>
+                <Stack gap={space.sm}>
+                  <Row gap={8}>
+                    <Icon name="Mail" size={16} color={colors.skyInk} />
+                    <Txt variant="small" weight={600} color={colors.skyInk}>Enter the code sent to {email.trim()}</Txt>
+                  </Row>
+                  <Row gap={8} align="flex-start">
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        icon="ShieldCheck"
+                        value={otp}
+                        onChangeText={(v) => { setOtp(v); resetFeedback(); }}
+                        placeholder="6-digit code"
+                        keyboardType="number-pad"
+                        editable={!isLoading}
+                      />
+                    </View>
+                    <Button label="Verify" onPress={handleVerifyOtp} disabled={isLoading} style={{ height: 50 }} />
+                  </Row>
+                </Stack>
+              </Inset>
+            ) : null}
+
+            <Field
+              label="Password"
+              icon="Lock"
+              value={password}
+              onChangeText={(v) => { setPassword(v); resetFeedback(); }}
+              onBlur={blurAndTouch('password')}
+              placeholder={isSignup ? 'Create a password' : 'Enter your password'}
+              secure
+              editable={!isLoading}
+              error={errors.password}
+              onSubmitEditing={!isSignup ? handleSignIn : undefined}
+            />
+
+            {isSignup ? (
+              <Field
+                label="Phone"
+                icon="Phone"
+                value={phone}
+                onChangeText={(v) => { setPhone(v); resetFeedback(); }}
+                onBlur={blurAndTouch('phone')}
+                placeholder="+91 98765 43210"
+                keyboardType="phone-pad"
+                editable={!isLoading}
+                error={errors.phone}
+              />
+            ) : null}
+          </Stack>
+        )}
+
+        <Feedback state={authState} />
+
+        {!isRecruiter ? (
+          <Button
+            label={isSignup ? 'Create account' : 'Sign in'}
+            iconRight="ArrowRight"
+            size="lg"
+            block
+            loading={isLoading}
+            onPress={isSignup ? handleCreateAccount : handleSignIn}
+          />
+        ) : null}
+
+        <Row justify="center" gap={6}>
+          <Txt variant="small" tone="muted">{isSignup ? 'Already have an account?' : 'New to SkillSetu?'}</Txt>
+          <Pressable onPress={() => switchAuthMode(isSignup ? 'login' : 'signup')} style={webOnly({ cursor: 'pointer' })}>
+            <Txt variant="small" weight={700} tone="ink" style={{ textDecorationLine: 'underline' }}>
+              {isSignup ? 'Sign in' : 'Create an account'}
+            </Txt>
+          </Pressable>
+        </Row>
+      </Stack>
+    </Card>
+  );
+
+  return (
+    <View style={styles.root}>
+      <View style={styles.frame}>
+        <View style={[styles.bar, isPhone ? { paddingHorizontal: space.md } : null]}>
+          <BrandMark />
+          <Row gap={8}>
+            {!isPhone ? <Txt variant="small" tone="inverseMuted">Career intelligence for students & recruiters</Txt> : null}
+          </Row>
+        </View>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheet}>
+          <ScrollView contentContainerStyle={[styles.scroll, isWide ? styles.scrollWide : null, isPhone ? { padding: space.md } : null]}>
+            {isWide ? <Showcase /> : null}
+            <View style={isWide ? { width: 480 } : { width: '100%' }}>{authCard}</View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feedback banner for auth status
+// ---------------------------------------------------------------------------
+function Feedback({ state }) {
+  if (state.status === 'error' && state.error) {
+    return (
+      <Inset tone="danger" padding={space.sm}>
+        <Row gap={8} align="flex-start">
+          <Icon name="CircleAlert" size={17} color="#B4232A" />
+          <Txt variant="small" weight={500} color="#B4232A" style={{ flex: 1 }}>{state.error}</Txt>
+        </Row>
+      </Inset>
+    );
+  }
+  if (state.status === 'success' && state.message) {
+    return (
+      <Inset tone="success" padding={space.sm}>
+        <Row gap={8} align="flex-start">
+          <Icon name="CircleCheck" size={17} color={colors.mintInk} />
+          <Txt variant="small" weight={500} color={colors.mintInk} style={{ flex: 1 }}>{state.message}</Txt>
+        </Row>
+      </Inset>
+    );
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Recruiter 3-step signup
+// ---------------------------------------------------------------------------
+const RECRUITER_STEPS = [
+  { title: 'About you', icon: 'User' },
+  { title: 'Organization', icon: 'Building' },
+  { title: 'Verification', icon: 'ShieldCheck' },
+];
+
+function RecruiterSignupForm({ step, errors, values, setters, orgTypeOptions, isLoading, onNext, onBack, onSubmit, onAnyChange }) {
+  const bind = (key) => ({
+    value: values[key],
+    onChangeText: (v) => { setters[key](v); onAnyChange(); },
+    editable: !isLoading,
+    error: errors[key],
+  });
+  return (
+    <Stack gap={space.md}>
+      <Row gap={6}>
+        {RECRUITER_STEPS.map((s, i) => {
+          const n = i + 1;
+          const done = n < step;
+          const active = n === step;
+          return (
+            <View key={s.title} style={[styles.stepChip, active ? { backgroundColor: colors.ink } : done ? { backgroundColor: colors.mint } : null]}>
+              <Icon name={done ? 'Check' : s.icon} size={14} color={active ? '#fff' : done ? colors.mintInk : colors.textMuted} />
+              <Txt variant="caption" weight={600} color={active ? '#fff' : done ? colors.mintInk : colors.textMuted} numberOfLines={1}>
+                {s.title}
+              </Txt>
             </View>
+          );
+        })}
+      </Row>
 
-            <View style={[styles.rightPanel, !isWide && styles.rightStacked]}>
-              <View style={styles.quoteBlock}>
-                <Text style={styles.quoteMark}>''</Text>
-                <Text style={styles.quoteText}>
-                  SkillSetu helped me understand exactly which skills I was
-                  missing and guided me toward opportunities that matched my
-                  career goals.
-                </Text>
+      {step === 1 ? (
+        <>
+          <Field label="Full name" icon="User" placeholder="Your full name" autoCapitalize="words" {...bind('name')} />
+          <Field label="Work email" icon="Mail" placeholder="you@company.com" keyboardType="email-address" autoCapitalize="none" {...bind('email')} />
+          <Field label="Phone" icon="Phone" placeholder="+91 98765 43210" keyboardType="phone-pad" {...bind('phone')} />
+          <Field label="Password" icon="Lock" placeholder="Create a password" secure {...bind('password')} />
+          <Field label="Confirm password" icon="Lock" placeholder="Re-enter your password" secure {...bind('confirmPassword')} />
+        </>
+      ) : null}
 
-                <View style={styles.personRow}>
-                  <View style={styles.avatar}>
-                    <View style={styles.avatarHead} />
-                    <View style={styles.avatarBody} />
+      {step === 2 ? (
+        <>
+          <Field label="Company / organization name" icon="Building" placeholder="Company name" autoCapitalize="words" {...bind('companyName')} />
+          <Field label="Company website" icon="Globe" placeholder="https://company.com" autoCapitalize="none" {...bind('companyWebsite')} />
+          <Stack gap={6}>
+            <Txt variant="small" weight={600} tone="ink">Organization type</Txt>
+            <ChipGroup options={orgTypeOptions} value={values.orgType} multiple={false} onChange={(v) => { setters.orgType(v); onAnyChange(); }} />
+            {errors.orgType ? <Txt variant="caption" tone="danger">{errors.orgType}</Txt> : null}
+          </Stack>
+          <Field label="Industry" icon="Briefcase" placeholder="e.g. Technology, Finance" {...bind('industry')} />
+          <Stack gap={6}>
+            <Txt variant="small" weight={600} tone="ink">Company size</Txt>
+            <ChipGroup options={['1-10', '11-50', '51-200', '201-500', '500+']} value={values.companySize} multiple={false} tone="info" onChange={(v) => { setters.companySize(v); onAnyChange(); }} />
+          </Stack>
+          <Field label="Location" icon="MapPin" placeholder="City, Country" autoCapitalize="words" {...bind('orgLocation')} />
+        </>
+      ) : null}
+
+      {step === 3 ? (
+        <>
+          <Txt variant="small" tone="muted">We use these details to verify your organization before approving the account.</Txt>
+          <Field label="Official work email" icon="Mail" placeholder="you@company.com" keyboardType="email-address" autoCapitalize="none" {...bind('officialEmail')} />
+          <Field label="Company website / domain" icon="Globe" placeholder="https://company.com" autoCapitalize="none" {...bind('companyDomain')} />
+          <Field label="Registration document (optional)" icon="FileText" placeholder="Paste a document link or reference" autoCapitalize="none" {...bind('registrationDoc')} />
+        </>
+      ) : null}
+
+      <Row gap={8} justify="space-between">
+        {step > 1 ? <Button label="Back" variant="secondary" icon="ArrowLeft" onPress={onBack} disabled={isLoading} /> : <View />}
+        {step < 3 ? (
+          <Button label="Continue" iconRight="ArrowRight" onPress={onNext} disabled={isLoading} />
+        ) : (
+          <Button label="Submit for approval" iconRight="Send" onPress={onSubmit} loading={isLoading} />
+        )}
+      </Row>
+    </Stack>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Showcase — left column illustrating the SkillSetu journey (reference layout).
+// ---------------------------------------------------------------------------
+function Showcase() {
+  return (
+    <View style={{ flex: 1, maxWidth: 620, gap: space.xl }}>
+      <Stack gap={10}>
+        <Pill label="Built for students & recruiters" tone="success" icon="Sparkles" />
+        <Txt variant="display" tone="ink" style={{ fontSize: 44, lineHeight: 52 }}>
+          Your career,{'\n'}mapped step by step.
+        </Txt>
+        <Txt variant="body" tone="muted" style={{ maxWidth: 460, fontSize: 16, lineHeight: 24 }}>
+          Verify your skills, close the gaps with curated learning, and land internships and scholarships matched to you.
+        </Txt>
+      </Stack>
+
+      <Timeline
+        gap={space.md}
+        items={[
+          {
+            key: 'profile',
+            done: true,
+            content: (
+              <Card padding={space.lg}>
+                <Row justify="space-between" align="flex-start">
+                  <Stack gap={4} style={{ flex: 1 }}>
+                    <Txt variant="h3" tone="ink">Build your profile</Txt>
+                    <Txt variant="small" tone="muted">Resume, education and GitHub analysed by AI.</Txt>
+                  </Stack>
+                  <Pill label="Step 1" tone="success" icon="CircleCheck" size="sm" />
+                </Row>
+              </Card>
+            ),
+          },
+          {
+            key: 'grow',
+            content: (
+              <FeatureCard tilt>
+                <Row justify="space-between" align="center" gap={space.md}>
+                  <Stack gap={4} style={{ flex: 1 }}>
+                    <Txt variant="h3" tone="ink">Close your skill gaps</Txt>
+                    <Txt variant="small" color={colors.lilacInk}>Personal learning paths, practice labs and an AI mentor.</Txt>
+                  </Stack>
+                  <View style={styles.playDisc}>
+                    <Icon name="Play" size={22} color={colors.ink} />
                   </View>
-                  <View>
-                    <Text style={styles.personName}>Aarav Sharma</Text>
-                    <Text style={styles.personRole}>
-                      Computer Science Student
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <CareerIllustration compact={!isWide} />
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+                </Row>
+              </FeatureCard>
+            ),
+          },
+          {
+            key: 'apply',
+            content: (
+              <Card padding={space.lg}>
+                <Row justify="space-between" align="flex-start">
+                  <Stack gap={4} style={{ flex: 1 }}>
+                    <Txt variant="h3" tone="ink">Apply with confidence</Txt>
+                    <Txt variant="small" tone="muted">Matched internships, scholarships and assessment rounds.</Txt>
+                  </Stack>
+                  <Pill label="Step 3" tone="neutral" icon="Clock" size="sm" />
+                </Row>
+              </Card>
+            ),
+          },
+        ]}
+      />
+    </View>
   );
 }
 
@@ -1231,1166 +1051,77 @@ function isValidPhone(value) {
   return /^[+]?[\d\s()-]{7,}$/.test(value.trim());
 }
 
-function Brand() {
-  return (
-    <View style={styles.brand}>
-      <View style={styles.logoMark}>
-        <View style={styles.bridgeDeck} />
-        <View style={styles.bridgePillarLeft} />
-        <View style={styles.bridgePillarRight} />
-        <View style={styles.logoNodeTop} />
-        <View style={styles.logoNodeLeft} />
-        <View style={styles.logoNodeRight} />
-      </View>
-      <Text style={styles.brandText}>SkillSetu</Text>
-    </View>
-  );
-}
-
-function RoleOption({ label, selected, onPress }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.roleOption, selected && styles.roleOptionActive]}
-    >
-      <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
-        {selected && <View style={styles.radioInner} />}
-      </View>
-      <Text style={[styles.roleText, selected && styles.roleTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <View style={styles.googleIcon}>
-      <Text style={styles.googleLetter}>G</Text>
-      <View style={[styles.googleDot, styles.googleDotRed]} />
-      <View style={[styles.googleDot, styles.googleDotYellow]} />
-      <View style={[styles.googleDot, styles.googleDotGreen]} />
-    </View>
-  );
-}
-
-function FieldLabel({ text }) {
-  return <Text style={styles.label}>{text}</Text>;
-}
-
-function RecruiterSignup(props) {
-  const {
-    step,
-    errors,
-    name,
-    email,
-    phone,
-    password,
-    confirmPassword,
-    companyName,
-    companyWebsite,
-    orgType,
-    industry,
-    companySize,
-    orgLocation,
-    officialEmail,
-    companyDomain,
-    registrationDoc,
-    focusedField,
-    isLoading,
-    orgTypeOptions,
-    onName,
-    onEmail,
-    onPhone,
-    onPassword,
-    onConfirmPassword,
-    onCompanyName,
-    onCompanyWebsite,
-    onOrgType,
-    onIndustry,
-    onCompanySize,
-    onOrgLocation,
-    onOfficialEmail,
-    onCompanyDomain,
-    onRegistrationDoc,
-    onFocus,
-    onBlur,
-    onNext,
-    onBack,
-    onSubmit,
-  } = props;
-
-  const steps = [
-    'Step 1 — Recruiter Information',
-    'Step 2 — Organization Information',
-    'Step 3 — Verification',
-  ];
-
-  function renderInput(icon, value, onChange, placeholder, field, extra = {}) {
-    return (
-      <>
-        <View
-          style={[
-            styles.inputBox,
-            focusedField === field && styles.inputFocused,
-            errors[field] && styles.inputError,
-          ]}
-        >
-          <Text style={styles.fieldIcon}>{icon}</Text>
-          <TextInput
-            value={value}
-            onChangeText={onChange}
-            onFocus={() => onFocus(field)}
-            onBlur={onBlur}
-            style={styles.input}
-            placeholder={placeholder}
-            placeholderTextColor="#9a9d94"
-            autoCapitalize="none"
-            editable={!isLoading}
-            {...extra}
-          />
-        </View>
-        {!!errors[field] && (
-          <Text style={styles.errorText}>{errors[field]}</Text>
-        )}
-      </>
-    );
-  }
-
-  return (
-    <>
-      <View style={styles.stepIndicator}>
-        <View style={styles.stepPill}>
-          <View style={[styles.stepDot, styles.stepDotActive]}>
-            <Text style={[styles.stepDotText, styles.stepDotTextActive]}>
-              {step}
-            </Text>
-          </View>
-          <Text style={[styles.stepLabel, styles.stepLabelActive]}>
-            {steps[step - 1]}
-          </Text>
-        </View>
-      </View>
-
-      {step === 1 && (
-        <>
-          <FieldLabel text="Full Name *" />
-          {renderInput('N', name, onName, 'Enter your full name', 'name', {
-            autoCapitalize: 'words',
-          })}
-
-          <FieldLabel text="Work Email *" />
-          {renderInput('@', email, onEmail, 'you@company.com', 'email', {
-            keyboardType: 'email-address',
-          })}
-
-          <FieldLabel text="'Phone Number'" />
-          {renderInput('+', phone, onPhone, 'Enter your phone number', 'phone', {
-            keyboardType: 'phone-pad',
-          })}
-
-          <FieldLabel text="Password *" />
-          <View
-            style={[
-              styles.inputBox,
-              focusedField === 'password' && styles.inputFocused,
-              errors.password && styles.inputError,
-            ]}
-          >
-            <Text style={styles.fieldIcon}>#</Text>
-            <TextInput
-              value={password}
-              onChangeText={onPassword}
-              onFocus={() => onFocus('password')}
-              onBlur={onBlur}
-              style={styles.input}
-              placeholder="Create a password"
-              placeholderTextColor="#9a9d94"
-              secureTextEntry
-              editable={!isLoading}
-            />
-          </View>
-          {!!errors.password && (
-            <Text style={styles.errorText}>{errors.password}</Text>
-          )}
-
-          <FieldLabel text="Confirm Password *" />
-          <View
-            style={[
-              styles.inputBox,
-              focusedField === 'confirmPassword' && styles.inputFocused,
-              errors.confirmPassword && styles.inputError,
-            ]}
-          >
-            <Text style={styles.fieldIcon}>#</Text>
-            <TextInput
-              value={confirmPassword}
-              onChangeText={onConfirmPassword}
-              onFocus={() => onFocus('confirmPassword')}
-              onBlur={onBlur}
-              style={styles.input}
-              placeholder="Re-enter your password"
-              placeholderTextColor="#9a9d94"
-              secureTextEntry
-              editable={!isLoading}
-            />
-          </View>
-          {!!errors.confirmPassword && (
-            <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-          )}
-        </>
-      )}
-
-      {step === 2 && (
-        <>
-          <FieldLabel text="Company / Organization Name *" />
-          {renderInput('C', companyName, onCompanyName, 'Enter company name', 'companyName', {
-            autoCapitalize: 'words',
-          })}
-
-          <FieldLabel text="Company Website" />
-          {renderInput('W', companyWebsite, onCompanyWebsite, 'https://company.com', 'companyWebsite')}
-
-          <FieldLabel text="Organization Type *" />
-          <ChipGroup
-            options={orgTypeOptions}
-            selected={orgType}
-            onSelect={onOrgType}
-            error={errors.orgType}
-          />
-
-          <FieldLabel text="Industry *" />
-          {renderInput('I', industry, onIndustry, 'e.g. Technology, Finance', 'industry')}
-
-          <FieldLabel text="Company Size *" />
-          <ChipGroup
-            options={['1-10', '11-50', '51-200', '201-500', '500+']}
-            selected={companySize}
-            onSelect={onCompanySize}
-            error={errors.companySize}
-          />
-
-          <FieldLabel text="Organization Location *" />
-          {renderInput('L', orgLocation, onOrgLocation, 'City, Country', 'orgLocation', {
-            autoCapitalize: 'words',
-          })}
-        </>
-      )}
-
-      {step === 3 && (
-        <>
-          <Text style={styles.verifyHint}>
-            Provide the details we need to verify your organization.
-          </Text>
-
-          <FieldLabel text="Official Work Email *" />
-          {renderInput(
-            '@',
-            officialEmail,
-            onOfficialEmail,
-            'you@company.com',
-            'officialEmail',
-            { keyboardType: 'email-address' }
-          )}
-
-          <FieldLabel text="Company Website / Domain *" />
-          {renderInput(
-            'W',
-            companyDomain,
-            onCompanyDomain,
-            'https://company.com',
-            'companyDomain'
-          )}
-
-          <FieldLabel text="Company Registration / Verification Document" />
-          {renderInput(
-            'F',
-            registrationDoc,
-            onRegistrationDoc,
-            'Paste document link or reference',
-            'registrationDoc'
-          )}
-        </>
-      )}
-    </>
-  );
-}
-
-function ChipGroup({ options, selected, onSelect, error }) {
-  return (
-    <>
-      <View style={styles.chipGroup}>
-        {options.map((option) => {
-          const active = selected === option;
-          return (
-            <Pressable
-              key={option}
-              onPress={() => onSelect(option)}
-              style={[styles.chip, active && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                {option}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      {!!error && <Text style={styles.errorText}>{error}</Text>}
-    </>
-  );
-}
-
-function CareerIllustration({ compact }) {
-  return (
-    <View style={[styles.illustration, compact && styles.illustrationCompact]}>
-      <View style={styles.growthCard}>
-        <View style={styles.cardTopLine} />
-        <View style={styles.barChart}>
-          <View style={[styles.bar, styles.barOne]} />
-          <View style={[styles.bar, styles.barTwo]} />
-          <View style={[styles.bar, styles.barThree]} />
-          <View style={[styles.bar, styles.barFour]} />
-        </View>
-        <Text style={styles.aiText}>AI</Text>
-      </View>
-
-      <View style={styles.personShape}>
-        <View style={styles.personHead} />
-        <View style={styles.personTorso} />
-      </View>
-
-      <View style={styles.connectionLineOne} />
-      <View style={styles.connectionLineTwo} />
-      <View style={styles.connectionLineThree} />
-      <View style={styles.connectionLineFour} />
-
-      <SkillNode label="Code" style={styles.nodeCode} />
-      <SkillNode label="AI" style={styles.nodeAi} />
-      <SkillNode label="CV" style={styles.nodeResume} />
-      <SkillNode label="Jobs" style={styles.nodeJobs} />
-      <SkillNode label="Talk" style={styles.nodeComm} />
-      <SkillNode label="Cert" style={styles.nodeCert} />
-
-      <View style={styles.arrowStem} />
-      <View style={styles.arrowHead} />
-      <View style={styles.pathBase} />
-    </View>
-  );
-}
-
-function SkillNode({ label, style }) {
-  return (
-    <View style={[styles.skillNode, style]}>
-      <Text style={styles.skillNodeText}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: COLORS.canvas,
+    backgroundColor: colors.frame,
+    ...webOnly({ height: '100vh' }),
   },
-  keyboardView: {
+  frame: {
     flex: 1,
-  },
-  page: {
-    flexGrow: 1,
-    backgroundColor: COLORS.canvas,
-    padding: 10,
-  },
-  pageCompact: {
-    padding: 8,
-  },
-  card: {
-    flex: 1,
-    width: '100%',
-    minHeight: 900,
-    alignSelf: 'center',
-    flexDirection: 'row',
+    backgroundColor: colors.frame,
     overflow: 'hidden',
-    borderRadius: 34,
-    backgroundColor: COLORS.paper,
-    shadowColor: '#071f14',
-    shadowOpacity: 0.18,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 8,
   },
-  cardStacked: {
-    minHeight: 0,
-    flexDirection: 'column',
-  },
-  leftPanel: {
-    width: '50%',
-    backgroundColor: COLORS.panel,
-    paddingHorizontal: 44,
-    paddingVertical: 34,
-  },
-  fullPanel: {
-    width: '100%',
-  },
-  rightPanel: {
-    flex: 1,
-    position: 'relative',
-    overflow: 'hidden',
-    backgroundColor: COLORS.paper,
-  },
-  rightStacked: {
-    minHeight: 470,
-  },
-  brand: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoMark: {
-    width: 34,
-    height: 34,
-    marginRight: 12,
-  },
-  bridgeDeck: {
-    position: 'absolute',
-    left: 4,
-    right: 4,
-    top: 15,
-    height: 5,
-    borderRadius: 4,
-    backgroundColor: COLORS.green,
-    transform: [{ rotate: '-7deg' }],
-  },
-  bridgePillarLeft: {
-    position: 'absolute',
-    left: 8,
-    top: 19,
-    width: 5,
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: COLORS.navy,
-  },
-  bridgePillarRight: {
-    position: 'absolute',
-    right: 8,
-    top: 19,
-    width: 5,
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: COLORS.navy,
-  },
-  logoNodeTop: {
-    position: 'absolute',
-    top: 3,
-    left: 12,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.amber,
-  },
-  logoNodeLeft: {
-    position: 'absolute',
-    bottom: 0,
-    left: 2,
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: COLORS.teal,
-  },
-  logoNodeRight: {
-    position: 'absolute',
-    right: 2,
-    bottom: 0,
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: COLORS.green,
-  },
-  brandText: {
-    color: COLORS.navy,
-    fontSize: 24,
-    fontWeight: '900',
-  },
-  formWrap: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    marginTop: 96,
-  },
-  formCompact: {
-    marginTop: 58,
-  },
-  title: {
-    color: COLORS.ink,
-    fontSize: 42,
-    fontWeight: '900',
-    lineHeight: 48,
-    textAlign: 'center',
-  },
-  subtitle: {
-    marginTop: 16,
-    color: COLORS.muted,
-    fontSize: 18,
-    lineHeight: 24,
-    textAlign: 'center',
-  },
-  roleRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: 14,
-    marginTop: 34,
-    marginBottom: 32,
-  },
-  roleOption: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
-    borderRadius: 24,
-    paddingHorizontal: 14,
-  },
-  roleOptionActive: {
-    backgroundColor: '#f8fbf6',
-    borderColor: '#caded2',
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderWidth: 2,
-    borderRadius: 11,
-    borderColor: COLORS.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  radioOuterActive: {
-    borderColor: COLORS.green,
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.green,
-  },
-  roleText: {
-    color: COLORS.ink,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  roleTextActive: {
-    color: COLORS.greenDark,
-  },
-  socialButton: {
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#eeeeea',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 28,
-    paddingHorizontal: 22,
-  },
-  pressed: {
-    transform: [{ scale: 0.99 }],
-    opacity: 0.88,
-  },
-  disabledButton: {
-    opacity: 0.72,
-  },
-  googleIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    marginRight: 15,
-  },
-  googleLetter: {
-    color: COLORS.blue,
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  googleDot: {
-    position: 'absolute',
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-  },
-  googleDotRed: {
-    top: 6,
-    right: 6,
-    backgroundColor: '#ea4335',
-  },
-  googleDotYellow: {
-    bottom: 7,
-    right: 7,
-    backgroundColor: '#fbbc05',
-  },
-  googleDotGreen: {
-    bottom: 6,
-    left: 7,
-    backgroundColor: '#34a853',
-  },
-  socialText: {
-    flex: 1,
-    color: COLORS.ink,
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginRight: 49,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.subtle,
-  },
-  orText: {
-    color: COLORS.muted,
-    fontSize: 15,
-    fontWeight: '700',
-    marginHorizontal: 22,
-  },
-  label: {
-    color: COLORS.ink,
-    fontSize: 17,
-    fontWeight: '800',
-    marginBottom: 10,
-  },
-  inputBox: {
-    height: 62,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 31,
-    borderWidth: 1,
-    borderColor: '#eeeeea',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 24,
-    marginBottom: 22,
-  },
-  inputFocused: {
-    borderColor: COLORS.green,
-    shadowColor: COLORS.green,
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  inputError: {
-    borderColor: COLORS.error,
-  },
-  fieldIcon: {
-    width: 30,
-    color: COLORS.green,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  input: {
-    flex: 1,
-    color: COLORS.ink,
-    fontSize: 17,
-    paddingVertical: 0,
-  },
-  passwordHeader: {
+  bar: {
+    height: 76,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: space.xxl,
   },
-  forgot: {
-    color: COLORS.green,
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 10,
-  },
-  eyeText: {
-    color: COLORS.green,
-    fontSize: 14,
-    fontWeight: '900',
-    marginLeft: 12,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: -14,
-    marginBottom: 16,
-  },
-  messageError: {
-    borderRadius: 16,
-    backgroundColor: '#fff1f0',
-    borderWidth: 1,
-    borderColor: '#f2c3bf',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  messageErrorText: {
-    color: COLORS.error,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  messageSuccess: {
-    borderRadius: 16,
-    backgroundColor: '#ecf8f1',
-    borderWidth: 1,
-    borderColor: '#bfe3cd',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  messageSuccessText: {
-    color: COLORS.success,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  signButton: {
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: COLORS.green,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-    shadowColor: COLORS.greenDark,
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-  },
-  signButtonPressed: {
-    backgroundColor: COLORS.greenDark,
-  },
-  disabledSignButton: {
-    opacity: 0.72,
-  },
-  signButtonText: {
-    color: '#fff5a4',
-    fontSize: 19,
-    fontWeight: '900',
-  },
-  signupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 26,
-  },
-  accountText: {
-    color: COLORS.ink,
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  signupText: {
-    color: COLORS.green,
-    fontSize: 15,
-    fontWeight: '900',
-    textDecorationLine: 'underline',
-  },
-  backButton: {
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#eeeeea',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  backButtonText: {
-    color: COLORS.ink,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  stepIndicator: {
-    flexDirection: 'column',
-    gap: 10,
-    marginBottom: 28,
-  },
-  stepPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stepDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 2,
-    borderColor: COLORS.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  stepDotActive: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.green,
-  },
-  stepDotDone: {
-    borderColor: COLORS.green,
-  },
-  stepDotText: {
-    color: COLORS.muted,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  stepDotTextActive: {
-    color: '#fff5a4',
-  },
-  stepLabel: {
-    color: COLORS.muted,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  stepLabelActive: {
-    color: COLORS.greenDark,
-    fontWeight: '900',
-  },
-  chipGroup: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 22,
-  },
-  chip: {
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#eeeeea',
-    backgroundColor: '#ffffff',
-  },
-  chipActive: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.mint,
-  },
-  chipText: {
-    color: COLORS.ink,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  chipTextActive: {
-    color: COLORS.greenDark,
-    fontWeight: '900',
-  },
-  verifyHint: {
-    color: COLORS.muted,
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 14,
-  },
-  quoteBlock: {
-    position: 'absolute',
-    top: 84,
-    left: 100,
-    right: 86,
-    zIndex: 4,
-  },
-  quoteMark: {
-    color: COLORS.amber,
-    fontSize: 42,
-    fontWeight: '900',
-    lineHeight: 38,
-  },
-  quoteText: {
-    color: COLORS.ink,
-    fontSize: 27,
-    fontWeight: '900',
-    lineHeight: 35,
-    maxWidth: 620,
-  },
-  personRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 34,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#f1dfd4',
-    marginRight: 15,
-    overflow: 'hidden',
-    alignItems: 'center',
-  },
-  avatarHead: {
-    width: 17,
-    height: 17,
-    borderRadius: 9,
-    backgroundColor: COLORS.navy,
-    marginTop: 11,
-  },
-  avatarBody: {
-    position: 'absolute',
-    bottom: -3,
-    width: 40,
-    height: 23,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    backgroundColor: COLORS.teal,
-  },
-  personName: {
-    color: COLORS.ink,
-    fontSize: 17,
-    fontWeight: '900',
-  },
-  personRole: {
-    color: COLORS.muted,
-    fontSize: 14,
-    marginTop: 3,
-  },
-  illustration: {
-    position: 'absolute',
-    left: 28,
-    right: 18,
-    bottom: 16,
-    height: 500,
-  },
-  illustrationCompact: {
-    left: 0,
-    right: 0,
-    bottom: 0,
-    transform: [{ scale: 0.82 }],
-  },
-  growthCard: {
-    position: 'absolute',
-    left: '36%',
-    bottom: 170,
-    width: 190,
-    height: 160,
-    borderRadius: 26,
-    borderWidth: 5,
-    borderColor: COLORS.teal,
-    backgroundColor: '#fcfbf2',
-    transform: [{ rotate: '-4deg' }],
-  },
-  cardTopLine: {
-    width: 92,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.teal,
-    marginTop: 24,
-    marginLeft: 26,
-  },
-  barChart: {
-    position: 'absolute',
-    left: 28,
-    bottom: 28,
-    height: 72,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  bar: {
-    width: 15,
-    borderRadius: 8,
-    backgroundColor: COLORS.green,
-    marginRight: 12,
-  },
-  barOne: {
-    height: 30,
-  },
-  barTwo: {
-    height: 46,
-  },
-  barThree: {
-    height: 58,
-  },
-  barFour: {
-    height: 72,
-    backgroundColor: COLORS.amber,
-  },
-  aiText: {
-    position: 'absolute',
-    right: 24,
-    bottom: 26,
-    color: COLORS.navy,
-    fontSize: 28,
-    fontWeight: '900',
-  },
-  personShape: {
-    position: 'absolute',
-    left: '46%',
-    bottom: 42,
-    width: 120,
-    height: 150,
-    alignItems: 'center',
-  },
-  personHead: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    borderWidth: 5,
-    borderColor: COLORS.teal,
-    backgroundColor: COLORS.paper,
-  },
-  personTorso: {
-    width: 108,
-    height: 78,
-    borderTopLeftRadius: 54,
-    borderTopRightRadius: 54,
-    borderWidth: 5,
-    borderBottomWidth: 0,
-    borderColor: COLORS.teal,
-    backgroundColor: COLORS.mint,
-    marginTop: 7,
-  },
-  connectionLineOne: {
-    position: 'absolute',
-    left: '29%',
-    bottom: 138,
-    width: 150,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.teal,
-    transform: [{ rotate: '-28deg' }],
-  },
-  connectionLineTwo: {
-    position: 'absolute',
-    left: '59%',
-    bottom: 162,
-    width: 142,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.teal,
-    transform: [{ rotate: '24deg' }],
-  },
-  connectionLineThree: {
-    position: 'absolute',
-    left: '35%',
-    bottom: 330,
-    width: 150,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.teal,
-    transform: [{ rotate: '18deg' }],
-  },
-  connectionLineFour: {
-    position: 'absolute',
-    left: '56%',
-    bottom: 320,
-    width: 142,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.teal,
-    transform: [{ rotate: '-22deg' }],
-  },
-  skillNode: {
-    position: 'absolute',
-    minWidth: 74,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 4,
-    borderColor: COLORS.teal,
-    backgroundColor: COLORS.paper,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  skillNodeText: {
-    color: COLORS.ink,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  nodeCode: {
-    left: '18%',
-    bottom: 210,
-  },
-  nodeAi: {
-    left: '65%',
-    bottom: 238,
-    backgroundColor: COLORS.mint,
-  },
-  nodeResume: {
-    left: '24%',
-    bottom: 368,
-  },
-  nodeJobs: {
-    right: '10%',
-    bottom: 354,
-  },
-  nodeComm: {
-    left: '10%',
-    bottom: 88,
-    backgroundColor: COLORS.rose,
-  },
-  nodeCert: {
-    right: '14%',
-    bottom: 104,
-  },
-  arrowStem: {
-    position: 'absolute',
-    right: '18%',
-    bottom: 178,
-    width: 6,
-    height: 210,
-    borderRadius: 3,
-    backgroundColor: COLORS.green,
-    transform: [{ rotate: '-18deg' }],
-  },
-  arrowHead: {
-    position: 'absolute',
-    right: '16%',
-    bottom: 374,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 18,
-    borderRightWidth: 18,
-    borderBottomWidth: 30,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: COLORS.green,
-    transform: [{ rotate: '-18deg' }],
-  },
-  pathBase: {
-    position: 'absolute',
-    left: '12%',
-    right: '10%',
-    bottom: 32,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.teal,
-  },
-  demoBox: {
-    backgroundColor: COLORS.mint,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(30,118,84,0.3)',
-  },
-  demoTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.greenDark,
-    marginBottom: 8,
-  },
-  demoButtonsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  demoBtn: {
+  sheet: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
+    backgroundColor: colors.canvas,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
   },
-  demoBtnActive: {
-    borderColor: COLORS.green,
-    backgroundColor: '#f0fdf4',
+  scroll: {
+    flexGrow: 1,
+    padding: space.xl,
+    justifyContent: 'center',
+    gap: space.xxxl,
   },
-  demoBtnActiveRecruiter: {
-    borderColor: COLORS.teal,
-    backgroundColor: '#f0f9ff',
+  scrollWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 56,
+    paddingVertical: space.xxl,
   },
-  demoBtnRole: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.ink,
+  roleTile: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surfaceMuted,
   },
-  demoBtnEmail: {
-    fontSize: 10,
-    color: COLORS.muted,
-    marginTop: 2,
+  roleTileActive: {
+    backgroundColor: colors.ink,
+  },
+  stepChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
+  playDisc: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 6,
+    borderColor: 'rgba(255,255,255,0.45)',
   },
 });

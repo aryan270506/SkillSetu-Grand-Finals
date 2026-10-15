@@ -1,41 +1,41 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { calculateSkillIndex } from './skillIndexCalculator';
 import { formatCareerTitle } from '../services/profileService';
 import { fetchRecommendedInternships } from '../services/internshipService';
 import { fetchStudentApplications } from '../services/applicationService';
-
-import {
-  CLAY_COLORS,
-  CLAY_FONTS,
-  ensureDashboardGlobalStyles,
-} from './components/DashboardDesignTokens';
-
-import DashboardHero from './components/DashboardHero';
-import DashboardMetrics from './components/DashboardMetrics';
-import AiCareerRecommendation from './components/AiCareerRecommendation';
-import SkillGapsSection from './components/SkillGapsSection';
-import SkillIntelligenceSection from './components/SkillIntelligenceSection';
-import CareerTrajectorySection from './components/CareerTrajectorySection';
-import ResumeIntelligenceSection from './components/ResumeIntelligenceSection';
-import PersonalizedLearningSection from './components/PersonalizedLearningSection';
-import RecommendedInternshipsSection from './components/RecommendedInternshipsSection';
-import PipelineAndReadinessSection from './components/PipelineAndReadinessSection';
 import {
   SkillIndexModal,
   SkillGapAnalysisModal,
   SingleSkillModal,
   AllSkillsModal,
 } from './components/DashboardModals';
+import {
+  Avatar,
+  Button,
+  Card,
+  EmptyState,
+  EventCard,
+  FeatureCard,
+  Icon,
+  IconButton,
+  Page,
+  Pill,
+  ProgressBar,
+  Ring,
+  Row,
+  SectionTitle,
+  Sheet,
+  Skeleton,
+  Stack,
+  StatTrio,
+  Timeline,
+  Txt,
+} from '../../../ui/components';
+import { colors, radii, space, webOnly } from '../../../ui/theme';
+import { API_BASE } from '../../../ui/config';
+import { pickFile } from '../../../ui/pickFile';
 
 export default function Dashboard({
   user,
@@ -47,15 +47,11 @@ export default function Dashboard({
 }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
-  const isWide = width >= 1024;
+  // Two-column body when the main column (beside the events panel) has room.
+  const isWide = width >= 1320 || (width >= 900 && width < 1120);
 
   const displayName = user?.name || profileData?.personalInfo?.fullName || 'Student';
   const studentEmail = user?.email || profileData?.personalInfo?.email || '';
-
-  // Ensure Web Styles and Google Fonts are injected
-  useEffect(() => {
-    ensureDashboardGlobalStyles();
-  }, []);
 
   // GitHub Analysis Real Data States
   const [githubState, setGithubState] = useState({
@@ -109,7 +105,7 @@ export default function Dashboard({
 
     try {
       const emailQuery = encodeURIComponent(studentEmail.trim());
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/github/status?email=${emailQuery}`);
+      const res = await fetch(`${API_BASE}/github/status?email=${emailQuery}`);
       const data = await res.json();
 
       if (res.ok && data.status === 'success' && data.connection) {
@@ -119,7 +115,7 @@ export default function Dashboard({
 
           if ((!skillsList || skillsList.length === 0) && conn.repositories && conn.repositories.length > 0) {
             try {
-              const analyzeRes = await fetch('http://127.0.0.1:8000/api/v1/github/analyze-selected', {
+              const analyzeRes = await fetch(`${API_BASE}/github/analyze-selected`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -228,7 +224,7 @@ export default function Dashboard({
             ? activeTargetCareers.map(c => `target_careers=${encodeURIComponent(c)}`).join('&')
             : `target_careers=${encodeURIComponent(activeTargetCareer)}`;
         const res = await fetch(
-          `http://127.0.0.1:8000/api/v1/student/career-skill-gaps?email=${emailQuery}&${careerQueryParams}`
+          `${API_BASE}/student/career-skill-gaps?email=${emailQuery}&${careerQueryParams}`
         );
         const data = await res.json();
         if (isMounted && res.ok && data.status === 'success' && data.data) {
@@ -342,7 +338,7 @@ export default function Dashboard({
         const emailParam = encodeURIComponent(studentEmail || '');
         const careerParam = encodeURIComponent(activeTargetCareer);
         const res = await fetch(
-          `http://127.0.0.1:8000/api/v1/student/career-readiness?email=${emailParam}&career_name=${careerParam}`
+          `${API_BASE}/student/career-readiness?email=${emailParam}&career_name=${careerParam}`
         );
         const data = await res.json();
         if (isMounted && res.ok && data.status === 'success') {
@@ -369,7 +365,7 @@ export default function Dashboard({
         const emailParam = encodeURIComponent(studentEmail || '');
         const careerParam = encodeURIComponent(activeTargetCareer || '');
         const res = await fetch(
-          `http://127.0.0.1:8000/api/v1/student/learning-path?email=${emailParam}&career_name=${careerParam}`
+          `${API_BASE}/student/learning-path?email=${emailParam}&career_name=${careerParam}`
         );
         const data = await res.json();
         if (isMounted && res.ok && data.status === 'success') {
@@ -419,7 +415,7 @@ export default function Dashboard({
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/student/resume/analyze-intelligence', {
+      const response = await fetch(`${API_BASE}/student/resume/analyze-intelligence`, {
         method: 'POST',
         body: formData,
       });
@@ -598,136 +594,359 @@ export default function Dashboard({
   const interviewPercent = totalAppsCount > 0 ? Math.round((interviewAppsCount / totalAppsCount) * 100) : 0;
   const reviewPercent = totalAppsCount > 0 ? Math.round((reviewAppsCount / totalAppsCount) * 100) : 0;
 
+
+  // ---------------------------------------------------------------------------
+  // View-model for the redesigned dashboard
+  // ---------------------------------------------------------------------------
+  const firstName = (displayName || 'Student').split(' ')[0];
+  const hasCareer = activeTargetCareers.length > 0;
+  const topGaps = hasCareer ? (computedGapData?.top_gaps || []).slice(0, 3) : [];
+  const modules = learningPathData?.modules || [];
+  const currentModule = modules.find((m) => (m.status || '').toUpperCase() === 'ACTIVE') || modules[0];
+  const readinessScore = careerReadinessData?.overall_readiness ?? backendGapData?.career_readiness?.score ?? null;
+  const topMatches = [...recommendedInternships]
+    .sort((a, b) => (b.match_score || b.score || 0) - (a.match_score || a.score || 0))
+    .slice(0, 3);
+  const completion = profileCompletion !== undefined ? profileCompletion : 0;
+  const [resumeSheetOpen, setResumeSheetOpen] = useState(false);
+
+  const pickResume = async () => {
+    const file = await pickFile({ accept: '.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp' });
+    if (file) handleDashboardResumeUpload(file);
+  };
+
+  const events = useMemo(() => {
+    const items = studentApplications
+      .filter((a) => a.nextAction || a.current_round_name)
+      .slice(0, 5)
+      .map((a) => {
+        const status = (a.application_status || a.statusClass || '').toUpperCase();
+        const isScholarship = a.type === 'scholarship';
+        const tone = status === 'SHORTLISTED' || a.current_round_name ? 'success' : isScholarship ? 'warning' : 'info';
+        return {
+          key: a.id || `${a.company}-${a.role}`,
+          tone,
+          icon: a.current_round_name ? 'Target' : isScholarship ? 'GraduationCap' : 'Briefcase',
+          type: a.current_round_name || (isScholarship ? 'Scholarship' : 'Internship'),
+          date: a.dateApplied ? a.dateApplied.replace(/, \d{4}$/, '') : '',
+          title: `${a.role || 'Application'} · ${a.company || ''}`.trim(),
+          body: a.nextAction || a.status,
+          onPress: () => onNavigate && onNavigate(a.current_round_name ? 'Rounds' : 'Applications'),
+        };
+      });
+    return items;
+  }, [studentApplications, onNavigate]);
+
+  const go = (id, params) => onNavigate && onNavigate(id, params);
+
+  const roadmap = [
+    {
+      key: 'profile',
+      done: completion >= 80,
+      content: (
+        <Card badge={{ icon: 'User', tone: completion >= 80 ? 'success' : 'warning' }} onPress={onNavigateToProfile}>
+          <Stack gap={6}>
+            <Txt variant="h2" tone="ink">Career profile</Txt>
+            <Txt variant="body" tone="muted">
+              {completion >= 80 ? 'Your profile is ready for recruiters.' : 'Add education, career goals, resume and GitHub to unlock better matches.'}
+            </Txt>
+          </Stack>
+          <Row justify="space-between" style={{ marginTop: space.lg }}>
+            {completion >= 80 ? (
+              <Pill label="Completed 👏" tone="success" />
+            ) : (
+              <Row gap={10} style={{ flex: 1, maxWidth: 260 }}>
+                <ProgressBar value={completion} tone="success" style={{ flex: 1 }} />
+                <Txt variant="small" weight={700} tone="ink">{completion}%</Txt>
+              </Row>
+            )}
+            <IconButton icon="ArrowRight" variant="dark" onPress={onNavigateToProfile} accessibilityLabel="Open profile" />
+          </Row>
+        </Card>
+      ),
+    },
+    {
+      key: 'learning',
+      done: false,
+      content: (
+        <FeatureCard tilt={isWide} onPress={() => go('Learning')}>
+          <Row align="flex-start" gap={space.md}>
+            <Stack gap={6} style={{ flex: 1 }}>
+              <Txt variant="overline" color={colors.lilacInk}>Continue learning</Txt>
+              <Txt variant="h2" tone="ink" numberOfLines={2}>
+                {learningPathLoading ? 'Loading your plan…' : currentModule?.title || (hasCareer ? 'Start your learning plan' : 'Pick a target career')}
+              </Txt>
+              <Txt variant="body" color={colors.lilacInk} numberOfLines={2}>
+                {currentModule
+                  ? `${currentModule.provider || 'Curated course'} · closes your ${learningPathData?.gap_skill || 'top'} gap`
+                  : 'Personal modules are generated from your skill gaps.'}
+              </Txt>
+            </Stack>
+            <View style={styles.playDisc}>
+              <Icon name="Play" size={26} color={colors.ink} />
+            </View>
+          </Row>
+          <Row justify="space-between" style={{ marginTop: space.lg }}>
+            <View style={styles.watchChip}>
+              <Icon name="Clock" size={15} color={colors.ink} />
+              <Txt variant="small" weight={600} tone="ink">
+                {currentModule ? `${currentModule.duration || 'Self-paced'} · ${currentModule.difficulty || 'All levels'}` : 'Self-paced'}
+              </Txt>
+            </View>
+            {modules.length ? <Pill label={`${modules.length} modules`} tone="neutral" style={{ backgroundColor: 'rgba(255,255,255,0.7)' }} /> : null}
+          </Row>
+        </FeatureCard>
+      ),
+    },
+    {
+      key: 'gaps',
+      done: false,
+      content: (
+        <Card badge={{ icon: 'Zap', tone: 'warning' }}>
+          <Stack gap={6}>
+            <Txt variant="h2" tone="ink">Close your skill gaps</Txt>
+            <Txt variant="body" tone="muted" numberOfLines={2}>
+              {hasCareer && computedGapData?.recommendation_text
+                ? computedGapData.recommendation_text
+                : 'Choose a target career to see the skills employers expect from you.'}
+            </Txt>
+          </Stack>
+          <Stack gap={space.sm} style={{ marginTop: space.lg }}>
+            {topGaps.length ? (
+              topGaps.map((g) => (
+                <Pressable key={g.skill_name || g.name} onPress={() => go('Skills', { focusSkill: g.skill_name })} style={webOnly({ cursor: 'pointer' })}>
+                  <Row justify="space-between" style={{ marginBottom: 6 }}>
+                    <Txt variant="bodyStrong" tone="ink">{g.student_friendly_name || g.skill_name || g.name}</Txt>
+                    <Txt variant="small" tone="muted">{g.current_level ?? 0}% / {g.required_level ?? 100}%</Txt>
+                  </Row>
+                  <ProgressBar value={g.current_level ?? 0} tone={(g.current_level ?? 0) >= 60 ? 'success' : 'warning'} />
+                </Pressable>
+              ))
+            ) : (
+              <Txt variant="small" tone="subtle">{hasCareer ? 'No gaps detected — nice work.' : 'Set a target career in your profile first.'}</Txt>
+            )}
+          </Stack>
+          <Row justify="space-between" style={{ marginTop: space.lg }}>
+            <Pill
+              label={!hasCareer ? 'Needs a career goal' : topGaps.length ? `${computedGapData?.top_gaps?.length || topGaps.length} priority skills` : 'Up to date'}
+              tone={!hasCareer ? 'neutral' : topGaps.length ? 'warning' : 'success'}
+              icon="Target"
+            />
+            <Row gap={8}>
+              <IconButton icon="Ellipsis" onPress={() => setIsSkillGapAnalysisModalOpen(true)} accessibilityLabel="Full gap analysis" />
+              <IconButton icon="ArrowRight" variant="dark" onPress={() => go('Skills')} accessibilityLabel="Open skills" />
+            </Row>
+          </Row>
+        </Card>
+      ),
+    },
+    {
+      key: 'apply',
+      done: false,
+      content: (
+        <Card badge={{ icon: 'Briefcase', tone: 'info' }}>
+          <Stack gap={6}>
+            <Txt variant="h2" tone="ink">Apply to matched roles</Txt>
+            <Txt variant="body" tone="muted">
+              {internshipsLoading
+                ? 'Finding internships that match your evidence…'
+                : internshipsError
+                ? 'Opportunities are unavailable right now.'
+                : `${liveMatchesCount} of ${totalOpportunitiesCount} opportunities meet your match threshold.`}
+            </Txt>
+          </Stack>
+          <Stack gap={space.xs} style={{ marginTop: space.md }}>
+            {internshipsLoading ? (
+              <>
+                <Skeleton height={44} />
+                <Skeleton height={44} />
+              </>
+            ) : (
+              topMatches.map((it) => (
+                <Pressable key={it.id || it.internship_id} onPress={() => go('Opportunities')} style={({ hovered }) => [styles.matchRow, webOnly({ cursor: 'pointer' }), hovered ? { backgroundColor: colors.surfaceMuted } : null]}>
+                  <Avatar name={it.company_name || it.company || '?'} uri={it.company_logo || undefined} size={36} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Txt variant="bodyStrong" tone="ink" numberOfLines={1}>{it.title}</Txt>
+                    <Txt variant="caption" tone="muted" numberOfLines={1}>{it.company_name || it.company} · {it.work_mode || it.location_name || 'Flexible'}</Txt>
+                  </View>
+                  <Pill label={`${Math.round(it.match_score || it.score || 0)}%`} tone="success" size="sm" />
+                </Pressable>
+              ))
+            )}
+          </Stack>
+          <Row justify="space-between" style={{ marginTop: space.lg }}>
+            <Pill label={liveMatchesCount ? 'Ready to apply' : 'Upcoming'} tone={liveMatchesCount ? 'info' : 'neutral'} icon={liveMatchesCount ? 'Rocket' : 'Clock'} />
+            <IconButton icon="ArrowRight" variant="dark" onPress={() => go('Opportunities')} accessibilityLabel="Open internships" />
+          </Row>
+        </Card>
+      ),
+    },
+  ];
+
+  const resumeResult = resumeIntelligence.result;
+
+  const insights = (
+    <Stack gap={space.md}>
+      <StatTrio
+        items={[
+          { value: applicationsLoading ? '…' : totalAppsCount, label: 'Applications', tone: 'info', onPress: () => go('Applications') },
+          { value: applicationsLoading ? '…' : interviewAppsCount, label: 'In rounds', tone: 'success', onPress: () => go('Rounds') },
+          { value: internshipsLoading ? '…' : liveMatchesCount, label: 'Ready to apply', dashed: true, onPress: () => go('Opportunities') },
+        ]}
+      />
+
+      <Card>
+        <Row justify="space-between" align="flex-start">
+          <Stack gap={4} style={{ flex: 1 }}>
+            <Txt variant="overline" tone="subtle">Career readiness</Txt>
+            <Txt variant="h3" tone="ink" numberOfLines={1}>{hasCareer ? activeTargetCareer : 'No target career yet'}</Txt>
+            {activeTargetCareers.length > 1 ? (
+              <Txt variant="caption" tone="muted">+{activeTargetCareers.length - 1} more target{activeTargetCareers.length > 2 ? 's' : ''}</Txt>
+            ) : null}
+          </Stack>
+          <Ring value={readinessScore || 0} size={76} stroke={8} tone="success">
+            <Txt variant="h3" tone="ink">{readinessScore != null ? `${readinessScore}%` : '—'}</Txt>
+          </Ring>
+        </Row>
+        {careerReadinessData ? (
+          <Stack gap={10} style={{ marginTop: space.md }}>
+            {[
+              ['Technical', careerReadinessData.technical_score, 'info'],
+              ['Practical', careerReadinessData.practical_score, 'accent'],
+              ['Evidence', careerReadinessData.evidence_score, 'warning'],
+            ].map(([label, v, tone]) => (
+              <Row key={label} gap={10}>
+                <Txt variant="small" tone="muted" style={{ width: 72 }}>{label}</Txt>
+                <ProgressBar value={v || 0} tone={tone} style={{ flex: 1 }} />
+                <Txt variant="small" weight={700} tone="ink" style={{ width: 36, textAlign: 'right' }}>{v ?? 0}%</Txt>
+              </Row>
+            ))}
+          </Stack>
+        ) : !hasCareer ? (
+          <Button label="Choose target career" icon="Target" variant="secondary" size="sm" onPress={onNavigateToProfile} style={{ marginTop: space.md }} />
+        ) : null}
+      </Card>
+
+      <Card>
+        <Row justify="space-between">
+          <Stack gap={2}>
+            <Txt variant="overline" tone="subtle">Skill intelligence</Txt>
+            <Txt variant="h3" tone="ink">{formattedSkills.length} verified skills</Txt>
+          </Stack>
+          <Pressable onPress={() => setIsSkillIndexModalOpen(true)} style={webOnly({ cursor: 'pointer' })} accessibilityLabel="GitHub skill index">
+            <Ring value={overallGithubScore || 0} size={56} stroke={6} tone="accent">
+              <Txt variant="small" weight={700} tone="ink">{githubState.loading ? '…' : overallGithubScore || 0}</Txt>
+            </Ring>
+          </Pressable>
+        </Row>
+        <Row wrap gap={8} style={{ marginTop: space.md }}>
+          {top8Skills.length ? (
+            top8Skills.map((s) => (
+              <Pressable key={s.name} onPress={() => setSelectedSkillModal(s)} style={webOnly({ cursor: 'pointer' })}>
+                <Pill label={`${s.name} · ${s.score}`} tone={s.score >= 75 ? 'success' : s.score >= 50 ? 'info' : 'neutral'} size="sm" />
+              </Pressable>
+            ))
+          ) : (
+            <Txt variant="small" tone="muted">
+              {githubState.connected ? 'Analysing your repositories…' : 'Connect GitHub or upload a resume to verify skills.'}
+            </Txt>
+          )}
+        </Row>
+        <Row gap={8} style={{ marginTop: space.md }}>
+          {formattedSkills.length > 8 ? <Button label="All skills" size="sm" variant="secondary" onPress={() => setShowAllSkills(true)} /> : null}
+          {!githubState.connected ? <Button label="Connect GitHub" icon="GitBranch" size="sm" variant="secondary" onPress={onNavigateToProfile} /> : null}
+        </Row>
+      </Card>
+
+      <Card tone="info">
+        <Row justify="space-between" align="flex-start">
+          <Stack gap={4} style={{ flex: 1 }}>
+            <Txt variant="overline" color={colors.skyInk}>Resume check</Txt>
+            <Txt variant="h3" tone="ink">
+              {resumeIntelligence.analyzing ? 'Analysing…' : resumeResult ? `ATS score ${resumeResult.ats_score || 0}/100` : 'How does your resume score?'}
+            </Txt>
+            <Txt variant="small" color={colors.skyInk} numberOfLines={2}>
+              {resumeIntelligence.error
+                ? resumeIntelligence.error
+                : resumeResult
+                ? `Best fit: ${resumeResult.role_fit?.best_fit_role || '—'} (${resumeResult.role_fit?.fit_score || 0}%)`
+                : 'Upload a PDF, DOCX or image for an instant ATS and role-fit report.'}
+            </Txt>
+          </Stack>
+          <View style={[styles.resumeIcon]}>
+            <Icon name="FileText" size={22} color={colors.skyInk} />
+          </View>
+        </Row>
+        <Row gap={8} style={{ marginTop: space.md }}>
+          <Button label={resumeResult ? 'Analyse another' : 'Upload resume'} icon="Upload" size="sm" onPress={pickResume} loading={resumeIntelligence.analyzing} />
+          {resumeResult ? <Button label="View report" size="sm" variant="light" onPress={() => setResumeSheetOpen(true)} /> : null}
+        </Row>
+      </Card>
+    </Stack>
+  );
+
+  const eventsPanel = (
+    <>
+      <SectionTitle title="My Events" emoji="🧐" size="h1" />
+      {computedGapData?.recommendation_text && hasCareer ? (
+        <EventCard
+          tone="accent"
+          icon="Sparkles"
+          type="Mentor tip"
+          date="Today"
+          body={computedGapData.recommendation_text}
+          footer={
+            <Pressable onPress={() => go('Learning')} style={[{ flexDirection: 'row', alignItems: 'center', gap: 8 }, webOnly({ cursor: 'pointer' })]}>
+              <Icon name="BookOpen" size={15} color={colors.ink} />
+              <Txt variant="small" weight={600} tone="ink">Open learning plan</Txt>
+            </Pressable>
+          }
+        />
+      ) : null}
+      {applicationsLoading ? (
+        <>
+          <Skeleton height={130} radius={radii.xl} />
+          <Skeleton height={130} radius={radii.xl} />
+        </>
+      ) : events.length ? (
+        events.map(({ key, ...ev }) => <EventCard key={key} {...ev} />)
+      ) : (
+        <View style={styles.emptyEvents}>
+          <EmptyState
+            icon="Calendar"
+            title="Nothing scheduled"
+            message="Applications, assessment rounds and deadlines will show up here."
+            action={<Button label="Find internships" size="sm" icon="Briefcase" onPress={() => go('Opportunities')} />}
+          />
+        </View>
+      )}
+    </>
+  );
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={true}
-    >
-      {/* 1. Welcome Hero Command Center */}
-      <DashboardHero
-        displayName={displayName}
-        profileCompletion={profileCompletion !== undefined ? profileCompletion : 80}
-        onNavigateToProfile={onNavigateToProfile}
-        isTablet={isTablet}
-        isWide={isWide}
+    <Page aside={eventsPanel}>
+      <SectionTitle
+        title={`Hi ${firstName}, here's your plan`}
+        emoji="⏰"
+        subtitle={hasCareer ? `Tracking ${activeTargetCareers.join(' · ')}` : 'Set a target career to personalise everything below.'}
+        right={
+          <Button
+            label={hasCareer ? 'Edit goals' : 'Set career goal'}
+            icon="Target"
+            variant="secondary"
+            onPress={onNavigateToProfile}
+          />
+        }
       />
 
-      {/* 2. Top Intelligence Metrics (4 Cards) */}
-      <DashboardMetrics
-        githubState={githubState}
-        overallGithubScore={overallGithubScore}
-        skillIndexDetails={skillIndexDetails}
-        getEvidenceLevelText={getEvidenceLevelText}
-        setIsSkillIndexModalOpen={setIsSkillIndexModalOpen}
-        onNavigateToProfile={onNavigateToProfile}
-        onNavigate={onNavigate}
-        // Opportunities
-        internshipsLoading={internshipsLoading}
-        internshipsError={internshipsError}
-        liveMatchesCount={liveMatchesCount}
-        totalOpportunitiesCount={totalOpportunitiesCount}
-        recommendedInternships={recommendedInternships}
-        // Applications
-        applicationsLoading={applicationsLoading}
-        applicationsError={applicationsError}
-        activeAppsCount={activeAppsCount}
-        submittedPercent={submittedPercent}
-        interviewPercent={interviewPercent}
-        reviewPercent={reviewPercent}
-        // Career Target
-        activeTargetCareer={activeTargetCareer}
-        activeTargetCareers={activeTargetCareers}
-        careerReadinessData={careerReadinessData}
-        backendGapData={backendGapData}
-        keyTargetSkills={keyTargetSkills}
-        formattedSkills={formattedSkills}
-        isTablet={isTablet}
-        isWide={isWide}
-      />
+      <View style={[styles.grid, isWide ? styles.gridWide : null]}>
+        <View style={isWide ? { flex: 1.15 } : null}>
+          <Timeline items={roadmap} gap={space.lg} />
+        </View>
+        <View style={isWide ? { flex: 1 } : null}>{insights}</View>
+      </View>
 
-      {/* 3. AI Career Recommendation Banner */}
-      <AiCareerRecommendation
-        computedGapData={computedGapData}
-        onNavigate={onNavigate}
-      />
-
-      {/* 4. Your Skill Gaps */}
-      <SkillGapsSection
-        computedGapData={computedGapData}
-        setIsSkillGapAnalysisModalOpen={setIsSkillGapAnalysisModalOpen}
-        onNavigate={onNavigate}
-        isTablet={isTablet}
-      />
-
-      {/* 5. Skill Intelligence */}
-      <SkillIntelligenceSection
-        top8Skills={top8Skills}
-        formattedSkills={formattedSkills}
-        setShowAllSkills={setShowAllSkills}
-        setSelectedSkillModal={setSelectedSkillModal}
-        isTablet={isTablet}
-      />
-
-      {/* 6. Career Trajectory & Goals */}
-      <CareerTrajectorySection
-        activeTargetCareer={activeTargetCareer}
-        activeTargetCareers={activeTargetCareers}
-        careerReadinessData={careerReadinessData}
-        backendGapData={backendGapData}
-        overallGithubScore={overallGithubScore}
-        keyTargetSkills={keyTargetSkills}
-        onNavigateToProfile={onNavigateToProfile}
-        isTablet={isTablet}
-      />
-
-      {/* 7. Resume Intelligence & ATS Diagnostic */}
-      <ResumeIntelligenceSection
-        resumeIntelligence={resumeIntelligence}
-        handleDashboardResumeUpload={handleDashboardResumeUpload}
-        onNavigateToProfile={onNavigateToProfile}
-        isTablet={isTablet}
-      />
-
-      {/* 8. Personalized Learning Tracks */}
-      <PersonalizedLearningSection
-        learningPathData={learningPathData}
-        activeTargetCareer={activeTargetCareer}
-        careerReadinessData={careerReadinessData}
-        backendGapData={backendGapData}
-        computedGapData={computedGapData}
-        onNavigate={onNavigate}
-        isWide={isWide}
-      />
-
-      {/* 9. Recommended Internships */}
-      <RecommendedInternshipsSection
-        internshipsLoading={internshipsLoading}
-        internshipsError={internshipsError}
-        recommendedInternships={recommendedInternships}
-        onNavigate={onNavigate}
-        isTablet={isTablet}
-      />
-
-      {/* 10. Application Pipeline & Interview Readiness */}
-      <PipelineAndReadinessSection
-        totalAppsCount={totalAppsCount}
-        reviewAppsCount={reviewAppsCount}
-        interviewAppsCount={interviewAppsCount}
-        selectedAppsCount={selectedAppsCount}
-        careerReadinessData={careerReadinessData}
-        backendGapData={backendGapData}
-        activeTargetCareer={activeTargetCareer}
-        onNavigate={onNavigate}
-        isTablet={isTablet}
-      />
-
-      {/* ============================================================ */}
-      {/* MODALS */}
-      {/* ============================================================ */}
-
-      {/* Modal 1: GitHub Skill Analysis Modal */}
+      {/* Modals (kept from previous dashboard) */}
       <SkillIndexModal
         isOpen={isSkillIndexModalOpen}
         onClose={() => setIsSkillIndexModalOpen(false)}
@@ -738,8 +957,6 @@ export default function Dashboard({
         activeEvidencePop={activeEvidencePop}
         setActiveEvidencePop={setActiveEvidencePop}
       />
-
-      {/* Modal 2: Complete Skill Gap Analysis Modal */}
       <SkillGapAnalysisModal
         isOpen={isSkillGapAnalysisModalOpen}
         onClose={() => setIsSkillGapAnalysisModalOpen(false)}
@@ -748,15 +965,11 @@ export default function Dashboard({
         gapAnalysisTab={gapAnalysisTab}
         setGapAnalysisTab={setGapAnalysisTab}
       />
-
-      {/* Modal 3: Single Skill Analysis Modal */}
       <SingleSkillModal
         selectedSkillModal={selectedSkillModal}
         onClose={() => setSelectedSkillModal(null)}
         getEvidenceLevelText={getEvidenceLevelText}
       />
-
-      {/* Modal 4: View All Skills Modal */}
       <AllSkillsModal
         isOpen={showAllSkills}
         onClose={() => setShowAllSkills(false)}
@@ -764,20 +977,133 @@ export default function Dashboard({
         isTablet={isTablet}
         setSelectedSkillModal={setSelectedSkillModal}
       />
-    </ScrollView>
+
+      <Sheet
+        visible={resumeSheetOpen}
+        onClose={() => setResumeSheetOpen(false)}
+        title="Resume report"
+        subtitle={resumeResult?.filename || resumeIntelligence.file?.name}
+        icon="FileText"
+        tone="info"
+      >
+        {resumeResult ? (
+          <>
+            <Row gap={space.lg}>
+              <Ring value={resumeResult.ats_score || 0} size={92} stroke={9} tone="info">
+                <Txt variant="h2" tone="ink">{resumeResult.ats_score || 0}</Txt>
+              </Ring>
+              <Txt variant="body" tone="muted" style={{ flex: 1 }}>
+                {resumeResult.score_text || 'ATS structure, format and keywords evaluated against industry standards.'}
+              </Txt>
+            </Row>
+            {resumeResult.ats_breakdown ? (
+              <Card padding={space.lg}>
+                <Stack gap={12}>
+                  {[
+                    ['Skills', resumeResult.ats_breakdown.skills || 0, 30],
+                    ['Experience', resumeResult.ats_breakdown.experience || 0, 25],
+                    ['Projects', resumeResult.ats_breakdown.projects || 0, 20],
+                    ['Education & extras', (resumeResult.ats_breakdown.education || 0) + (resumeResult.ats_breakdown.extras || 0), 25],
+                  ].map(([label, v, max]) => (
+                    <Stack key={label} gap={6}>
+                      <Row justify="space-between">
+                        <Txt variant="small" weight={600} tone="ink">{label}</Txt>
+                        <Txt variant="small" tone="muted">{v}/{max}</Txt>
+                      </Row>
+                      <ProgressBar value={(v / max) * 100} tone="info" />
+                    </Stack>
+                  ))}
+                </Stack>
+              </Card>
+            ) : null}
+            <Card padding={space.lg}>
+              <Txt variant="overline" tone="subtle">Best-fit role</Txt>
+              <Row justify="space-between" style={{ marginTop: 4 }}>
+                <Txt variant="h3" tone="ink">{resumeResult.role_fit?.best_fit_role || 'General Software Engineering'}</Txt>
+                <Pill label={`${resumeResult.role_fit?.fit_score || 0}% fit`} tone="success" />
+              </Row>
+              <Txt variant="small" tone="muted" style={{ marginTop: 6 }}>{resumeResult.role_fit?.why_fit || ''}</Txt>
+              {(resumeResult.extracted_skills || []).length ? (
+                <Row wrap gap={6} style={{ marginTop: space.sm }}>
+                  {resumeResult.extracted_skills.slice(0, 10).map((sk, i) => (
+                    <Pill key={`${sk}-${i}`} label={typeof sk === 'string' ? sk : sk.name || sk.skill} tone="info" size="sm" />
+                  ))}
+                </Row>
+              ) : null}
+              {resumeResult.role_fit?.missing_skills?.length ? (
+                <>
+                  <Txt variant="small" weight={600} tone="ink" style={{ marginTop: space.md }}>Missing for this role</Txt>
+                  <Row wrap gap={6} style={{ marginTop: 6 }}>
+                    {resumeResult.role_fit.missing_skills.slice(0, 6).map((sk, i) => (
+                      <Pill key={`${sk}-${i}`} label={typeof sk === 'string' ? sk : sk.name || sk.skill} tone="warning" size="sm" />
+                    ))}
+                  </Row>
+                </>
+              ) : null}
+            </Card>
+            {resumeResult.skillsetu_value?.length ? (
+              <Stack gap={8}>
+                {resumeResult.skillsetu_value.map((point, i) => (
+                  <Row key={i} gap={8} align="flex-start">
+                    <Icon name="CircleCheck" size={16} color={colors.mintInk} />
+                    <Txt variant="small" tone="default" style={{ flex: 1 }}>{typeof point === 'string' ? point : point.text || JSON.stringify(point)}</Txt>
+                  </Row>
+                ))}
+              </Stack>
+            ) : null}
+          </>
+        ) : null}
+      </Sheet>
+    </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: CLAY_COLORS.canvas,
+  grid: {
+    gap: space.xl,
   },
-  contentContainer: {
-    padding: 24,
-    paddingBottom: 80,
-    maxWidth: 1280,
-    width: '100%',
-    alignSelf: 'center',
+  gridWide: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  playDisc: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 8,
+    borderColor: 'rgba(255,255,255,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+  },
+  matchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 8,
+    borderRadius: radii.md,
+  },
+  resumeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyEvents: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.borderStrong,
+    borderRadius: radii.xl,
   },
 });

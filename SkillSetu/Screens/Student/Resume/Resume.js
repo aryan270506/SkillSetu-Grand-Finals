@@ -1,24 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-
-import { CLAY_COLORS, ensureClayGlobalStyles } from './components/DesignTokens';
-import AmbientBackground from './components/AmbientBackground';
-import ResumeHeader from './components/ResumeHeader';
-import RoleCalibrationCard from './components/RoleCalibrationCard';
-import VerifiedSkillsLedger from './components/VerifiedSkillsLedger';
-import SkillGapsCard from './components/SkillGapsCard';
-import ATSScoreMetricsCard from './components/ATSScoreMetricsCard';
-import ResumePreview from './components/ResumePreview';
-import BottomActionBar from './components/BottomActionBar';
-import ResumeFooter from './components/ResumeFooter';
-import ResumeLoadingSkeleton from './components/ResumeLoadingSkeleton';
-import ResumeErrorState from './components/ResumeErrorState';
+  calculateFormatScore,
+  calculateImpactScore,
+  calculateKeywordScore,
+  calculateUtf8Score,
+} from './components/atsEvaluator';
+import {
+  Avatar,
+  Button,
+  Card,
+  Field,
+  Icon,
+  Inset,
+  Page,
+  Pill,
+  ProgressBar,
+  Row,
+  SectionTitle,
+  SegmentedTabs,
+  Skeleton,
+  Stack,
+  StatTrio,
+  Txt,
+} from '../../../ui/components';
+import { colors, radii, shadows, space, toneOf } from '../../../ui/theme';
+import { API_BASE } from '../../../ui/config';
 
 export default function Resume({ user, profileData }) {
   const { width } = useWindowDimensions();
@@ -47,10 +54,6 @@ export default function Resume({ user, profileData }) {
     certifications: [],
   });
 
-  // Inject Google Fonts and Claymorphism CSS keyframes once
-  useEffect(() => {
-    ensureClayGlobalStyles();
-  }, []);
 
   // Fetch Tailored Resume Payload from Backend API
   const fetchTailoredResume = useCallback(async (careerToFetch = null) => {
@@ -64,7 +67,7 @@ export default function Resume({ user, profileData }) {
     try {
       const emailQuery = encodeURIComponent(studentEmail.trim());
       const careerParam = careerToFetch ? `&target_career=${encodeURIComponent(careerToFetch.trim())}` : '';
-      const url = `http://127.0.0.1:8000/api/v1/student/tailored-resume?email=${emailQuery}${careerParam}`;
+      const url = `${API_BASE}/student/tailored-resume?email=${emailQuery}${careerParam}`;
 
       const res = await fetch(url);
       const data = await res.json();
@@ -617,139 +620,339 @@ export default function Resume({ user, profileData }) {
   // Real effective resume data (reflecting local edit buffer if editing)
   const currentResumeData = isEditing ? { ...resumePayload, ...editedResumeBuffer } : resumePayload;
 
+
+  const busy = loading || isGenerating;
+  const formatScore = calculateFormatScore(currentResumeData);
+  const keywordScore = calculateKeywordScore(atsAnalysis, keyRequirements, profileMatch);
+  const impactScore = calculateImpactScore(currentResumeData);
+  const utf8Score = calculateUtf8Score(currentResumeData);
+  const metrics = [
+    { label: 'Format', value: formatScore, tone: 'info', icon: 'LayoutGrid' },
+    { label: 'Keywords', value: keywordScore, tone: 'accent', icon: 'Search' },
+    { label: 'Impact', value: impactScore, tone: 'success', icon: 'TrendingUp' },
+    { label: 'Encoding', value: utf8Score, tone: 'warning', icon: 'FileText' },
+  ];
+  const matchedReqs = keyRequirements.filter((r) => r.matched).length;
+
+  const insights = (
+    <Stack gap={space.md}>
+      <StatTrio
+        items={[
+          { value: busy ? '…' : atsAnalysis.score ?? '—', label: 'ATS score', tone: 'info' },
+          { value: busy ? '…' : typeof profileMatch.overall === 'number' ? `${profileMatch.overall}%` : '—', label: 'Role match', tone: 'success' },
+          { value: busy ? '…' : skillGaps.length, label: 'Skill gaps', dashed: true },
+        ]}
+      />
+
+      <Card>
+        <Txt variant="h3" tone="ink">ATS checks</Txt>
+        <View style={styles.metricGrid}>
+          {metrics.map((m) => (
+            <View key={m.label} style={[styles.metricCell, { backgroundColor: toneOf(m.tone).bg }]}>
+              <Row justify="space-between">
+                <Row gap={6}>
+                  <Icon name={m.icon} size={14} color={toneOf(m.tone).ink} />
+                  <Txt variant="small" weight={600} tone="ink">{m.label}</Txt>
+                </Row>
+                <Txt variant="small" weight={700} tone="ink">{busy ? '…' : m.value != null ? `${m.value}%` : 'N/A'}</Txt>
+              </Row>
+              <ProgressBar value={m.value || 0} tone={m.tone} track="rgba(255,255,255,0.7)" height={6} style={{ marginTop: 8 }} />
+            </View>
+          ))}
+        </View>
+        {(atsAnalysis.matched_keywords || []).length ? (
+          <Stack gap={6} style={{ marginTop: space.md }}>
+            <Txt variant="overline" tone="subtle">Matched keywords</Txt>
+            <Row wrap gap={6}>
+              {atsAnalysis.matched_keywords.map((k) => <Pill key={k} label={k} tone="success" size="sm" />)}
+            </Row>
+          </Stack>
+        ) : null}
+        {(atsAnalysis.missing_keywords || []).length ? (
+          <Stack gap={6} style={{ marginTop: space.md }}>
+            <Txt variant="overline" tone="subtle">Missing keywords</Txt>
+            <Row wrap gap={6}>
+              {atsAnalysis.missing_keywords.map((k) => <Pill key={k} label={k} tone="warning" size="sm" />)}
+            </Row>
+          </Stack>
+        ) : null}
+        {(atsAnalysis.recommendations || []).length ? (
+          <Inset tone="info" style={{ marginTop: space.md }}>
+            <Stack gap={6}>
+              {atsAnalysis.recommendations.map((r, i) => (
+                <Row key={i} gap={8} align="flex-start">
+                  <Icon name="Sparkles" size={15} color={colors.skyInk} />
+                  <Txt variant="small" color={colors.skyInk} style={{ flex: 1 }}>{r}</Txt>
+                </Row>
+              ))}
+            </Stack>
+          </Inset>
+        ) : null}
+      </Card>
+
+      <Card badge={{ icon: 'ShieldCheck', tone: 'success' }}>
+        <Txt variant="h3" tone="ink">Role requirements</Txt>
+        <Txt variant="small" tone="muted" style={{ marginBottom: space.md }}>
+          {tailoredData?.hiring_standard || 'Competency benchmark'} · {matchedReqs}/{keyRequirements.length} met
+        </Txt>
+        {busy ? (
+          <Stack gap={8}>
+            <Skeleton height={36} />
+            <Skeleton height={36} />
+          </Stack>
+        ) : keyRequirements.length ? (
+          <Stack gap={12}>
+            {keyRequirements.map((r) => (
+              <Stack key={r.skill_id || r.skill_name} gap={6}>
+                <Row justify="space-between">
+                  <Row gap={8} style={{ flex: 1 }}>
+                    <Icon name={r.matched ? 'CircleCheck' : 'Circle'} size={16} color={r.matched ? colors.mintInk : colors.textSubtle} />
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ flex: 1 }}>{r.skill_name}</Txt>
+                  </Row>
+                  <Txt variant="caption" tone="muted">{r.student_level ?? 0}% / {r.required_level ?? 0}%</Txt>
+                </Row>
+                <ProgressBar value={r.student_level || 0} tone={r.matched ? 'success' : 'warning'} height={6} />
+              </Stack>
+            ))}
+          </Stack>
+        ) : (
+          <Txt variant="small" tone="subtle">Set a target career to see requirements.</Txt>
+        )}
+      </Card>
+
+      {skillGaps.length ? (
+        <Card tone="warning">
+          <Txt variant="h3" tone="ink">Gaps holding your resume back</Txt>
+          <Stack gap={8} style={{ marginTop: space.md }}>
+            {skillGaps.map((g) => (
+              <Inset key={g.skill_id || g.skill_name} tone="warning" padding={space.sm}>
+                <Row justify="space-between">
+                  <Txt variant="small" weight={700} tone="ink">{g.skill_name}</Txt>
+                  <Pill label={g.priority || 'Gap'} tone="peach" size="sm" />
+                </Row>
+                <Txt variant="caption" color={colors.butterInk}>Currently {g.student_level ?? 0}% · needs {g.required_level ?? 0}%</Txt>
+              </Inset>
+            ))}
+          </Stack>
+        </Card>
+      ) : null}
+    </Stack>
+  );
+
   return (
-    <View style={styles.outerContainer}>
-      <AmbientBackground />
+    <Page>
+      <SectionTitle
+        title="Resume builder"
+        emoji="📄"
+        subtitle={activeTargetRole ? `Tailored for ${activeTargetRole}` : 'Generated from your verified profile'}
+        right={
+          <Row gap={8} wrap>
+            <Button label="Regenerate" icon="RefreshCw" variant="secondary" onPress={handleRegenerate} loading={isGenerating} />
+            {isEditing ? (
+              <>
+                <Button label="Cancel" variant="secondary" onPress={cancelEditing} />
+                <Button label="Save" icon="Check" variant="secondary" onPress={saveEdits} />
+              </>
+            ) : (
+              <Button label="Edit" icon="Pencil" variant="secondary" onPress={startEditing} disabled={busy || !tailoredData} />
+            )}
+            <Button label="Download PDF" icon="Download" onPress={() => handleDownload('PDF')} disabled={busy || !tailoredData} />
+          </Row>
+        }
+      />
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="clay-page-enter" style={styles.centerConstrainedContainer}>
-          {/* TOP HERO / HEADER CARD */}
-          <ResumeHeader
-            activeTargetRole={activeTargetRole}
-            isGenerating={isGenerating}
-            onRegenerate={handleRegenerate}
-            onDownloadPdf={() => handleDownload('PDF')}
-            isEditing={isEditing}
-            onToggleEdit={() => (isEditing ? cancelEditing() : startEditing())}
-          />
+      {targetCareers.length > 1 ? (
+        <SegmentedTabs
+          options={targetCareers.map((c) => ({ id: c, label: c, icon: 'Target' }))}
+          value={activeTargetRole}
+          onChange={handleRoleChange}
+          scrollable={!isWide}
+        />
+      ) : null}
 
-          {error && (
-            <ResumeErrorState
-              message={error}
-              onRetry={() => fetchTailoredResume(activeTargetRole)}
+      {error ? (
+        <Card tone="danger">
+          <Row justify="space-between" wrap gap={space.sm}>
+            <Row gap={8} style={{ flex: 1 }}>
+              <Icon name="CircleAlert" size={18} color="#B4232A" />
+              <Txt variant="small" weight={600} color="#B4232A" style={{ flex: 1 }}>{error}</Txt>
+            </Row>
+            <Button label="Retry" size="sm" variant="light" onPress={() => fetchTailoredResume(activeTargetRole)} />
+          </Row>
+        </Card>
+      ) : null}
+
+      <View style={[styles.grid, isWide ? styles.gridWide : null]}>
+        <View style={isWide ? { flex: 1, minWidth: 0 } : null}>{insights}</View>
+        <View style={isWide ? { flex: 1.45, minWidth: 0 } : null}>
+          {busy ? (
+            <Card padding={space.xxl}>
+              <Stack gap={12}>
+                <Skeleton height={28} width="50%" />
+                <Skeleton height={14} width="35%" />
+                <Skeleton height={80} />
+                <Skeleton height={14} width="30%" />
+                <Skeleton height={120} />
+              </Stack>
+            </Card>
+          ) : (
+            <ResumeSheet
+              data={currentResumeData}
+              name={studentName}
+              role={activeTargetRole}
+              photo={studentPhotoUrl}
+              contact={[studentEmailDisplay, studentPhoneDisplay, studentLocationDisplay, studentGithubDisplay ? `github.com/${studentGithubDisplay}` : null].filter(Boolean)}
+              isEditing={isEditing}
+              onSummary={(val) => setEditedResumeBuffer((prev) => ({ ...prev, summary: val }))}
             />
           )}
-
-          {/* MAIN 2-COLUMN WORKSPACE (40% LEFT / 60% RIGHT) */}
-          <View style={[styles.mainGrid, !isWide && styles.flexCol]}>
-            {/* LEFT COLUMN (approx 40%) */}
-            <View style={styles.leftCol}>
-              {/* 1. Role Calibration */}
-              <RoleCalibrationCard
-                activeTargetRole={activeTargetRole}
-                targetCareers={targetCareers}
-                onSelectRole={handleRoleChange}
-                matchScore={typeof profileMatch.overall === 'number' ? profileMatch.overall : null}
-                requirements={keyRequirements}
-                hiringStandard={tailoredData?.hiring_standard}
-                taxonomy={tailoredData?.taxonomy}
-              />
-
-              {/* 2. Verified Skills Ledger */}
-              <VerifiedSkillsLedger requirements={keyRequirements} />
-
-              {/* 3. Skill Gaps Affecting Resume */}
-              <SkillGapsCard skillGaps={skillGaps} />
-            </View>
-
-            {/* RIGHT COLUMN (approx 60%) */}
-            <View style={styles.rightCol}>
-              {/* 1. ATS Score & 4 Dynamic Metrics (Format, Keyword, Impact, UTF-8) */}
-              <ATSScoreMetricsCard
-                atsData={atsAnalysis}
-                profileMatch={profileMatch}
-                resumeData={currentResumeData}
-                careerRequirements={keyRequirements}
-                loading={loading || isGenerating}
-              />
-
-              {/* 2. Large Dominating Resume Preview Sheet */}
-              {loading || isGenerating ? (
-                <ResumeLoadingSkeleton />
-              ) : (
-                <ResumePreview
-                  resumeData={resumePayload}
-                  editedBuffer={editedResumeBuffer}
-                  isEditing={isEditing}
-                  onUpdateBuffer={setEditedResumeBuffer}
-                  activeTargetRole={activeTargetRole}
-                  zoom={zoom}
-                />
-              )}
-            </View>
-          </View>
-
-          {/* BOTTOM FLOATING ACTION / STATUS BAR */}
-          <BottomActionBar
-            isEditing={isEditing}
-            onStartEdit={startEditing}
-            onSaveEdit={saveEdits}
-            onCancelEdit={cancelEditing}
-            onDownloadPdf={() => handleDownload('PDF')}
-            zoom={zoom}
-            setZoom={setZoom}
-          />
-
-          {/* FOOTER */}
-          <ResumeFooter />
         </View>
-      </ScrollView>
-    </View>
+      </View>
+    </Page>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <Stack gap={8}>
+      <Row gap={8}>
+        <Txt variant="overline" tone="ink">{title}</Txt>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+      </Row>
+      {children}
+    </Stack>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ResumeSheet — paper-style preview of the generated resume.
+// ---------------------------------------------------------------------------
+function ResumeSheet({ data, name, role, photo, contact, isEditing, onSummary }) {
+  const skills = data.skills || [];
+  const experience = data.experience || [];
+  const projects = data.projects || [];
+  const education = data.education || [];
+  const certifications = data.certifications || [];
+  return (
+    <Card padding={space.xxl} style={shadows.raised}>
+      <Stack gap={space.lg}>
+        <Row gap={space.md} align="center" wrap>
+          <Avatar name={name} uri={photo || undefined} size={64} tone="accent" />
+          <Stack gap={2} style={{ flex: 1, minWidth: 200 }}>
+            <Txt variant="h1" tone="ink">{name}</Txt>
+            {role ? <Txt variant="title" color={colors.lilacInk}>{role}</Txt> : null}
+            <Txt variant="caption" tone="muted">{contact.join('  ·  ')}</Txt>
+          </Stack>
+        </Row>
+
+        <Section title="Summary">
+          {isEditing ? (
+            <Field multiline value={data.summary || ''} onChangeText={onSummary} placeholder="Write a short professional summary…" />
+          ) : (
+            <Txt variant="small" tone="default" style={{ lineHeight: 20 }}>{data.summary || 'No summary yet.'}</Txt>
+          )}
+        </Section>
+
+        {skills.length ? (
+          <Section title="Skills">
+            <Stack gap={4}>
+              {skills.map((s, i) => (
+                <Row key={i} gap={10} align="flex-start">
+                  <Txt variant="small" weight={700} tone="ink" style={{ width: 110 }}>{s.label}</Txt>
+                  <Txt variant="small" tone="default" style={{ flex: 1 }}>{s.value}</Txt>
+                </Row>
+              ))}
+            </Stack>
+          </Section>
+        ) : null}
+
+        {experience.length ? (
+          <Section title="Experience">
+            <Stack gap={space.sm}>
+              {experience.map((e, i) => (
+                <Stack key={i} gap={2}>
+                  <Row justify="space-between" wrap>
+                    <Txt variant="small" weight={700} tone="ink">{e.title}</Txt>
+                    <Txt variant="caption" tone="muted">{e.period}</Txt>
+                  </Row>
+                  <Txt variant="caption" tone="muted">{e.company}</Txt>
+                  {(e.bullets || []).map((b, j) => (
+                    <Txt key={j} variant="small" tone="default">• {b}</Txt>
+                  ))}
+                </Stack>
+              ))}
+            </Stack>
+          </Section>
+        ) : null}
+
+        {projects.length ? (
+          <Section title="Projects">
+            <Stack gap={space.sm}>
+              {projects.map((p, i) => (
+                <Stack key={i} gap={3}>
+                  <Row gap={8} wrap>
+                    <Txt variant="small" weight={700} tone="ink">{p.title}</Txt>
+                    {p.verified ? <Pill label="Verified" tone="success" icon="ShieldCheck" size="sm" /> : null}
+                    {p.type ? <Txt variant="caption" tone="muted">{p.type}</Txt> : null}
+                  </Row>
+                  {(p.bullets && p.bullets.length ? p.bullets : p.description ? [p.description] : []).map((b, j) => (
+                    <Txt key={j} variant="small" tone="default">• {b}</Txt>
+                  ))}
+                  {(p.technologies || []).length ? (
+                    <Row wrap gap={4} style={{ marginTop: 2 }}>
+                      {p.technologies.map((t) => <Pill key={t} label={t} size="sm" />)}
+                    </Row>
+                  ) : null}
+                </Stack>
+              ))}
+            </Stack>
+          </Section>
+        ) : null}
+
+        {education.length ? (
+          <Section title="Education">
+            {education.map((e, i) => (
+              <Row key={i} justify="space-between" align="flex-start" wrap>
+                <Stack gap={1} style={{ flex: 1, minWidth: 200 }}>
+                  <Txt variant="small" weight={700} tone="ink">{e.degree}</Txt>
+                  <Txt variant="caption" tone="muted">{e.university}{e.cgpa ? ` · CGPA ${e.cgpa}` : ''}</Txt>
+                </Stack>
+                <Txt variant="caption" tone="muted">{e.graduationYear}</Txt>
+              </Row>
+            ))}
+          </Section>
+        ) : null}
+
+        {certifications.length ? (
+          <Section title="Certifications">
+            {certifications.map((c, i) => (
+              <Txt key={i} variant="small" tone="default">• {typeof c === 'string' ? c : c.name || c.title}</Txt>
+            ))}
+          </Section>
+        ) : null}
+      </Stack>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  outerContainer: {
-    flex: 1,
-    backgroundColor: CLAY_COLORS.canvas,
-    position: 'relative',
+  grid: {
+    gap: space.xl,
   },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-    zIndex: 1,
-  },
-  centerConstrainedContainer: {
-    width: '100%',
-    maxWidth: 1380,
-    alignSelf: 'center',
-    gap: 16,
-  },
-  mainGrid: {
+  gridWide: {
     flexDirection: 'row',
-    gap: 20,
     alignItems: 'flex-start',
   },
-  flexCol: {
-    flexDirection: 'column',
+  metricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.xs,
+    marginTop: space.md,
   },
-  leftCol: {
-    flex: 4.2,
-    minWidth: 320,
-    gap: 16,
-  },
-  rightCol: {
-    flex: 5.8,
-    minWidth: 360,
-    gap: 16,
+  metricCell: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    borderRadius: radii.md,
+    padding: space.sm,
   },
 });

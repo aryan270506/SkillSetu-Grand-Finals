@@ -1,55 +1,39 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Linking, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { createInitialProfile, fetchCompleteStudentProfile, formatCareerTitle } from '../services/profileService';
-import { ensureProfileGlobalStyles, CLAY_COLORS } from './components/DesignTokens';
-import AmbientBackground from './components/AmbientBackground';
-import ProfileHeaderNav from './components/ProfileHeaderNav';
-import ProfileHero from './components/ProfileHero';
-import AIPreAnalysisCard from './components/AIPreAnalysisCard';
-import VerifiedSkillProofsCard from './components/VerifiedSkillProofsCard';
-import GitHubRepositoriesCard from './components/GitHubRepositoriesCard';
-import ActiveApplicationsCard from './components/ActiveApplicationsCard';
-import AcademicCredentialsCard from './components/AcademicCredentialsCard';
-import ProfessionalLinksCard from './components/ProfessionalLinksCard';
-import ProfileFooter from './components/ProfileFooter';
-import { EditProfileModal, ShareProfileModal, DownloadReportModal, ATSBreakdownModal } from './components/ProfileModals';
 import { fetchStudentApplications } from '../services/applicationService';
-
 import {
-  ActivityIndicator,
-  Animated,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+  Avatar,
+  Button,
+  Card,
+  Checkbox,
+  Chip,
+  Divider,
+  EmptyState,
+  EventCard,
+  Field,
+  Icon,
+  IconButton,
+  Inset,
+  KeyValue,
+  Page,
+  Pill,
+  ProgressBar,
+  Ring,
+  Row,
+  SectionTitle,
+  Sheet,
+  Skeleton,
+  Stack,
+  StatTrio,
+  Stepper,
+  TagSearch,
+  Txt,
+} from '../../../ui/components';
+import { colors, radii, space, toneOf, webOnly } from '../../../ui/theme';
+import { API_BASE } from '../../../ui/config';
+import { pickFile } from '../../../ui/pickFile';
 
-
-const COLORS = {
-  canvas: '#f8f9fa',       // Soft Off-white Background
-  panel: '#f1f5f9',        // Slate light background
-  paper: '#ffffff',        // Clean White Cards
-  ink: '#0f172a',          // Deep Slate Black
-  navy: '#1e293b',         // Navy Dark Gray
-  muted: '#64748b',        // Muted Blue-Gray
-  subtle: '#e2e8f0',       // Border Gray
-  green: '#0e4f34',        // Primary Deep Green (SkillSetu Green)
-  greenLight: '#e6f4ea',   // Very Light Green for badges
-  teal: '#0d9488',         // Teal Accent
-  mint: '#ccfbf1',         // Soft Mint Background
-  amber: '#f59e0b',        // Amber/Yellow
-  amberLight: '#fef3c7',   // Light Amber
-  rose: '#f43f5e',         // Rose/Red
-  roseLight: '#ffe4e6',    // Light Rose
-  blue: '#2563eb',         // Link Blue
-  blueLight: '#dbeafe',    // Light Blue
-};
-
-// Helper function to safely render strings in React JSX without object child errors
 export function renderVal(val, defaultVal = '') {
   if (val === null || val === undefined) return defaultVal;
   if (typeof val === 'object') {
@@ -61,94 +45,7 @@ export function renderVal(val, defaultVal = '') {
   return String(val);
 }
 
-// HoverableCard component for web interactions
-function HoverableCard({ children, style, containerStyle, ...props }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const shadow = useRef(new Animated.Value(0)).current;
 
-  const handleHoverIn = () => {
-    if (Platform.OS === 'web') {
-      Animated.parallel([
-        Animated.spring(scale, {
-          toValue: 1.02,
-          friction: 8,
-          tension: 100,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.timing(shadow, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ]).start();
-    }
-  };
-
-  const handleHoverOut = () => {
-    if (Platform.OS === 'web') {
-      Animated.parallel([
-        Animated.spring(scale, {
-          toValue: 1.0,
-          friction: 8,
-          tension: 100,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.timing(shadow, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ]).start();
-    }
-  };
-
-  const shadowOpacity = shadow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.03, 0.12],
-  });
-
-  const shadowRadius = shadow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [6, 16],
-  });
-
-  const flatStyle = StyleSheet.flatten(style);
-  const containerLayout = {};
-  if (flatStyle) {
-    if (flatStyle.flex !== undefined) containerLayout.flex = flatStyle.flex;
-    if (flatStyle.width !== undefined) containerLayout.width = flatStyle.width;
-    if (flatStyle.margin !== undefined) containerLayout.margin = flatStyle.margin;
-    if (flatStyle.marginTop !== undefined) containerLayout.marginTop = flatStyle.marginTop;
-    if (flatStyle.marginBottom !== undefined) containerLayout.marginBottom = flatStyle.marginBottom;
-    if (flatStyle.marginLeft !== undefined) containerLayout.marginLeft = flatStyle.marginLeft;
-    if (flatStyle.marginRight !== undefined) containerLayout.marginRight = flatStyle.marginRight;
-    if (flatStyle.marginHorizontal !== undefined) containerLayout.marginHorizontal = flatStyle.marginHorizontal;
-    if (flatStyle.marginVertical !== undefined) containerLayout.marginVertical = flatStyle.marginVertical;
-  }
-
-  const animatedStyle = {
-    transform: [{ scale }],
-    shadowColor: '#1e293b',
-    shadowOpacity,
-    shadowRadius,
-    shadowOffset: { width: 0, height: 4 },
-  };
-
-  return (
-    <Pressable
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      style={[containerLayout, containerStyle]}
-      {...props}
-    >
-      <Animated.View style={[style, animatedStyle]}>
-        {children}
-      </Animated.View>
-    </Pressable>
-  );
-}
-
-// Clean empty profile structure
 export const DEFAULT_MOCK_PROFILE = {
   personalInfo: {
     fullName: '',
@@ -269,6 +166,7 @@ export const EMPTY_PROFILE = {
   verified: false,
 };
 
+
 export default function Profile({ user, updateUser, profileData, setProfileData, onFinish }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
@@ -276,8 +174,6 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
 
   const [activeStep, setActiveStep] = useState(1);
   const [validationErrors, setValidationErrors] = useState({});
-  const fileInputRef = useRef(null);
-  const marksheetFileInputRef = useRef(null);
 
   // Marksheet Document Extraction States
   const [isExtractingMarksheet, setIsExtractingMarksheet] = useState(false);
@@ -343,10 +239,6 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [isReanalyzingResume, setIsReanalyzingResume] = useState(false);
 
-  // Inject Claymorphism Google Fonts & CSS Animations
-  useEffect(() => {
-    ensureProfileGlobalStyles();
-  }, []);
 
   // Fetch student active applications
   useEffect(() => {
@@ -365,7 +257,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
   useEffect(() => {
     if (user?.email) {
       const emailQuery = encodeURIComponent(user.email.trim());
-      fetch(`http://127.0.0.1:8000/api/v1/student/resume-data?email=${emailQuery}`)
+      fetch(`${API_BASE}/student/resume-data?email=${emailQuery}`)
         .then(r => r.json())
         .then(resData => {
           if (resData && resData.status === 'success' && resData.resume_data) {
@@ -418,10 +310,10 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     async function loadInitialTaxonomy() {
       try {
         const [cRes, sRes, iRes, lRes] = await Promise.all([
-          fetch('http://127.0.0.1:8000/api/v1/taxonomy/careers?limit=50').then(r => r.json()),
-          fetch('http://127.0.0.1:8000/api/v1/taxonomy/skills?limit=50').then(r => r.json()),
-          fetch('http://127.0.0.1:8000/api/v1/taxonomy/industries').then(r => r.json()),
-          fetch('http://127.0.0.1:8000/api/v1/taxonomy/locations?limit=50').then(r => r.json()),
+          fetch(`${API_BASE}/taxonomy/careers?limit=50`).then(r => r.json()),
+          fetch(`${API_BASE}/taxonomy/skills?limit=50`).then(r => r.json()),
+          fetch(`${API_BASE}/taxonomy/industries`).then(r => r.json()),
+          fetch(`${API_BASE}/taxonomy/locations?limit=50`).then(r => r.json()),
         ]);
 
         if (cRes.status === 'success') setTaxonomyCareers(cRes.data || []);
@@ -440,8 +332,8 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     const timer = setTimeout(async () => {
       try {
         const url = careerSearch.trim() 
-          ? `http://127.0.0.1:8000/api/v1/taxonomy/careers?q=${encodeURIComponent(careerSearch.trim())}&limit=50`
-          : `http://127.0.0.1:8000/api/v1/taxonomy/careers?limit=50`;
+          ? `${API_BASE}/taxonomy/careers?q=${encodeURIComponent(careerSearch.trim())}&limit=50`
+          : `${API_BASE}/taxonomy/careers?limit=50`;
         const res = await fetch(url).then(r => r.json());
         if (res.status === 'success') {
           setTaxonomyCareers(res.data || []);
@@ -458,8 +350,8 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     const timer = setTimeout(async () => {
       try {
         const url = skillSearch.trim() 
-          ? `http://127.0.0.1:8000/api/v1/taxonomy/skills?q=${encodeURIComponent(skillSearch.trim())}&limit=50`
-          : `http://127.0.0.1:8000/api/v1/taxonomy/skills?limit=50`;
+          ? `${API_BASE}/taxonomy/skills?q=${encodeURIComponent(skillSearch.trim())}&limit=50`
+          : `${API_BASE}/taxonomy/skills?limit=50`;
         const res = await fetch(url).then(r => r.json());
         if (res.status === 'success') {
           setTaxonomySkills(res.data || []);
@@ -476,8 +368,8 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     const timer = setTimeout(async () => {
       try {
         const url = locationSearch.trim() 
-          ? `http://127.0.0.1:8000/api/v1/taxonomy/locations?q=${encodeURIComponent(locationSearch.trim())}&limit=50`
-          : `http://127.0.0.1:8000/api/v1/taxonomy/locations?limit=50`;
+          ? `${API_BASE}/taxonomy/locations?q=${encodeURIComponent(locationSearch.trim())}&limit=50`
+          : `${API_BASE}/taxonomy/locations?limit=50`;
         const res = await fetch(url).then(r => r.json());
         if (res.status === 'success') {
           setTaxonomyLocations(res.data || []);
@@ -586,7 +478,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
       if (activeStep === 1) {
         // Save Step 1 personal information directly to user database record
         try {
-          const res = await fetch('http://127.0.0.1:8000/api/v1/student/update-personal-info', {
+          const res = await fetch(`${API_BASE}/student/update-personal-info`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -617,7 +509,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
           const finalStart = eduStart.trim() || renderVal(eduItem.startYear);
           const finalGrad = eduGrad.trim() || renderVal(eduItem.graduationYear);
 
-          const res = await fetch('http://127.0.0.1:8000/api/v1/student/update-education', {
+          const res = await fetch(`${API_BASE}/student/update-education`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -647,7 +539,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
           const selectedCareers = cGoals.targetCareerIds || (cGoals.targetCareerId ? [cGoals.targetCareerId] : []);
           const selectedIndustries = cGoals.targetIndustryIds || (cGoals.targetIndustryId ? [cGoals.targetIndustryId] : []);
 
-          await fetch('http://127.0.0.1:8000/api/v1/taxonomy/student/career-goals', {
+          await fetch(`${API_BASE}/taxonomy/student/career-goals`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -684,7 +576,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             linksObj.portfolio = currentProfile.githubLinks.portfolioUrl;
           }
 
-          await fetch('http://127.0.0.1:8000/api/v1/student/update-resume-data', {
+          await fetch(`${API_BASE}/student/update-resume-data`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -869,7 +761,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     formData.append('email', currentProfile.personalInfo.email.trim());
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/student/upload-resume', {
+      const response = await fetch(`${API_BASE}/student/upload-resume`, {
         method: 'POST',
         body: formData,
       });
@@ -919,7 +811,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
 
   const deleteResume = async () => {
     try {
-      await fetch(`http://127.0.0.1:8000/api/v1/student/delete-resume?email=${encodeURIComponent(currentProfile.personalInfo.email.trim())}`, {
+      await fetch(`${API_BASE}/student/delete-resume?email=${encodeURIComponent(currentProfile.personalInfo.email.trim())}`, {
         method: 'DELETE',
       });
     } catch (err) {
@@ -958,7 +850,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     formData.append('email', currentProfile.personalInfo.email.trim());
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/student/upload-marksheet', {
+      const response = await fetch(`${API_BASE}/student/upload-marksheet`, {
         method: 'POST',
         body: formData,
       });
@@ -1033,7 +925,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/github/connect?email=${encodeURIComponent(email)}`);
+      const response = await fetch(`${API_BASE}/github/connect?email=${encodeURIComponent(email)}`);
       const resData = await response.json();
       if (response.ok && resData.status === 'success' && resData.authorization_url) {
         // Redirect browser to GitHub OAuth authorization URL
@@ -1052,7 +944,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     if (!email) return;
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/github/refresh?email=${encodeURIComponent(email)}`, {
+      const response = await fetch(`${API_BASE}/github/refresh?email=${encodeURIComponent(email)}`, {
         method: 'POST',
       });
       const resData = await response.json();
@@ -1087,7 +979,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     }
     setIsAnalyzingGithub(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/github/analyze-selected', {
+      const response = await fetch(`${API_BASE}/github/analyze-selected`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -1121,7 +1013,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     const email = currentProfile.personalInfo.email.trim();
     if (confirm('Are you sure you want to disconnect your GitHub profile?')) {
       try {
-        await fetch(`http://127.0.0.1:8000/api/v1/github/disconnect?email=${encodeURIComponent(email)}`, {
+        await fetch(`${API_BASE}/github/disconnect?email=${encodeURIComponent(email)}`, {
           method: 'DELETE',
         });
       } catch (err) {
@@ -1147,7 +1039,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     const email = currentProfile.personalInfo.email.trim();
     if (!email) return;
     try {
-      await fetch('http://127.0.0.1:8000/api/v1/github/repositories/select', {
+      await fetch(`${API_BASE}/github/repositories/select`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1219,1570 +1111,815 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     return Math.min(score, 100);
   };
 
-  // Rendering step content
-  const renderStepContent = () => {
-    switch (activeStep) {
-      case 1:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.sectionTitle}>Personal Information</Text>
-            <Text style={styles.sectionSubtitle}>Add your personal contact details and basic introduction.</Text>
 
-            <View style={styles.avatarUploadRow}>
-              {currentProfile.personalInfo.profileImage ? (
-                <Image
-                  source={{ uri: currentProfile.personalInfo.profileImage }}
-                  style={[styles.avatarImage, validationErrors.profileImage && styles.inputErrorBorder]}
+  // ---------------------------------------------------------------------------
+  // File pickers (web)
+  // ---------------------------------------------------------------------------
+  const pickProfileImage = async () => {
+    const file = await pickFile({ accept: 'image/png,image/jpeg,image/jpg' });
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image size exceeds 2MB limit. Please select a smaller image.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => updatePersonalInfo('profileImage', event.target.result);
+    reader.readAsDataURL(file);
+  };
+  const pickMarksheet = async () => {
+    const file = await pickFile({ accept: '.pdf,.jpg,.jpeg,.png' });
+    if (file) handleMarksheetFileUpload(file);
+  };
+  const pickResume = async () => {
+    const file = await pickFile({ accept: '.pdf,.docx,.png,.jpg,.jpeg,.webp' });
+    if (file) handleResumeFileUpload(file);
+  };
+  const openUrl = (url) => {
+    if (!url) return;
+    const dest = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    if (Platform.OS === 'web') window.open(dest, '_blank', 'noopener,noreferrer');
+    else Linking.openURL(dest).catch(() => {});
+  };
+
+  const twoCol = isTablet;
+
+  const careerName = (id) =>
+    (taxonomyCareers.find((c) => c.id === id) || {}).name ||
+    (id === currentProfile.careerGoals.targetCareerId || id === (currentProfile.careerGoals.targetCareerIds || [])[0]
+      ? currentProfile.careerGoals.targetCareer
+      : '') ||
+    formatCareerTitle(id);
+
+  // ---------------------------------------------------------------------------
+  // Wizard steps
+  // ---------------------------------------------------------------------------
+  const renderStep1 = () => {
+    const p = currentProfile.personalInfo;
+    const bind = (field) => ({
+      value: p[field] || '',
+      onChangeText: (v) => updatePersonalInfo(field, v),
+      error: validationErrors[field],
+    });
+    return (
+      <Card>
+        <Stack gap={space.lg}>
+          <Row gap={space.lg} align="center" wrap>
+            <Avatar name={p.fullName || user?.name} uri={p.profileImage || undefined} size={92} ring={validationErrors.profileImage ? colors.danger : undefined} />
+            <Stack gap={8} style={{ flex: 1, minWidth: 220 }}>
+              <Txt variant="title" tone="ink">Profile photo</Txt>
+              <Txt variant="small" tone="muted">JPG or PNG, up to 2MB. Recruiters see this on your profile.</Txt>
+              <Row gap={8}>
+                <Button label={p.profileImage ? 'Change photo' : 'Upload photo'} icon="Upload" size="sm" onPress={pickProfileImage} />
+                {p.profileImage ? <Button label="Remove" variant="danger" size="sm" onPress={() => updatePersonalInfo('profileImage', '')} /> : null}
+              </Row>
+              {validationErrors.profileImage ? <Txt variant="caption" tone="danger">{validationErrors.profileImage}</Txt> : null}
+            </Stack>
+          </Row>
+          <Grid twoCol={twoCol}>
+            <Col twoCol={twoCol}>
+              <Field label="Full name" icon="User" placeholder="e.g. Alex Chen" {...bind('fullName')} />
+              <Field label="Phone" icon="Phone" placeholder="+91 98765 43210" keyboardType="phone-pad" {...bind('phone')} />
+              <Field label="Location" icon="MapPin" placeholder="e.g. Pune, India" {...bind('location')} />
+            </Col>
+            <Col twoCol={twoCol}>
+              <Field label="Email" icon="Mail" placeholder="hello@example.com" keyboardType="email-address" autoCapitalize="none" {...bind('email')} />
+              <Field label="Headline" icon="Sparkles" placeholder="e.g. Aspiring Full Stack Developer" {...bind('headline')} />
+              <Field label="Experience" icon="Briefcase" placeholder="e.g. Fresher, 1 year" {...bind('yearsOfExperience')} />
+            </Col>
+          </Grid>
+          <Field label="About you" multiline placeholder="A short summary of your skills and what you're aiming for…" {...bind('bio')} />
+        </Stack>
+      </Card>
+    );
+  };
+
+  const renderStep2 = () => {
+    const edu = currentProfile.education;
+    const first = edu.list[0] || {};
+    return (
+      <Stack gap={space.md}>
+        <Card tone={edu.hasExtractedMarksheet ? 'success' : 'info'} badge={{ icon: 'FileText', tone: edu.hasExtractedMarksheet ? 'success' : 'info' }}>
+          {isExtractingMarksheet ? (
+            <Stack gap={10}>
+              <Txt variant="h3" tone="ink">Reading your marksheet…</Txt>
+              <Txt variant="small" tone="muted">Extracting degree, branch, university, years and CGPA.</Txt>
+              <Skeleton height={12} width="70%" />
+              <Skeleton height={12} width="50%" />
+            </Stack>
+          ) : !edu.hasExtractedMarksheet ? (
+            <Stack gap={10}>
+              <Txt variant="h3" tone="ink">Upload your latest marksheet</Txt>
+              <Txt variant="small" color={colors.skyInk}>
+                PDF, JPG or PNG up to 5MB. SkillSetu fills in your education details automatically — you can edit them below.
+              </Txt>
+              <Button label="Upload marksheet" icon="Upload" onPress={pickMarksheet} />
+              {validationErrors.marksheet ? <Txt variant="caption" tone="danger">{validationErrors.marksheet}</Txt> : null}
+            </Stack>
+          ) : (
+            <Stack gap={space.sm}>
+              <Row justify="space-between" wrap>
+                <Row gap={10} style={{ flexShrink: 1 }}>
+                  <Icon name="CircleCheck" size={20} color={colors.mintInk} />
+                  <Txt variant="bodyStrong" tone="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{edu.marksheetFileName || 'Marksheet uploaded'}</Txt>
+                </Row>
+                <Button label="Replace" icon="RefreshCw" size="sm" variant="light" onPress={pickMarksheet} />
+              </Row>
+              <Inset tone="success">
+                <KeyValue icon="GraduationCap" label="Degree" value={renderVal(first.degree) || 'Not detected'} />
+                <KeyValue icon="BookOpen" label="Branch" value={renderVal(first.branch) || 'Not detected'} />
+                <KeyValue icon="Building" label="University" value={renderVal(first.university) || 'Not detected'} />
+                <KeyValue
+                  icon="Calendar"
+                  label="Period"
+                  value={first.startYear || first.graduationYear ? `${renderVal(first.startYear, '—')} – ${renderVal(first.graduationYear, '—')}` : renderVal(edu.academicYearDetected, 'Not detected')}
                 />
-              ) : (
-                <View style={[styles.avatarInitials, validationErrors.profileImage && styles.inputErrorBorder]}>
-                  <Text style={styles.avatarInitialsText}>
-                    {currentProfile.personalInfo.fullName ? currentProfile.personalInfo.fullName.slice(0, 2).toUpperCase() : '??'}
-                  </Text>
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-                  {Platform.OS === 'web' && (
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept="image/png, image/jpeg, image/jpg"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files && e.target.files[0];
-                        if (file) {
-                          if (file.size > 2 * 1024 * 1024) {
-                            alert('Image size exceeds 2MB limit. Please select a smaller image.');
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            updatePersonalInfo('profileImage', event.target.result);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  )}
-                  <Pressable
-                    style={styles.uploadBtn}
-                    onPress={() => {
-                      if (Platform.OS === 'web' && fileInputRef.current) {
-                        fileInputRef.current.click();
-                      } else {
-                        const sampleImages = [
-                          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
-                          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
-                        ];
-                        const randomPic = sampleImages[Math.floor(Math.random() * sampleImages.length)];
-                        updatePersonalInfo('profileImage', randomPic);
-                      }
-                    }}
-                  >
-                    <Text style={styles.uploadBtnText}>📸 Select Profile Image</Text>
-                  </Pressable>
-                  {currentProfile.personalInfo.profileImage ? (
-                    <Pressable
-                      style={[styles.uploadBtn, { backgroundColor: '#fee2e2' }]}
-                      onPress={() => updatePersonalInfo('profileImage', '')}
-                    >
-                      <Text style={[styles.uploadBtnText, { color: '#dc2626' }]}>🗑️ Remove Image</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-                <Text style={styles.inputHelpText}>Supported files: JPG, PNG. Max 2MB. Profile photo is required.</Text>
-                {validationErrors.profileImage && <Text style={styles.errorText}>{validationErrors.profileImage}</Text>}
-              </View>
-            </View>
+                <KeyValue icon="Award" label="CGPA / %" value={renderVal(edu.cgpaDetected) || 'Not detected'} />
+              </Inset>
+            </Stack>
+          )}
+        </Card>
 
-            <View style={styles.rowLayout}>
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Full Name *</Text>
-                <TextInput
-                  style={[styles.textInput, validationErrors.fullName && styles.inputErrorBorder]}
-                  placeholder="e.g. Alex Chen"
-                  value={currentProfile.personalInfo.fullName}
-                  onChangeText={(val) => updatePersonalInfo('fullName', val)}
-                />
-                {validationErrors.fullName && <Text style={styles.errorText}>{validationErrors.fullName}</Text>}
-              </View>
-
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Email Address *</Text>
-                <TextInput
-                  style={[styles.textInput, validationErrors.email && styles.inputErrorBorder]}
-                  placeholder="hello@example.com"
-                  value={currentProfile.personalInfo.email}
-                  onChangeText={(val) => updatePersonalInfo('email', val)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-                {validationErrors.email && <Text style={styles.errorText}>{validationErrors.email}</Text>}
-              </View>
-            </View>
-
-            <View style={styles.rowLayout}>
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Phone Number *</Text>
-                <TextInput
-                  style={[styles.textInput, validationErrors.phone && styles.inputErrorBorder]}
-                  placeholder="+1 (555) 019-2834"
-                  value={currentProfile.personalInfo.phone}
-                  onChangeText={(val) => updatePersonalInfo('phone', val)}
-                  keyboardType="phone-pad"
-                />
-                {validationErrors.phone && <Text style={styles.errorText}>{validationErrors.phone}</Text>}
-              </View>
-
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Headline / Short Title *</Text>
-                <TextInput
-                  style={[styles.textInput, validationErrors.headline && styles.inputErrorBorder]}
-                  placeholder="e.g. Senior Frontend Engineer"
-                  value={currentProfile.personalInfo.headline}
-                  onChangeText={(val) => updatePersonalInfo('headline', val)}
-                />
-                {validationErrors.headline && <Text style={styles.errorText}>{validationErrors.headline}</Text>}
-              </View>
-            </View>
-
-            <View style={styles.rowLayout}>
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Location *</Text>
-                <TextInput
-                  style={[styles.textInput, validationErrors.location && styles.inputErrorBorder]}
-                  placeholder="e.g. San Francisco, CA"
-                  value={currentProfile.personalInfo.location}
-                  onChangeText={(val) => updatePersonalInfo('location', val)}
-                />
-                {validationErrors.location && <Text style={styles.errorText}>{validationErrors.location}</Text>}
-              </View>
-
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Years of Experience *</Text>
-                <TextInput
-                  style={[styles.textInput, validationErrors.yearsOfExperience && styles.inputErrorBorder]}
-                  placeholder="e.g. 3 Years"
-                  value={currentProfile.personalInfo.yearsOfExperience}
-                  onChangeText={(val) => updatePersonalInfo('yearsOfExperience', val)}
-                />
-                {validationErrors.yearsOfExperience && <Text style={styles.errorText}>{validationErrors.yearsOfExperience}</Text>}
-              </View>
-            </View>
-
-            <View style={styles.inputWrap}>
-              <Text style={styles.inputLabel}>Bio / About Yourself *</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea, validationErrors.bio && styles.inputErrorBorder]}
-                placeholder="Brief summary of your professional skills and aspirations..."
-                value={currentProfile.personalInfo.bio}
-                onChangeText={(val) => updatePersonalInfo('bio', val)}
-                multiline
-                numberOfLines={4}
-              />
-              {validationErrors.bio && <Text style={styles.errorText}>{validationErrors.bio}</Text>}
-            </View>
-          </View>
-        );
-
-      case 2:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.sectionTitle}>Education</Text>
-            <Text style={styles.sectionSubtitle}>Add your academic background so SkillSetu can understand your educational profile.</Text>
-
-            {/* AI Marksheet Extraction Box */}
-            <HoverableCard style={[styles.extractedBoxCard, validationErrors.marksheet && styles.inputErrorBorder]}>
-              {Platform.OS === 'web' && (
-                <input
-                  type="file"
-                  ref={marksheetFileInputRef}
-                  accept=".pdf, .jpg, .jpeg, .png"
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    const file = e.target.files && e.target.files[0];
-                    if (file) {
-                      handleMarksheetFileUpload(file);
-                    }
-                  }}
-                />
-              )}
-
-              {isExtractingMarksheet ? (
-                <View style={styles.simulationUploadBox}>
-                  <Text style={styles.extractBadgeText}>✨ Processing Marksheet...</Text>
-                  <Text style={styles.extractionDescription}>Extracting Degree, Branch, University, and Academic dates using AI Document Vision...</Text>
-                </View>
-              ) : !currentProfile.education.hasExtractedMarksheet ? (
-                <View style={styles.simulationUploadBox}>
-                  <Text style={styles.extractBadgeText}>📄 Marksheet Required</Text>
-                  <Text style={styles.extractionDescription}>Please upload your latest university marksheet (PDF, JPG, PNG max 5MB). SkillSetu will automatically extract your Degree, Branch, University, Academic Years, and CGPA. No educational data is assumed until you upload.</Text>
-                  <Pressable
-                    style={styles.extractBtn}
-                    onPress={() => {
-                      if (Platform.OS === 'web' && marksheetFileInputRef.current) {
-                        marksheetFileInputRef.current.click();
-                      }
-                    }}
-                  >
-                    <Text style={styles.extractBtnText}>📄 Upload Marksheet Document (PDF / Image)</Text>
-                  </Pressable>
-                  {validationErrors.marksheet && <Text style={styles.errorText}>{validationErrors.marksheet}</Text>}
-                </View>
-              ) : (
-                <View style={[styles.extractedFlexRow, !isTablet && styles.flexCol]}>
-                  {/* Left part */}
-                  <View style={styles.extractedFileLeft}>
-                    <View style={styles.pdfThumbnail}>
-                      <Text style={styles.pdfIcon}>📄</Text>
-                      <View style={styles.pdfCheckedCircle}>
-                        <Text style={styles.pdfCheckedText}>✓</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.pdfFileName}>{currentProfile.education.marksheetFileName || 'marksheet_document.pdf'}</Text>
-                    <Pressable
-                      style={styles.replaceBtn}
-                      onPress={() => {
-                        if (Platform.OS === 'web' && marksheetFileInputRef.current) {
-                          marksheetFileInputRef.current.click();
-                        }
-                      }}
-                    >
-                      <Text style={styles.replaceBtnText}>🔄 Replace Marksheet</Text>
-                    </Pressable>
-                  </View>
-
-                  {/* Right part: Detailed Extracted Breakdown */}
-                  <View style={styles.extractedChecklistRight}>
-                    <View style={styles.extractedBadge}>
-                      <Text style={styles.extractedBadgeText}>✨ Extracted Academic Information</Text>
-                    </View>
-                    <View style={styles.checkRow}>
-                      <Text style={styles.greenCheck}>🎓</Text>
-                      <Text style={styles.checkText}>Degree / Course: <Text style={styles.boldText}>{renderVal(currentProfile.education.list[0]?.degree) || 'Not detected'}</Text></Text>
-                    </View>
-                    <View style={styles.checkRow}>
-                      <Text style={styles.greenCheck}>🔬</Text>
-                      <Text style={styles.checkText}>Branch / Specialization: <Text style={styles.boldText}>{renderVal(currentProfile.education.list[0]?.branch) || 'Not detected'}</Text></Text>
-                    </View>
-                    <View style={styles.checkRow}>
-                      <Text style={styles.greenCheck}>🏛️</Text>
-                      <Text style={styles.checkText}>University / Institution: <Text style={styles.boldText}>{renderVal(currentProfile.education.list[0]?.university) || 'Not detected'}</Text></Text>
-                    </View>
-                    <View style={styles.checkRow}>
-                      <Text style={styles.greenCheck}>📅</Text>
-                      <Text style={styles.checkText}>Academic Period: <Text style={styles.boldText}>{(currentProfile.education.list[0]?.startYear || currentProfile.education.list[0]?.graduationYear) ? `${renderVal(currentProfile.education.list[0]?.startYear, 'N/A')} - ${renderVal(currentProfile.education.list[0]?.graduationYear, 'N/A')}` : renderVal(currentProfile.education.academicYearDetected, 'Not detected')}</Text></Text>
-                    </View>
-                    <View style={styles.checkRow}>
-                      <Text style={styles.greenCheck}>📊</Text>
-                      <Text style={styles.checkText}>CGPA / Percentage: <Text style={styles.boldText}>{renderVal(currentProfile.education.cgpaDetected) || 'Not detected'}</Text></Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-            </HoverableCard>
-
-            {/* List of Education entries */}
-            {currentProfile.education.list.map((item) => (
-              <View key={item.id} style={styles.educationCard}>
-                <View style={styles.eduHeader}>
-                  <Text style={styles.eduDegreeText}>{renderVal(item.degree)}</Text>
-                  <Pressable onPress={() => removeEducationItem(item.id)}>
-                    <Text style={styles.trashIcon}>🗑️</Text>
-                  </Pressable>
-                </View>
-                <Text style={styles.eduInfoLine}><Text style={styles.boldText}>Branch/Major:</Text> {renderVal(item.branch)}</Text>
-                <Text style={styles.eduInfoLine}><Text style={styles.boldText}>University:</Text> {renderVal(item.university)}</Text>
-                <Text style={styles.eduInfoLine}><Text style={styles.boldText}>Duration:</Text> {renderVal(item.startYear)} - {renderVal(item.graduationYear)}</Text>
-              </View>
+        {edu.list.length ? (
+          <Stack gap={space.sm}>
+            {edu.list.map((item) => (
+              <Card key={item.id} padding={space.lg}>
+                <Row justify="space-between" align="flex-start">
+                  <Stack gap={2} style={{ flex: 1 }}>
+                    <Txt variant="title" tone="ink">{renderVal(item.degree) || 'Degree'}{item.branch ? ` · ${renderVal(item.branch)}` : ''}</Txt>
+                    <Txt variant="small" tone="muted">{renderVal(item.university)} · {renderVal(item.startYear, '—')} – {renderVal(item.graduationYear, '—')}</Txt>
+                  </Stack>
+                  <IconButton icon="Trash" onPress={() => removeEducationItem(item.id)} accessibilityLabel="Remove education" />
+                </Row>
+              </Card>
             ))}
+          </Stack>
+        ) : null}
 
-            {/* Manual Form for Education Entry */}
-            <View style={styles.manualEduForm}>
-              <Text style={styles.formSectionTitle}>Add / Edit Education Entry</Text>
-              
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Degree *</Text>
-                <TextInput
-                  style={[styles.textInput, validationErrors.eduDegree && styles.inputErrorBorder]}
-                  placeholder="e.g. B.S. Computer Science"
-                  value={eduDegree}
-                  onChangeText={setEduDegree}
-                />
-                {validationErrors.eduDegree && <Text style={styles.errorText}>{validationErrors.eduDegree}</Text>}
-              </View>
+        <Card>
+          <Stack gap={space.md}>
+            <Txt variant="h3" tone="ink">Education details</Txt>
+            <Grid twoCol={twoCol}>
+              <Col twoCol={twoCol}>
+                <Field label="Degree" icon="GraduationCap" placeholder="e.g. B.Tech" value={eduDegree} onChangeText={setEduDegree} error={validationErrors.eduDegree} />
+                <Field label="University / institution" icon="Building" placeholder="e.g. Pune University" value={eduUniv} onChangeText={setEduUniv} error={validationErrors.eduUniv} />
+              </Col>
+              <Col twoCol={twoCol}>
+                <Field label="Branch / major" icon="BookOpen" placeholder="e.g. Computer Science" value={eduBranch} onChangeText={setEduBranch} />
+                <Row gap={space.sm} align="flex-start">
+                  <Field style={{ flex: 1 }} label="Start year" placeholder="2022" keyboardType="number-pad" value={eduStart} onChangeText={setEduStart} />
+                  <Field style={{ flex: 1 }} label="Graduation" placeholder="2026" keyboardType="number-pad" value={eduGrad} onChangeText={setEduGrad} error={validationErrors.eduGrad} />
+                </Row>
+              </Col>
+            </Grid>
+            <Button label="Add as another entry" icon="Plus" variant="secondary" size="sm" onPress={addEducationItem} />
+          </Stack>
+        </Card>
+      </Stack>
+    );
+  };
 
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Branch / Major</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. Computer Science"
-                  value={eduBranch}
-                  onChangeText={setEduBranch}
-                />
-              </View>
+  const renderStep3 = () => {
+    const cg = currentProfile.careerGoals;
+    const selectedCareers = cg.targetCareerIds || (cg.targetCareerId ? [cg.targetCareerId] : []);
+    const selectedSkills = cg.skillIds || [];
+    const selectedLocations = cg.preferredLocationIds || [];
+    const selectedIndustries = cg.targetIndustryIds || (cg.targetIndustryId ? [cg.targetIndustryId] : []);
+    const setSkills = (updated) => {
+      updateCareerGoalsField('skillIds', updated);
+      updateCareerGoalsField('careerInterests', updated.map((id) => (taxonomySkills.find((s) => s.id === id) || {}).name || id));
+    };
+    const toggleIn = (field, list, id, label) => {
+      const updated = list.includes(id) || (label && list.includes(label)) ? list.filter((o) => o !== id && o !== label) : [...list, id];
+      updateCareerGoalsField(field, updated);
+    };
+    return (
+      <Stack gap={space.md}>
+        <Grid twoCol={twoCol}>
+          <Col twoCol={twoCol}>
+            <Card style={{ zIndex: showCareerDropdown ? 30 : 1 }}>
+              <TagSearch
+                label="Target career roles"
+                hint="Pick one or more roles. Matching and skill gaps are based on these."
+                icon="Target"
+                placeholder="Search careers (e.g. Frontend, Data, AI)"
+                query={careerSearch}
+                onQuery={setCareerSearch}
+                open={showCareerDropdown}
+                onOpenChange={setShowCareerDropdown}
+                options={taxonomyCareers.map((c) => ({ id: c.id, name: c.name, sub: c.category }))}
+                selected={selectedCareers.map((id) => ({ id, name: careerName(id) }))}
+                onAdd={(item) => {
+                  const updated = [...selectedCareers, item.id];
+                  updateCareerGoalsField('targetCareerIds', updated);
+                  updateCareerGoalsField('targetCareerId', updated[0]);
+                  updateCareerGoalsField('targetCareer', selectedCareers.length ? careerName(updated[0]) : item.name);
+                }}
+                onRemove={(id) => {
+                  const updated = selectedCareers.filter((x) => x !== id);
+                  updateCareerGoalsField('targetCareerIds', updated);
+                  updateCareerGoalsField('targetCareerId', updated[0] || '');
+                  updateCareerGoalsField('targetCareer', updated[0] ? careerName(updated[0]) : '');
+                }}
+                error={validationErrors.targetCareer}
+              />
+            </Card>
+          </Col>
+          <Col twoCol={twoCol}>
+            <Card style={{ zIndex: showLocationDropdown ? 30 : 1 }}>
+              <TagSearch
+                label="Preferred locations"
+                hint="Cities you can work from, or Remote."
+                icon="MapPin"
+                tone="info"
+                placeholder="Search locations (e.g. Pune, Remote)"
+                query={locationSearch}
+                onQuery={setLocationSearch}
+                open={showLocationDropdown}
+                onOpenChange={setShowLocationDropdown}
+                options={taxonomyLocations.map((l) => ({ id: l.id, name: l.name, sub: [l.state, l.country].filter(Boolean).join(', ') }))}
+                selected={selectedLocations.map((id) => ({ id, name: (taxonomyLocations.find((l) => l.id === id) || {}).name || id }))}
+                onAdd={(item) => {
+                  updateCareerGoalsField('preferredLocationIds', [...selectedLocations, item.id]);
+                  updateCareerGoalsField('preferredLocations', [...(cg.preferredLocations || []), item.name]);
+                }}
+                onRemove={(id) => updateCareerGoalsField('preferredLocationIds', selectedLocations.filter((x) => x !== id))}
+                error={validationErrors.locations}
+              />
+            </Card>
+          </Col>
+        </Grid>
 
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>University / Institution *</Text>
-                <View style={styles.iconInputRow}>
-                  <Text style={styles.inputIconEmoji}>🏛️</Text>
-                  <TextInput
-                    style={[styles.textInput, { flex: 1, borderLeftWidth: 0, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }, validationErrors.eduUniv && styles.inputErrorBorder]}
-                    placeholder="e.g. Tech University"
-                    value={eduUniv}
-                    onChangeText={setEduUniv}
-                  />
-                </View>
-                {validationErrors.eduUniv && <Text style={styles.errorText}>{validationErrors.eduUniv}</Text>}
-              </View>
+        <Card style={{ zIndex: showSkillDropdown ? 30 : 1 }}>
+          <TagSearch
+            label="Skills you have or want"
+            hint="Internships are matched against these skills."
+            icon="Zap"
+            tone="accent"
+            placeholder="Search skills (e.g. React, Python, Docker)"
+            query={skillSearch}
+            onQuery={setSkillSearch}
+            open={showSkillDropdown}
+            onOpenChange={setShowSkillDropdown}
+            options={taxonomySkills.map((s) => ({ id: s.id, name: s.name, sub: s.category }))}
+            selected={selectedSkills.map((id) => ({ id, name: (taxonomySkills.find((s) => s.id === id) || {}).name || (cg.careerInterests || [])[selectedSkills.indexOf(id)] || id }))}
+            onAdd={(item) => setSkills([...selectedSkills, item.id])}
+            onRemove={(id) => setSkills(selectedSkills.filter((x) => x !== id))}
+            error={validationErrors.skills}
+          />
+        </Card>
 
-              <View style={styles.rowLayout}>
-                <View style={styles.inputWrap}>
-                  <Text style={styles.inputLabel}>Start Year (Optional if missing)</Text>
-                  <View style={styles.iconInputRow}>
-                    <Text style={styles.inputIconEmoji}>📅</Text>
-                    <TextInput
-                      style={[styles.textInput, { flex: 1, borderLeftWidth: 0, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }]}
-                      placeholder="e.g. 2021"
-                      value={eduStart}
-                      onChangeText={setEduStart}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.inputWrap}>
-                  <Text style={styles.inputLabel}>Graduation Year *</Text>
-                  <View style={styles.iconInputRow}>
-                    <Text style={styles.inputIconEmoji}>📅</Text>
-                    <TextInput
-                      style={[styles.textInput, { flex: 1, borderLeftWidth: 0, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }, validationErrors.eduGrad && styles.inputErrorBorder]}
-                      placeholder="e.g. 2025"
-                      value={eduGrad}
-                      onChangeText={setEduGrad}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  {validationErrors.eduGrad && <Text style={styles.errorText}>{validationErrors.eduGrad}</Text>}
-                </View>
-              </View>
-
-              <Pressable style={styles.addEduBtn} onPress={addEducationItem}>
-                <Text style={styles.addEduBtnText}>➕ Add Education</Text>
-              </Pressable>
-            </View>
-
-            {validationErrors.educationList && <Text style={[styles.errorText, { marginTop: 12 }]}>{validationErrors.educationList}</Text>}
-          </View>
-        );
-
-      case 3:
-        const selectedCareers = currentProfile.careerGoals.targetCareerIds || (currentProfile.careerGoals.targetCareerId ? [currentProfile.careerGoals.targetCareerId] : []);
-        const selectedSkills = currentProfile.careerGoals.skillIds || [];
-        const selectedLocations = currentProfile.careerGoals.preferredLocationIds || [];
-        const selectedIndustries = currentProfile.careerGoals.targetIndustryIds || (currentProfile.careerGoals.targetIndustryId ? [currentProfile.careerGoals.targetIndustryId] : []);
-
-        const filteredCareers = taxonomyCareers.filter(c => !selectedCareers.includes(c.id));
-        const filteredSkills = taxonomySkills.filter(s => !selectedSkills.includes(s.id));
-        const filteredLocations = taxonomyLocations.filter(l => !selectedLocations.includes(l.id));
-
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.sectionTitle}>Career Goals & Preferences *</Text>
-            <Text style={styles.sectionSubtitle}>All fields are required. Select your standardized career goals powered by ESCO & SkillSetu taxonomy for 100% accurate internship matching.</Text>
-
-            <View style={[styles.gridTwoColumns, !isTablet && styles.flexCol]}>
-              {/* Target Career Card (Multi-select) */}
-              <HoverableCard style={[styles.prefCard, validationErrors.targetCareer && styles.inputErrorBorder]}>
-                <Text style={styles.cardHeaderTitle}>🎯 Target Career Roles *</Text>
-                <Text style={styles.inputHelpText}>Select one or more target roles (e.g. Frontend Developer, Data Analyst)</Text>
-
-                {/* Selected Target Careers Chips */}
-                <View style={styles.tagsContainer}>
-                  {selectedCareers.map((carId) => {
-                    const carObj = taxonomyCareers.find(c => c.id === carId) || { name: currentProfile.careerGoals.targetCareer || carId };
-                    return (
-                      <View key={carId} style={[styles.tagBadge, { backgroundColor: COLORS.green }]}>
-                        <Text style={[styles.tagBadgeText, { color: COLORS.white }]}>✓ {carObj.name}</Text>
-                        <Pressable onPress={() => {
-                          const updated = selectedCareers.filter(id => id !== carId);
-                          updateCareerGoalsField('targetCareerIds', updated);
-                          updateCareerGoalsField('targetCareerId', updated[0] || '');
-                          updateCareerGoalsField('targetCareer', updated[0] ? (taxonomyCareers.find(c => c.id === updated[0])?.name || '') : '');
-                        }}>
-                          <Text style={[styles.closeTagEmoji, { color: COLORS.white }]}>×</Text>
-                        </Pressable>
-                      </View>
-                    );
-                  })}
-                </View>
-
-                <View style={styles.iconInputRow}>
-                  <Text style={styles.inputIconEmoji}>🔍</Text>
-                  <TextInput
-                    style={[styles.textInput, { flex: 1, borderLeftWidth: 0, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }]}
-                    placeholder="Search target careers (e.g. Frontend, Data, AI)..."
-                    value={careerSearch}
-                    onFocus={() => setShowCareerDropdown(true)}
-                    onChangeText={(val) => {
-                      setCareerSearch(val);
-                      setShowCareerDropdown(true);
-                    }}
-                  />
-                </View>
-
-                {showCareerDropdown && (
-                  <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 200, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginTop: 4 }}>
-                    {filteredCareers.map((item) => (
-                      <Pressable
-                        key={item.id}
-                        style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.mint, backgroundColor: COLORS.white }}
-                        onPress={() => {
-                          if (!selectedCareers.includes(item.id)) {
-                            const updated = [...selectedCareers, item.id];
-                            updateCareerGoalsField('targetCareerIds', updated);
-                            updateCareerGoalsField('targetCareerId', updated[0]);
-                            updateCareerGoalsField('targetCareer', item.name);
-                          }
-                          setCareerSearch('');
-                          setShowCareerDropdown(false);
-                        }}
-                      >
-                        <Text style={{ fontWeight: '700', color: COLORS.textDark, fontSize: 13 }}>{item.name}</Text>
-                        <Text style={{ fontSize: 11, color: COLORS.textMuted }}>{item.category}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                )}
-
-                {validationErrors.targetCareer && <Text style={styles.errorText}>{validationErrors.targetCareer}</Text>}
-              </HoverableCard>
-
-              {/* Preferred Locations Card */}
-              <HoverableCard style={[styles.prefCard, validationErrors.locations && styles.inputErrorBorder]}>
-                <Text style={styles.cardHeaderTitle}>📍 Preferred Locations *</Text>
-                <Text style={styles.inputHelpText}>Select canonical work locations or Remote</Text>
-
-                {/* Selected Location Chips */}
-                <View style={styles.tagsContainer}>
-                  {selectedLocations.map((locId) => {
-                    const locObj = taxonomyLocations.find(l => l.id === locId) || { name: locId };
-                    return (
-                      <View key={locId} style={styles.tagBadge}>
-                        <Text style={styles.tagBadgeText}>{locObj.name}</Text>
-                        <Pressable onPress={() => {
-                          const updated = selectedLocations.filter(id => id !== locId);
-                          updateCareerGoalsField('preferredLocationIds', updated);
-                        }}>
-                          <Text style={styles.closeTagEmoji}>×</Text>
-                        </Pressable>
-                      </View>
-                    );
-                  })}
-                </View>
-
-                <View style={styles.iconInputRow}>
-                  <Text style={styles.inputIconEmoji}>📍</Text>
-                  <TextInput
-                    style={[styles.textInput, { flex: 1, borderLeftWidth: 0, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }]}
-                    placeholder="Search location (e.g. Pune, Remote)..."
-                    value={locationSearch}
-                    onFocus={() => setShowLocationDropdown(true)}
-                    onChangeText={(val) => {
-                      setLocationSearch(val);
-                      setShowLocationDropdown(true);
-                    }}
-                  />
-                </View>
-
-                {showLocationDropdown && (
-                  <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 200, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginTop: 4 }}>
-                    {filteredLocations.map((item) => (
-                      <Pressable
-                        key={item.id}
-                        style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.mint }}
-                        onPress={() => {
-                          if (!selectedLocations.includes(item.id)) {
-                            updateCareerGoalsField('preferredLocationIds', [...selectedLocations, item.id]);
-                            updateCareerGoalsField('preferredLocations', [...(currentProfile.careerGoals.preferredLocations || []), item.name]);
-                          }
-                          setLocationSearch('');
-                          setShowLocationDropdown(false);
-                        }}
-                      >
-                        <Text style={{ fontWeight: '700', color: COLORS.textDark, fontSize: 13 }}>{item.name}</Text>
-                        <Text style={{ fontSize: 11, color: COLORS.textMuted }}>
-                          {[item.state, item.country].filter(Boolean).join(', ')}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                )}
-                {validationErrors.locations && <Text style={styles.errorText}>{validationErrors.locations}</Text>}
-              </HoverableCard>
-            </View>
-
-            {/* Career Interests / Skills Card with Recommended Skills */}
-            <HoverableCard style={[styles.fullWidthCard, validationErrors.skills && styles.inputErrorBorder]}>
-              <Text style={styles.cardHeaderTitle}>⚡ Career Skills & Technical Stack *</Text>
-              <Text style={styles.inputHelpText}>Select skills you possess or want to gain. Internships will match deterministically against these canonical skill IDs.</Text>
-
-              {/* Selected Skills Chips */}
-              <View style={styles.tagsContainer}>
-                {selectedSkills.map((skId) => {
-                  const skObj = taxonomySkills.find(s => s.id === skId) || { name: skId };
-                  return (
-                    <View key={skId} style={[styles.tagBadge, { backgroundColor: COLORS.mint }]}>
-                      <Text style={[styles.tagBadgeText, { color: COLORS.teal }]}>{skObj.name}</Text>
-                      <Pressable onPress={() => {
-                        const updated = selectedSkills.filter(id => id !== skId);
-                        updateCareerGoalsField('skillIds', updated);
-                        updateCareerGoalsField('careerInterests', updated.map(id => (taxonomySkills.find(s => s.id === id) || {}).name || id));
-                      }}>
-                        <Text style={[styles.closeTagEmoji, { color: COLORS.teal }]}>×</Text>
-                      </Pressable>
-                    </View>
-                  );
-                })}
-              </View>
-
-              {/* Recommended Skills section based on Target Career */}
-              {recommendedSkillIds.length > 0 && (
-                <View style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 10, borderLeftWidth: 4, borderLeftColor: COLORS.green, marginVertical: 10 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.green, marginBottom: 6 }}>
-                    ✨ Recommended Skills for {currentProfile.careerGoals.targetCareer || 'your Target Role'}:
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                    {recommendedSkillIds.map((skId) => {
-                      const skObj = taxonomySkills.find(s => s.id === skId);
-                      if (!skObj) return null;
-                      const isAdded = selectedSkills.includes(skId);
-                      return (
-                        <Pressable
-                          key={skId}
-                          style={{
-                            backgroundColor: isAdded ? COLORS.green : COLORS.white,
-                            borderColor: COLORS.green,
-                            borderWidth: 1,
-                            borderRadius: 14,
-                            paddingVertical: 4,
-                            paddingHorizontal: 10,
-                          }}
-                          onPress={() => {
-                            let updated;
-                            if (isAdded) {
-                              updated = selectedSkills.filter(id => id !== skId);
-                            } else {
-                              updated = [...selectedSkills, skId];
-                            }
-                            updateCareerGoalsField('skillIds', updated);
-                            updateCareerGoalsField('careerInterests', updated.map(id => (taxonomySkills.find(s => s.id === id) || {}).name || id));
-                          }}
-                        >
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: isAdded ? COLORS.white : COLORS.green }}>
-                            {isAdded ? '✓ ' : '+ '} {skObj.name}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-
-              {/* Skill Search Input */}
-              <View style={styles.iconInputRow}>
-                <Text style={styles.inputIconEmoji}>💡</Text>
-                <TextInput
-                  style={[styles.textInput, { flex: 1, borderLeftWidth: 0, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }]}
-                  placeholder="Search and add skills (e.g. React, Python, PostgreSQL, Docker)..."
-                  value={skillSearch}
-                  onFocus={() => setShowSkillDropdown(true)}
-                  onChangeText={(val) => {
-                    setSkillSearch(val);
-                    setShowSkillDropdown(true);
-                  }}
-                />
-              </View>
-
-              {showSkillDropdown && (
-                <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 220, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginTop: 4 }}>
-                  {filteredSkills.map((item) => (
-                    <Pressable
-                      key={item.id}
-                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.mint, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+        <Grid twoCol={twoCol}>
+          <Col twoCol={twoCol}>
+            <Card>
+              <Stack gap={8}>
+                <Txt variant="small" weight={600} tone="ink">Target industries</Txt>
+                <Row wrap gap={8}>
+                  {taxonomyIndustries.map((ind) => (
+                    <Chip
+                      key={ind.id}
+                      label={ind.name}
+                      tone="warning"
+                      selected={selectedIndustries.includes(ind.id)}
                       onPress={() => {
-                        if (!selectedSkills.includes(item.id)) {
-                          const updated = [...selectedSkills, item.id];
-                          updateCareerGoalsField('skillIds', updated);
-                          updateCareerGoalsField('careerInterests', updated.map(id => (taxonomySkills.find(s => s.id === id) || {}).name || id));
-                        }
-                        setSkillSearch('');
-                        setShowSkillDropdown(false);
+                        const updated = selectedIndustries.includes(ind.id) ? selectedIndustries.filter((x) => x !== ind.id) : [...selectedIndustries, ind.id];
+                        updateCareerGoalsField('targetIndustryIds', updated);
+                        updateCareerGoalsField('targetIndustryId', updated[0] || '');
+                        updateCareerGoalsField('industry', updated.map((id) => (taxonomyIndustries.find((i) => i.id === id) || {}).name || id).join(', '));
                       }}
+                    />
+                  ))}
+                </Row>
+                {validationErrors.industry ? <Txt variant="caption" tone="danger">{validationErrors.industry}</Txt> : null}
+              </Stack>
+            </Card>
+          </Col>
+          <Col twoCol={twoCol}>
+            <Card>
+              <Stack gap={8}>
+                <Txt variant="small" weight={600} tone="ink">When can you start?</Txt>
+                <Row wrap gap={8}>
+                  {TIMELINES.map((t) => (
+                    <Chip key={t.id} label={t.label} tone="info" selected={cg.timeline === t.id || cg.timeline === t.label} onPress={() => updateCareerGoalsField('timeline', t.id)} />
+                  ))}
+                </Row>
+                {validationErrors.timeline ? <Txt variant="caption" tone="danger">{validationErrors.timeline}</Txt> : null}
+              </Stack>
+            </Card>
+          </Col>
+        </Grid>
+
+        <Grid twoCol={twoCol}>
+          <Col twoCol={twoCol}>
+            <Card>
+              <Stack gap={8}>
+                <Txt variant="small" weight={600} tone="ink">Opportunity type</Txt>
+                <Row wrap gap={8}>
+                  {OPPORTUNITY_TYPES.map((o) => {
+                    const list = cg.opportunityTypes || [];
+                    return <Chip key={o.id} label={o.label} icon="Briefcase" selected={list.includes(o.id) || list.includes(o.label)} onPress={() => toggleIn('opportunityTypes', list, o.id, o.label)} />;
+                  })}
+                </Row>
+                {validationErrors.opportunityTypes ? <Txt variant="caption" tone="danger">{validationErrors.opportunityTypes}</Txt> : null}
+              </Stack>
+            </Card>
+          </Col>
+          <Col twoCol={twoCol}>
+            <Card>
+              <Stack gap={8}>
+                <Txt variant="small" weight={600} tone="ink">Work preference</Txt>
+                <Row wrap gap={8}>
+                  {WORK_PREFS.map((o) => {
+                    const list = cg.workPreferences || [];
+                    return <Chip key={o.id} label={o.label} icon={o.icon} selected={list.includes(o.id) || list.includes(o.label)} onPress={() => toggleIn('workPreferences', list, o.id, o.label)} />;
+                  })}
+                </Row>
+                {validationErrors.workPreferences ? <Txt variant="caption" tone="danger">{validationErrors.workPreferences}</Txt> : null}
+              </Stack>
+            </Card>
+          </Col>
+        </Grid>
+
+        <Card>
+          <Field
+            label="Career goal"
+            hint="Used by your AI mentor and in your profile summary."
+            multiline
+            placeholder="I want to build scalable web products with React and Python, and grow into a product engineering role…"
+            value={cg.careerGoal || ''}
+            onChangeText={(v) => updateCareerGoalsField('careerGoal', v)}
+            error={validationErrors.careerGoal}
+          />
+        </Card>
+      </Stack>
+    );
+  };
+
+  const renderStep4 = () => {
+    const ra = currentProfile.resumeAnalysis;
+    const ext = ra.extractedData || {};
+    return (
+      <Grid twoCol={twoCol}>
+        <Col twoCol={twoCol} flex={0.9}>
+          {ra.resumeFile ? (
+            <Card tone="info">
+              <Stack gap={space.md} style={{ alignItems: 'center' }}>
+                <Txt variant="overline" color={colors.skyInk}>Resume score</Txt>
+                <Ring value={ra.score || 0} size={128} stroke={12} tone="info" track="rgba(255,255,255,0.7)">
+                  <Txt variant="display" tone="ink">{ra.score || 0}</Txt>
+                  <Txt variant="caption" tone="muted">/ 100</Txt>
+                </Ring>
+                <Txt variant="small" color={colors.skyInk} align="center">{ra.scoreText}</Txt>
+                <Button label="View full analysis" icon="Eye" variant="light" size="sm" onPress={() => setShowAtsModal(true)} />
+              </Stack>
+              <Inset tone="info" style={{ marginTop: space.md }}>
+                <Row gap={10}>
+                  <Icon name="FileText" size={20} color={colors.skyInk} />
+                  <Stack gap={0} style={{ flex: 1 }}>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1}>{ra.resumeFile}</Txt>
+                    <Txt variant="caption" tone="muted">{ra.parseTime}</Txt>
+                  </Stack>
+                  <IconButton icon="Trash" variant="light" size={32} onPress={deleteResume} accessibilityLabel="Delete resume" />
+                </Row>
+              </Inset>
+            </Card>
+          ) : (
+            <Card>
+              <EmptyState
+                icon="FileText"
+                tone="info"
+                title={isUploadingResume ? 'Analysing your resume…' : 'Upload your resume'}
+                message="PDF, DOCX or image up to 10MB. SkillSetu AI extracts projects, experience and skills."
+                action={<Button label="Upload resume" icon="Upload" onPress={pickResume} loading={isUploadingResume} />}
+              />
+              {validationErrors.resumeFile ? <Txt variant="caption" tone="danger" align="center">{validationErrors.resumeFile}</Txt> : null}
+            </Card>
+          )}
+        </Col>
+        <Col twoCol={twoCol} flex={1.3}>
+          <Card>
+            <Row justify="space-between" style={{ marginBottom: space.md }}>
+              <Txt variant="h3" tone="ink">Extracted from your resume</Txt>
+              {ra.resumeFile ? (
+                isEditingExtracted ? (
+                  <Row gap={6}>
+                    <Button label="Cancel" size="sm" variant="secondary" onPress={() => setIsEditingExtracted(false)} />
+                    <Button label="Save" size="sm" icon="Check" onPress={saveExtractedEdits} />
+                  </Row>
+                ) : (
+                  <Button
+                    label="Edit"
+                    size="sm"
+                    variant="secondary"
+                    icon="Pencil"
+                    onPress={() => {
+                      setTempProjects((ext.projects || []).map((p) => renderVal(p)).join(', '));
+                      setTempCoreTechs((ext.coreTechnologies || []).map((t) => renderVal(t)).join(', '));
+                      setIsEditingExtracted(true);
+                    }}
+                  />
+                )
+              ) : null}
+            </Row>
+            {isEditingExtracted ? (
+              <Stack gap={space.md}>
+                <Field label="Projects (comma separated)" multiline value={tempProjects} onChangeText={setTempProjects} />
+                <Field label="Core technologies (comma separated)" multiline value={tempCoreTechs} onChangeText={setTempCoreTechs} />
+              </Stack>
+            ) : (
+              <Stack gap={space.lg}>
+                <Stack gap={8}>
+                  <Row justify="space-between">
+                    <Txt variant="overline" tone="subtle">Projects</Txt>
+                    <Pill label={`${(ext.projects || []).length} found`} size="sm" />
+                  </Row>
+                  {(ext.projects || []).length ? (
+                    ext.projects.map((proj, i) => (
+                      <Row key={i} gap={8} align="flex-start">
+                        <Icon name="CircleCheck" size={16} color={colors.mintInk} />
+                        <Txt variant="small" tone="default" style={{ flex: 1 }}>{renderVal(proj)}</Txt>
+                      </Row>
+                    ))
+                  ) : (
+                    <Txt variant="small" tone="subtle">None yet</Txt>
+                  )}
+                </Stack>
+                <Stack gap={8}>
+                  <Row justify="space-between">
+                    <Txt variant="overline" tone="subtle">Experience</Txt>
+                    <Pill label={`${(ext.experience || []).length} found`} size="sm" />
+                  </Row>
+                  {(ext.experience || []).length ? (
+                    ext.experience.map((exp, i) => (
+                      <Row key={i} gap={8} align="flex-start">
+                        <Icon name="Briefcase" size={16} color={colors.textMuted} />
+                        <Stack gap={0} style={{ flex: 1 }}>
+                          <Txt variant="small" weight={600} tone="ink">{renderVal(exp.title)}</Txt>
+                          <Txt variant="caption" tone="muted">{[renderVal(exp.company), renderVal(exp.period)].filter(Boolean).join(' · ')}</Txt>
+                        </Stack>
+                      </Row>
+                    ))
+                  ) : (
+                    <Txt variant="small" tone="subtle">None yet</Txt>
+                  )}
+                </Stack>
+                <Stack gap={8}>
+                  <Txt variant="overline" tone="subtle">Core technologies</Txt>
+                  <Row wrap gap={6}>
+                    {(ext.coreTechnologies || []).length ? (
+                      ext.coreTechnologies.map((t, i) => <Pill key={i} label={renderVal(t)} tone="success" size="sm" />)
+                    ) : (
+                      <Txt variant="small" tone="subtle">None yet</Txt>
+                    )}
+                  </Row>
+                </Stack>
+                {(ext.identifiedSkillDomains || []).length ? (
+                  <Stack gap={10}>
+                    <Txt variant="overline" tone="subtle">Skill domains</Txt>
+                    {ext.identifiedSkillDomains.map((d, i) => (
+                      <Stack key={i} gap={4}>
+                        <Row justify="space-between">
+                          <Txt variant="small" weight={600} tone="ink">{d.name}</Txt>
+                          <Txt variant="small" tone="muted">{d.value}%</Txt>
+                        </Row>
+                        <ProgressBar value={d.value} tone="accent" />
+                      </Stack>
+                    ))}
+                  </Stack>
+                ) : null}
+              </Stack>
+            )}
+          </Card>
+        </Col>
+      </Grid>
+    );
+  };
+
+  const renderSkillEvidence = (githubSkills) => (
+    <Stack gap={space.sm}>
+      {githubSkills.map((skill, index) => {
+        const score = skill.score || skill.percentage || 0;
+        const isExpanded = expandedSkillIdx === index;
+        const signals = Array.isArray(skill.signals) ? skill.signals : [];
+        const sources = Array.isArray(skill.evidence_sources) ? skill.evidence_sources : [];
+        return (
+          <Pressable key={index} onPress={() => setExpandedSkillIdx(isExpanded ? null : index)} style={[styles.evidenceRow, webOnly({ cursor: 'pointer' })]}>
+            <Row justify="space-between">
+              <Stack gap={0} style={{ flex: 1 }}>
+                <Txt variant="small" weight={700} tone="ink">{skill.name}</Txt>
+                {skill.repository_count ? <Txt variant="caption" tone="muted">In {skill.repository_count} repo{skill.repository_count > 1 ? 's' : ''}</Txt> : null}
+              </Stack>
+              <Pill label={skill.rating || evidenceLabel(score)} tone={score >= 85 ? 'success' : score >= 70 ? 'info' : 'neutral'} size="sm" />
+              <Txt variant="small" weight={700} tone="ink" style={{ width: 44, textAlign: 'right' }}>{score}</Txt>
+            </Row>
+            <ProgressBar value={score} tone={score >= 85 ? 'success' : 'info'} height={6} style={{ marginTop: 8 }} />
+            {isExpanded && (signals.length || sources.length) ? (
+              <Stack gap={4} style={{ marginTop: 10 }}>
+                {signals.length
+                  ? signals.map((sig, i) => (
+                      <Txt key={i} variant="caption" tone="muted">
+                        • {sig.evidence_description} (+{sig.contribution_pts}) — {sig.repository_name}/{sig.file_path}
+                      </Txt>
+                    ))
+                  : sources.map((r, i) => <Txt key={i} variant="caption" tone="muted">• {r}</Txt>)}
+              </Stack>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </Stack>
+  );
+
+  const renderStep5 = () => {
+    const gl = currentProfile.githubLinks;
+    const linkedinUrl = gl.linkedinUrl || '';
+    const portfolioUrl = gl.portfolioUrl || '';
+    const isValidLinkedin = linkedinUrl.trim() ? /^https?:\/\/(www\.)?linkedin\.com\/in\/[A-Za-z0-9_-]+\/?$/i.test(linkedinUrl.trim()) : null;
+    const isValidPortfolio = portfolioUrl.trim() ? /^https?:\/\/[^\s$.?#].[^\s]*$/i.test(portfolioUrl.trim()) : null;
+    const repositories = gl.repositories || [];
+    const selectedCount = repositories.filter((r) => r.selected).length;
+    const githubSkills = gl.githubSkills || [];
+    const setAllSelected = (value) => {
+      const updatedRepos = repositories.map((r) => ({ ...r, selected: value }));
+      setProfileData((prev) => ({ ...prev, githubLinks: { ...prev.githubLinks, repositories: updatedRepos } }));
+      saveSelectedRepoIds(value ? updatedRepos.map((r) => r.id) : []);
+    };
+    const linkStatus = (valid) => (valid === null ? <Pill label="Optional" size="sm" /> : valid ? <Pill label="Valid" tone="success" icon="Check" size="sm" /> : <Pill label="Check URL" tone="danger" size="sm" />);
+    return (
+      <Grid twoCol={twoCol}>
+        <Col twoCol={twoCol} flex={0.85}>
+          <Card>
+            <Stack gap={space.md}>
+              <Txt variant="h3" tone="ink">Professional links</Txt>
+              <Txt variant="small" tone="muted">Shared with verified recruiters when you apply.</Txt>
+              <Field label="LinkedIn" icon="Link" placeholder="https://linkedin.com/in/username" autoCapitalize="none" value={linkedinUrl} onChangeText={(v) => updateGithubLinksField('linkedinUrl', v)} right={linkStatus(isValidLinkedin)} />
+              <Field label="Portfolio" icon="Globe" placeholder="https://yourportfolio.dev" autoCapitalize="none" value={portfolioUrl} onChangeText={(v) => updateGithubLinksField('portfolioUrl', v)} right={linkStatus(isValidPortfolio)} />
+            </Stack>
+          </Card>
+          <Card tone="warning">
+            <Row gap={10} align="flex-start">
+              <Icon name="Info" size={18} color={colors.butterInk} />
+              <Txt variant="small" color={colors.butterInk} style={{ flex: 1 }}>
+                Evidence scores reflect technical signals found in the repositories you select. They are not a grade of your coding ability.
+              </Txt>
+            </Row>
+          </Card>
+        </Col>
+        <Col twoCol={twoCol} flex={1.3}>
+          <Card badge={{ icon: 'GitBranch', tone: gl.githubConnected ? 'success' : 'neutral' }}>
+            {gl.githubConnected ? (
+              <Stack gap={space.md}>
+                <Row gap={space.sm} wrap>
+                  <Avatar name={gl.githubUsername || 'GitHub'} size={48} tone="dark" />
+                  <Stack gap={0} style={{ flex: 1 }}>
+                    <Row gap={8}>
+                      <Txt variant="title" tone="ink">@{gl.githubUsername || 'github'}</Txt>
+                      <Pill label="Connected" tone="success" icon="Check" size="sm" />
+                    </Row>
+                    <Txt variant="small" tone="muted">{repositories.length} repositories available</Txt>
+                  </Stack>
+                  <Row gap={6}>
+                    <Button label="Refresh" icon="RefreshCw" size="sm" variant="secondary" onPress={refreshGithubRepositories} />
+                    <Button label="Disconnect" size="sm" variant="danger" onPress={disconnectGithubAccount} />
+                  </Row>
+                </Row>
+                <Divider />
+                <Txt variant="h3" tone="ink">Skill evidence</Txt>
+                {githubSkills.length ? (
+                  renderSkillEvidence(githubSkills)
+                ) : (
+                  <Txt variant="small" tone="muted">Select repositories below and run Analyse to generate skill evidence.</Txt>
+                )}
+              </Stack>
+            ) : (
+              <EmptyState
+                icon="GitBranch"
+                title="Connect GitHub"
+                message="Authorise SkillSetu to import your repositories and use the projects you pick as skill evidence."
+                action={<Button label="Connect GitHub account" icon="GitBranch" onPress={connectRealGithubAccount} />}
+              />
+            )}
+          </Card>
+
+          {gl.githubConnected ? (
+            <Card>
+              <Row justify="space-between" wrap style={{ marginBottom: space.md }}>
+                <Stack gap={2}>
+                  <Txt variant="h3" tone="ink">Repositories</Txt>
+                  <Txt variant="small" tone="muted">{selectedCount} of {repositories.length} selected as evidence</Txt>
+                </Stack>
+                <Row gap={6}>
+                  {repositories.length ? <Button label={selectedCount === repositories.length ? 'Clear' : 'Select all'} size="sm" variant="secondary" onPress={() => setAllSelected(selectedCount !== repositories.length)} /> : null}
+                  <Button label="Analyse" icon="Sparkles" size="sm" onPress={analyzeSelectedGithubRepositories} loading={isAnalyzingGithub} />
+                </Row>
+              </Row>
+              {repositories.length ? (
+                <Stack gap={8}>
+                  {repositories.map((repo) => (
+                    <Pressable
+                      key={repo.id}
+                      onPress={() => toggleRepositorySelected(repo.id)}
+                      style={({ hovered }) => [styles.repoRow, repo.selected ? { backgroundColor: colors.mint } : hovered ? { backgroundColor: colors.surfaceMuted } : null, webOnly({ cursor: 'pointer' })]}
                     >
-                      <View>
-                        <Text style={{ fontWeight: '700', color: COLORS.textDark, fontSize: 13 }}>{item.name}</Text>
-                        <Text style={{ fontSize: 11, color: COLORS.textMuted }}>{item.category}</Text>
+                      <View style={[styles.repoCheck, repo.selected ? { backgroundColor: colors.ink, borderColor: colors.ink } : null]}>
+                        {repo.selected ? <Icon name="Check" size={13} color="#fff" strokeWidth={3} /> : null}
                       </View>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.green }}>+ Add</Text>
+                      <Stack gap={2} style={{ flex: 1 }}>
+                        <Row justify="space-between">
+                          <Txt variant="small" weight={700} tone="ink" numberOfLines={1} style={{ flex: 1 }}>{repo.name}</Txt>
+                          {repo.stars !== undefined ? <Txt variant="caption" tone="muted">★ {repo.stars}</Txt> : null}
+                        </Row>
+                        {repo.description ? <Txt variant="caption" tone="muted" numberOfLines={2}>{repo.description}</Txt> : null}
+                        {Array.isArray(repo.tags) && repo.tags.length ? (
+                          <Row wrap gap={4} style={{ marginTop: 4 }}>
+                            {repo.tags.map((tag) => <Pill key={tag} label={tag} size="sm" />)}
+                          </Row>
+                        ) : null}
+                      </Stack>
                     </Pressable>
                   ))}
-                </ScrollView>
+                </Stack>
+              ) : (
+                <EmptyState icon="Inbox" title="No public repositories" message="Add public repositories on GitHub, then refresh." />
               )}
-              {validationErrors.skills && <Text style={styles.errorText}>{validationErrors.skills}</Text>}
-            </HoverableCard>
+            </Card>
+          ) : null}
+        </Col>
+      </Grid>
+    );
+  };
 
-            {/* Target Industry & Timeline */}
-            <View style={[styles.gridTwoColumns, !isTablet && styles.flexCol]}>
-              {/* Target Industry Card (Multi-select) */}
-              <HoverableCard style={[styles.prefCard, validationErrors.industry && styles.inputErrorBorder]}>
-                <Text style={styles.cardHeaderTitle}>🏢 Target Industry Sectors *</Text>
-                <Text style={styles.inputHelpText}>Select one or more preferred industry sectors</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                  {taxonomyIndustries.map((ind) => {
-                    const isSelected = selectedIndustries.includes(ind.id);
-                    return (
-                      <Pressable
-                        key={ind.id}
-                        style={[styles.choiceBtn, { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12 }, isSelected && styles.choiceBtnSelected]}
-                        onPress={() => {
-                          let updated;
-                          if (isSelected) {
-                            updated = selectedIndustries.filter(id => id !== ind.id);
-                          } else {
-                            updated = [...selectedIndustries, ind.id];
-                          }
-                          updateCareerGoalsField('targetIndustryIds', updated);
-                          updateCareerGoalsField('targetIndustryId', updated[0] || '');
-                          updateCareerGoalsField('industry', updated.map(id => (taxonomyIndustries.find(i => i.id === id) || {}).name || id).join(', '));
-                        }}
-                      >
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: isSelected ? COLORS.green : COLORS.textDark }}>
-                          {ind.name} {isSelected ? '✓' : ''}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {validationErrors.industry && <Text style={styles.errorText}>{validationErrors.industry}</Text>}
-              </HoverableCard>
+  const resumeSkillCount = (currentProfile.resumeAnalysis.extractedData?.normalizedSkills || []).length || (currentProfile.resumeAnalysis.extractedData?.coreTechnologies || []).length;
+  const githubSkillCount = (currentProfile.githubLinks.githubSkills || []).length;
 
-              {/* Timeline Card */}
-              <HoverableCard style={[styles.prefCard, validationErrors.timeline && styles.inputErrorBorder]}>
-                <Text style={styles.cardHeaderTitle}>⏱️ Timeline *</Text>
-                <Text style={styles.inputHelpText}>When are you ready to begin an internship?</Text>
-                <View style={styles.choicesGrid}>
-                  {[
-                    { id: 'immediately', label: 'Immediately' },
-                    { id: 'within_1_month', label: 'Within 1 Month' },
-                    { id: '1_to_3_months', label: '1–3 Months' },
-                    { id: '3_to_6_months', label: '3–6 Months' },
-                    { id: '6_to_12_months', label: '6–12 Months' },
-                    { id: '12_plus_months', label: '12+ Months' },
-                  ].map((t) => {
-                    const isSel = currentProfile.careerGoals.timeline === t.id || currentProfile.careerGoals.timeline === t.label;
-                    return (
-                      <Pressable
-                        key={t.id}
-                        onPress={() => updateCareerGoalsField('timeline', t.id)}
-                        style={[styles.choiceBtn, isSel && styles.choiceBtnSelected]}
-                      >
-                        <Text style={[styles.choiceBtnLabel, isSel && styles.choiceBtnLabelSelected]}>{t.label}</Text>
-                        {isSel && <View style={styles.checkedBadge}><Text style={styles.checkedTextMini}>✓</Text></View>}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {validationErrors.timeline && <Text style={styles.errorText}>{validationErrors.timeline}</Text>}
-              </HoverableCard>
-            </View>
-
-            {/* Opportunity Type & Work Preference */}
-            <View style={[styles.gridTwoColumns, !isTablet && styles.flexCol]}>
-              {/* Opportunity Type */}
-              <HoverableCard style={[styles.prefCard, validationErrors.opportunityTypes && styles.inputErrorBorder]}>
-                <Text style={styles.cardHeaderTitle}>💼 Opportunity Type *</Text>
-                <View style={styles.choicesGrid}>
-                  {[
-                    { id: 'internship', label: 'Internship' },
-                    { id: 'fulltime', label: 'Full-time' },
-                    { id: 'parttime', label: 'Part-time' },
-                    { id: 'contract', label: 'Contract' },
-                  ].map((item) => {
-                    const selected = (currentProfile.careerGoals.opportunityTypes || []).includes(item.id) || (currentProfile.careerGoals.opportunityTypes || []).includes(item.label);
-                    return (
-                      <Pressable
-                        key={item.id}
-                        onPress={() => {
-                          const currentOpps = currentProfile.careerGoals.opportunityTypes || [];
-                          const updated = currentOpps.includes(item.id)
-                            ? currentOpps.filter(o => o !== item.id && o !== item.label)
-                            : [...currentOpps, item.id];
-                          updateCareerGoalsField('opportunityTypes', updated);
-                        }}
-                        style={[styles.choiceBtn, selected && styles.choiceBtnSelected]}
-                      >
-                        <Text style={styles.choiceBtnIcon}>💼</Text>
-                        <Text style={[styles.choiceBtnLabel, selected && styles.choiceBtnLabelSelected]}>{item.label}</Text>
-                        {selected && <View style={styles.checkedBadge}><Text style={styles.checkedTextMini}>✓</Text></View>}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {validationErrors.opportunityTypes && <Text style={styles.errorText}>{validationErrors.opportunityTypes}</Text>}
-              </HoverableCard>
-
-              {/* Work Preference */}
-              <HoverableCard style={[styles.prefCard, validationErrors.workPreferences && styles.inputErrorBorder]}>
-                <Text style={styles.cardHeaderTitle}>🏠 Work Preference *</Text>
-                <View style={styles.choicesGrid}>
-                  {[
-                    { id: 'remote', label: 'Remote', icon: '🏠' },
-                    { id: 'hybrid', label: 'Hybrid', icon: '🔄' },
-                    { id: 'onsite', label: 'On-site', icon: '🏢' },
-                  ].map((item) => {
-                    const selected = (currentProfile.careerGoals.workPreferences || []).includes(item.id) || (currentProfile.careerGoals.workPreferences || []).includes(item.label);
-                    return (
-                      <Pressable
-                        key={item.id}
-                        onPress={() => {
-                          const currentWps = currentProfile.careerGoals.workPreferences || [];
-                          const updated = currentWps.includes(item.id)
-                            ? currentWps.filter(w => w !== item.id && w !== item.label)
-                            : [...currentWps, item.id];
-                          updateCareerGoalsField('workPreferences', updated);
-                        }}
-                        style={[styles.choiceBtn, selected && styles.choiceBtnSelected]}
-                      >
-                        <Text style={styles.choiceBtnIcon}>{item.icon}</Text>
-                        <Text style={[styles.choiceBtnLabel, selected && styles.choiceBtnLabelSelected]}>{item.label}</Text>
-                        {selected && <View style={styles.checkedBadge}><Text style={styles.checkedTextMini}>✓</Text></View>}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {validationErrors.workPreferences && <Text style={styles.errorText}>{validationErrors.workPreferences}</Text>}
-              </HoverableCard>
-            </View>
-
-            {/* Career Goal Textarea (Required AI Guidance & Summary) */}
-            <HoverableCard style={[styles.fullWidthCard, validationErrors.careerGoal && styles.inputErrorBorder]}>
-              <Text style={styles.cardHeaderTitle}>📝 Career Goal & Personal Statement *</Text>
-              <Text style={styles.inputHelpText}>Describe your long-term aspirations. Used for AI mentor guidance and profile summaries.</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea, validationErrors.careerGoal && styles.inputErrorBorder]}
-                placeholder="I aim to build scalable web platforms using React and Python, eventually transitioning into product leadership..."
-                value={currentProfile.careerGoals.careerGoal}
-                onChangeText={(val) => updateCareerGoalsField('careerGoal', val)}
-                multiline
-                numberOfLines={4}
-              />
-              {validationErrors.careerGoal && <Text style={styles.errorText}>{validationErrors.careerGoal}</Text>}
-            </HoverableCard>
+  const renderStep6 = () => {
+    const pct = calculateStepCompletionPercent();
+    const cg = currentProfile.careerGoals;
+    const first = currentProfile.education.list[0];
+    const summary = [
+      {
+        title: 'Personal info',
+        icon: 'User',
+        step: 1,
+        rows: [
+          ['Name', currentProfile.personalInfo.fullName],
+          ['Location', currentProfile.personalInfo.location],
+          ['Experience', currentProfile.personalInfo.yearsOfExperience],
+        ],
+      },
+      {
+        title: 'Education',
+        icon: 'GraduationCap',
+        step: 2,
+        rows: first
+          ? [
+              ['Degree', renderVal(first.degree)],
+              ['University', renderVal(first.university)],
+              ['Graduation', renderVal(first.graduationYear)],
+            ]
+          : [['Education', null]],
+      },
+      {
+        title: 'Career goals',
+        icon: 'Target',
+        step: 3,
+        rows: [
+          ['Target role', cg.targetCareer],
+          ['Industry', cg.industry],
+          ['Timeline', (TIMELINES.find((t) => t.id === cg.timeline) || {}).label || cg.timeline],
+        ],
+      },
+      {
+        title: 'Resume & GitHub',
+        icon: 'GitBranch',
+        step: 5,
+        rows: [
+          ['Resume', currentProfile.resumeAnalysis.resumeFile ? 'Uploaded' : null],
+          ['GitHub', currentProfile.githubLinks.githubConnected ? `@${currentProfile.githubLinks.githubUsername}` : null],
+          ['LinkedIn', currentProfile.githubLinks.linkedinUrl ? 'Added' : null],
+        ],
+      },
+    ];
+    return (
+      <Grid twoCol={twoCol}>
+        <Col twoCol={twoCol} flex={1.4}>
+          <Card>
+            <Row justify="space-between">
+              <Txt variant="h3" tone="ink">Profile completion</Txt>
+              <Txt variant="h2" tone="ink">{pct}%</Txt>
+            </Row>
+            <ProgressBar value={pct} tone="success" height={10} style={{ marginTop: space.sm }} />
+          </Card>
+          <View style={[styles.summaryGrid, twoCol ? { flexDirection: 'row', flexWrap: 'wrap' } : null]}>
+            {summary.map((c) => (
+              <Card key={c.title} padding={space.lg} style={twoCol ? { width: '48.8%' } : null}>
+                <Row justify="space-between" style={{ marginBottom: space.sm }}>
+                  <Row gap={8}>
+                    <Icon name={c.icon} size={17} color={colors.ink} />
+                    <Txt variant="title" tone="ink">{c.title}</Txt>
+                  </Row>
+                  <IconButton icon="Pencil" size={32} onPress={() => setActiveStep(c.step)} accessibilityLabel={`Edit ${c.title}`} />
+                </Row>
+                {c.rows.map(([k, v]) => (
+                  <KeyValue key={k} label={k} value={v || 'Not provided'} />
+                ))}
+              </Card>
+            ))}
           </View>
-        );
+        </Col>
+        <Col twoCol={twoCol}>
+          <Card tone="accent">
+            <Row gap={8} style={{ marginBottom: space.md }}>
+              <Icon name="Sparkles" size={18} color={colors.lilacInk} />
+              <Txt variant="h3" tone="ink">AI pre-analysis</Txt>
+            </Row>
+            <Inset tone="accent">
+              <KeyValue label="Resume score" value={currentProfile.resumeAnalysis.resumeFile ? `${currentProfile.resumeAnalysis.score || 0}/100` : 'No resume'} />
+              <KeyValue label="Skills from resume" value={resumeSkillCount} />
+              <KeyValue label="Skills from GitHub" value={githubSkillCount} />
+              <KeyValue label="Profile confidence" value={`${calculateProfileConfidence()}%`} />
+            </Inset>
+          </Card>
+          <Card>
+            <Stack gap={space.md}>
+              <Checkbox checked={isConfirmed} onChange={setIsConfirmed} label="I confirm this information is accurate." />
+              <Button label="Complete profile" iconRight="ArrowRight" size="lg" block onPress={handleNext} disabled={!isConfirmed} />
+              <Txt variant="caption" tone="subtle" align="center">You can edit your profile any time.</Txt>
+            </Stack>
+          </Card>
+        </Col>
+      </Grid>
+    );
+  };
 
-      case 4:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.sectionTitle}>Upload Your Resume</Text>
-            <Text style={styles.sectionSubtitle}>Let SkillSetu analyze your resume and automatically build your professional profile.</Text>
+  const STEP_INTRO = {
+    1: ['Personal information', 'Your contact details and a short introduction.'],
+    2: ['Education', 'Upload a marksheet and we will fill the details for you.'],
+    3: ['Career goals', 'Tell SkillSetu what you are aiming for — matching and gaps use these.'],
+    4: ['Resume + AI', 'Upload your resume and let SkillSetu AI build your profile.'],
+    5: ['GitHub & links', 'Verify skills with real projects and add your professional links.'],
+    6: ['Review & verify', 'Check everything before SkillSetu generates your career intelligence.'],
+  };
 
-            <View style={[styles.rowLayout, !isTablet && styles.flexCol]}>
-              {/* Left Column: Resume Score Card & File */}
-              <View style={styles.leftColResume}>
-                {currentProfile.resumeAnalysis.resumeFile ? (
-                  <HoverableCard style={styles.resumeScoreCard}>
-                    <Text style={styles.scoreHeaderTitle}>✨ Resume Score</Text>
-                    
-                    {/* Circle Score Ring */}
-                    <View style={styles.circleContainer}>
-                      <View style={[styles.progressRingLarge, { borderTopColor: COLORS.teal, borderLeftColor: COLORS.teal }]}>
-                        <Text style={styles.ringValueText}>{currentProfile.resumeAnalysis.score}</Text>
-                        <Text style={styles.ringTotalText}>/100</Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.scoreTextDescription}>{currentProfile.resumeAnalysis.scoreText}</Text>
-
-                    <Pressable style={styles.viewAnalysisBtn} onPress={() => alert('Detailed ATS checklist:\n1. Keywords match: 88%\n2. Typography: 92%\n3. Layout verification: OK\n4. Quantified impacts check: Good')}>
-                      <Text style={styles.viewAnalysisBtnText}>👁️ View Full Analysis</Text>
-                    </Pressable>
-                  </HoverableCard>
-                ) : (
-                  <View style={styles.noResumeCard}>
-                    <Text style={styles.noResumeIcon}>📄</Text>
-                    <Text style={styles.noResumeText}>
-                      {isUploadingResume ? 'Analyzing resume with SkillSetu AI...' : 'No resume uploaded yet'}
-                    </Text>
-                    {isUploadingResume ? (
-                      <ActivityIndicator size="large" color={COLORS.teal} style={{ marginTop: 12 }} />
-                    ) : (
-                      <>
-                        {Platform.OS === 'web' && (
-                          <input
-                            type="file"
-                            id="resumeFileInput"
-                            accept=".pdf,.docx,.png,.jpg,.jpeg,.webp"
-                            style={{ display: 'none' }}
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files[0]) {
-                                handleResumeFileUpload(e.target.files[0]);
-                              }
-                            }}
-                          />
-                        )}
-                        <Pressable
-                          style={styles.uploadResumeBtn}
-                          onPress={() => {
-                            if (Platform.OS === 'web') {
-                              document.getElementById('resumeFileInput')?.click();
-                            } else {
-                              alert('Please upload a PDF or DOCX resume.');
-                            }
-                          }}
-                        >
-                          <Text style={styles.uploadResumeBtnText}>📤 Upload Resume</Text>
-                        </Pressable>
-                      </>
-                    )}
-                  </View>
-                )}
-
-
-                {/* Uploaded File representation */}
-                {currentProfile.resumeAnalysis.resumeFile && (
-                  <View style={styles.fileRepCard}>
-                    <Text style={styles.fileRepIcon}>📄</Text>
-                    <View style={styles.fileRepDetails}>
-                      <Text style={styles.fileRepName}>{currentProfile.resumeAnalysis.resumeFile}</Text>
-                      <Text style={styles.fileRepTime}>{currentProfile.resumeAnalysis.parseTime}</Text>
-                    </View>
-                    <Pressable onPress={deleteResume}>
-                      <Text style={styles.trashIcon}>🗑️</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </View>
-
-              {/* Right Column: Extracted Profile Data */}
-              <View style={styles.rightColResume}>
-                <HoverableCard style={styles.extractedProfileDataCard}>
-                 
-
-                  {!isEditingExtracted ? (
-                    <View style={styles.extractedDataList}>
-                      {/* Projects */}
-                      <View style={styles.extractedSection}>
-                        <View style={styles.sectionHeaderWrap}>
-                          <Text style={styles.extractedSectionLabel}>📁 PROJECTS</Text>
-                          <View style={styles.extractedCountBadge}>
-                            <Text style={styles.extractedCountText}>{currentProfile.resumeAnalysis.extractedData.projects.length} Detected</Text>
-                          </View>
-                        </View>
-                        {currentProfile.resumeAnalysis.extractedData.projects.map((proj, idx) => (
-                          <View key={idx} style={styles.extractedItemRow}>
-                            <Text style={styles.checkedBullet}>✓</Text>
-                            <Text style={styles.extractedItemText}>{proj}</Text>
-                          </View>
-                        ))}
-                      </View>
-
-                      {/* Experience */}
-                      <View style={styles.extractedSection}>
-                        <View style={styles.sectionHeaderWrap}>
-                          <Text style={styles.extractedSectionLabel}>💼 EXPERIENCE</Text>
-                          <View style={styles.extractedCountBadge}>
-                            <Text style={styles.extractedCountText}>{currentProfile.resumeAnalysis.extractedData.experience.length} Detected</Text>
-                          </View>
-                        </View>
-                        {currentProfile.resumeAnalysis.extractedData.experience.map((exp, idx) => (
-                          <View key={idx} style={styles.extractedItemRow}>
-                            <Text style={styles.checkedBullet}>✓</Text>
-                            <View>
-                              <Text style={styles.extractedItemTextBold}>{exp.title}</Text>
-                              <Text style={styles.extractedItemSubtext}>{exp.company} • {exp.period}</Text>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-
-                      {/* Core Technologies */}
-                      <View style={styles.extractedSection}>
-                        <Text style={styles.extractedSectionLabel}>⚙️ CORE TECHNOLOGIES</Text>
-                        <View style={styles.tagsContainer}>
-                          {currentProfile.resumeAnalysis.extractedData.coreTechnologies.map((tech, idx) => (
-                            <View key={idx} style={[styles.tagBadge, { backgroundColor: COLORS.mint }]}>
-                              <Text style={[styles.tagBadgeText, { color: COLORS.teal }]}>{tech}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      </View>
-
-                      {/* Identified Skill Domains */}
-                      <View style={styles.extractedSection}>
-                        <Text style={styles.extractedSectionLabel}>🔬 IDENTIFIED SKILL DOMAINS</Text>
-                        {currentProfile.resumeAnalysis.extractedData.identifiedSkillDomains.map((domain, idx) => (
-                          <View key={idx} style={styles.domainItem}>
-                            <View style={styles.domainInfoRow}>
-                              <Text style={styles.domainName}>{domain.name}</Text>
-                              <Text style={styles.domainVal}>{domain.value}%</Text>
-                            </View>
-                            <View style={styles.domainProgressTrack}>
-                              <View style={[styles.domainProgressBar, { width: `${domain.value}%` }]} />
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={styles.extractedDataList}>
-                      <Text style={styles.inputHelpText}>Edit extracted comma-separated lists below:</Text>
-                      <View style={styles.inputWrap}>
-                        <Text style={styles.inputLabel}>Projects</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={tempProjects}
-                          onChangeText={setTempProjects}
-                        />
-                      </View>
-                      <View style={styles.inputWrap}>
-                        <Text style={styles.inputLabel}>Core Technologies</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={tempCoreTechs}
-                          onChangeText={setTempCoreTechs}
-                        />
-                      </View>
-                    </View>
-                  )}
-                </HoverableCard>
-              </View>
-            </View>
-
-            {validationErrors.resumeFile && <Text style={styles.errorText}>{validationErrors.resumeFile}</Text>}
-          </View>
-        );
-
-      case 5:
-        const linkedinUrl = currentProfile.githubLinks.linkedinUrl || '';
-        const portfolioUrl = currentProfile.githubLinks.portfolioUrl || '';
-        const rawGithubUrl = currentProfile.githubLinks.githubUrl || currentProfile.githubLinks.githubUsername || '';
-        
-        // Ensure githubUrl starts with http for parsing if entered as github.com/username
-        const fullGithubUrl = rawGithubUrl.trim().length > 0
-          ? (rawGithubUrl.trim().startsWith('http://') || rawGithubUrl.trim().startsWith('https://') ? rawGithubUrl.trim() : `https://${rawGithubUrl.trim()}`)
-          : '';
-
-        const isValidLinkedin = linkedinUrl.trim().length > 0 ? /^https?:\/\/(www\.)?linkedin\.com\/in\/[A-Za-z0-9_-]+\/?$/i.test(linkedinUrl.trim()) : null;
-        const isValidPortfolio = portfolioUrl.trim().length > 0 ? /^https?:\/\/[^\s$.?#].[^\s]*$/i.test(portfolioUrl.trim()) : null;
-        const isValidGithubUrl = fullGithubUrl.length > 0 ? /^https?:\/\/(www\.)?github\.com\/[A-Za-z0-9_.-]+\/?$/i.test(fullGithubUrl) : null;
-
-        // Extract username from URL if valid
-        let detectedUsername = '';
-        if (isValidGithubUrl) {
-          const match = fullGithubUrl.match(/github\.com\/([A-Za-z0-9_.-]+)/i);
-          if (match && match[1]) {
-            detectedUsername = match[1];
-          }
-        }
-
-        const repositories = currentProfile.githubLinks.repositories || [];
-        const selectedCount = repositories.filter(r => r.selected).length;
-        const totalCount = repositories.length;
-        const githubSkills = currentProfile.githubLinks.githubSkills || [];
-
-        return (
-          <View style={styles.stepContainer}>
-            {/* 1. TOP SECTION */}
-            <View style={styles.stepHeaderWrap}>
-              <Text style={styles.sectionTitle}>Build Your Professional Evidence</Text>
-              <Text style={styles.sectionSubtitle}>
-                Connect GitHub and professional profiles so SkillSetu can verify your skills through real projects and professional work.
-              </Text>
-              <View style={styles.bannerInfoNote}>
-                <Text style={styles.bannerInfoNoteIcon}>💡</Text>
-                <Text style={styles.bannerInfoNoteText}>
-                  Your selected projects and verified skills will be used to strengthen your internship matches.
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.rowLayout, !isTablet && styles.flexCol]}>
-              {/* LEFT COLUMN: 6. PROFESSIONAL LINKS CARD */}
-              <View style={styles.leftColLinks}>
-                <HoverableCard style={styles.linksCard}>
-                  <View style={styles.cardHeaderGroup}>
-                    <Text style={styles.cardHeaderTitle}>Professional Profiles</Text>
-                    <Text style={styles.cardHeaderSub}>Add links that help recruiters understand your professional presence.</Text>
-                  </View>
-
-                  {/* LINKEDIN */}
-                  <View style={styles.inputWrap}>
-                    <View style={styles.inputLabelRow}>
-                      <Text style={styles.inputLabel}>LinkedIn URL</Text>
-                      {linkedinUrl.trim().length === 0 ? (
-                        <Text style={styles.optionalBadgeText}>Optional</Text>
-                      ) : isValidLinkedin ? (
-                        <Text style={styles.validStatusText}>✓ Valid LinkedIn URL</Text>
-                      ) : (
-                        <Text style={styles.invalidStatusText}>⚠ Enter a valid LinkedIn profile URL</Text>
-                      )}
-                    </View>
-                    <View style={[
-                      styles.iconInputRow,
-                      linkedinUrl.trim().length > 0 && (isValidLinkedin ? styles.inputValidBorder : styles.inputErrorBorder)
-                    ]}>
-                      <View style={styles.inputIconPrefix}>
-                        <Text style={styles.inputIconEmoji}>💼</Text>
-                      </View>
-                      <TextInput
-                        style={[styles.textInput, styles.iconTextInput]}
-                        placeholder="https://linkedin.com/in/username"
-                        value={linkedinUrl}
-                        onChangeText={(val) => updateGithubLinksField('linkedinUrl', val)}
-                        autoCapitalize="none"
-                      />
-                    </View>
-                  </View>
-
-                  {/* PORTFOLIO */}
-                  <View style={styles.inputWrap}>
-                    <View style={styles.inputLabelRow}>
-                      <Text style={styles.inputLabel}>Personal Portfolio</Text>
-                      {portfolioUrl.trim().length === 0 ? (
-                        <Text style={styles.optionalBadgeText}>Optional</Text>
-                      ) : isValidPortfolio ? (
-                        <Text style={styles.validStatusText}>✓ Valid website</Text>
-                      ) : (
-                        <Text style={styles.invalidStatusText}>⚠ Enter a valid website URL</Text>
-                      )}
-                    </View>
-                    <View style={[
-                      styles.iconInputRow,
-                      portfolioUrl.trim().length > 0 && (isValidPortfolio ? styles.inputValidBorder : styles.inputErrorBorder)
-                    ]}>
-                      <View style={styles.inputIconPrefix}>
-                        <Text style={styles.inputIconEmoji}>🌐</Text>
-                      </View>
-                      <TextInput
-                        style={[styles.textInput, styles.iconTextInput]}
-                        placeholder="https://yourportfolio.dev"
-                        value={portfolioUrl}
-                        onChangeText={(val) => updateGithubLinksField('portfolioUrl', val)}
-                        autoCapitalize="none"
-                      />
-                    </View>
-                  </View>
-
-                  {/* Supported profiles info pill */}
-                  <View style={styles.supportedProfilesPill}>
-                    <Text style={styles.supportedProfilesText}>
-                      🔒 Links are shared with verified recruiters during internship matching.
-                    </Text>
-                  </View>
-                </HoverableCard>
-              </View>
-
-              {/* RIGHT COLUMN: GITHUB & REPOSITORY ANALYSIS */}
-              <View style={styles.rightColLinks}>
-                <View style={{ gap: 20 }}>
-                  {/* 1. GITHUB PROFILE CARD */}
-                  <HoverableCard style={styles.githubCard}>
-                    <View style={styles.githubCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.cardHeaderTitle}>GitHub Profile</Text>
-                        <Text style={styles.cardHeaderSub}>
-                          Connect your GitHub account so SkillSetu can securely retrieve your available repositories and use selected projects as evidence.
-                        </Text>
-                      </View>
-                      {currentProfile.githubLinks.githubConnected && (
-                        <View style={styles.connectedHeaderActions}>
-                          <Pressable style={styles.refreshBtn} onPress={refreshGithubRepositories}>
-                            <Text style={styles.refreshBtnText}>🔄 Refresh Repos</Text>
-                          </Pressable>
-                          <Pressable style={styles.disconnectBtn} onPress={disconnectGithubAccount}>
-                            <Text style={styles.disconnectBtnText}>🔌 Disconnect</Text>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* 2. GITHUB ACCOUNT OAUTH CONNECTION */}
-                    <View style={styles.githubConnectBox}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.navy, marginBottom: 4 }}>
-                          GitHub Profile
-                        </Text>
-                        <Text style={styles.inputHelpText}>
-                          {currentProfile.githubLinks.githubConnected
-                            ? 'Your GitHub account is connected via OAuth authorization. SkillSetu can access your public and authorized private repositories.'
-                            : 'Authorize SkillSetu to securely connect your GitHub account and import your repositories for technical skill evidence verification.'}
-                        </Text>
-                      </View>
-
-                      {!currentProfile.githubLinks.githubConnected ? (
-                        <Pressable
-                          style={{
-                            backgroundColor: COLORS.teal,
-                            paddingHorizontal: 16,
-                            paddingVertical: 10,
-                            borderRadius: 8,
-                            alignSelf: 'flex-start',
-                            marginTop: 8
-                          }}
-                          onPress={connectRealGithubAccount}
-                        >
-                          <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>
-                            ⚡ Connect GitHub Account
-                          </Text>
-                        </Pressable>
-                      ) : (
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                          <Pressable
-                            style={{ backgroundColor: COLORS.gray200, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}
-                            onPress={refreshGithubRepositories}
-                          >
-                            <Text style={{ color: COLORS.navy, fontWeight: '600', fontSize: 12 }}>🔄 Refresh Repos</Text>
-                          </Pressable>
-                          <Pressable
-                            style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}
-                            onPress={disconnectGithubAccount}
-                          >
-                            <Text style={{ color: '#DC2626', fontWeight: '600', fontSize: 12 }}>🔌 Disconnect</Text>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* 3. GITHUB PROFILE PREVIEW (WHEN CONNECTED) */}
-                    {currentProfile.githubLinks.githubConnected ? (
-                      <View style={styles.githubProfilePreviewCard}>
-                        <View style={styles.githubAvatarWrap}>
-                          <Text style={styles.githubAvatarIcon}>💻</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={styles.githubTitleBadgeRow}>
-                            <Text style={styles.githubTitleText}>GitHub</Text>
-                            <View style={styles.connectedBadge}>
-                              <Text style={styles.connectedBadgeText}>✓ Connected</Text>
-                            </View>
-                          </View>
-                          <Text style={styles.githubSubText}>@{currentProfile.githubLinks.githubUsername || 'user'}</Text>
-                          <Text style={styles.githubVerifiedSubText}>
-                            {totalCount} repositories available
-                          </Text>
-                        </View>
-                      </View>
-                    ) : (
-                      /* 10. EMPTY STATE */
-                      <View style={styles.emptyGithubPrompt}>
-                        <Text style={styles.emptyGithubPromptTitle}>No GitHub Profile Connected</Text>
-                        <Text style={styles.emptyGithubPromptSub}>Click "Connect GitHub Account" above to authorize SkillSetu and import your project evidence.</Text>
-                      </View>
-                    )}
-
-                    {/* 8. INFORMATION / PRIVACY MESSAGE */}
-                    <View style={styles.evidenceDisclaimerCard}>
-                      <Text style={styles.disclaimerIcon}>🔒</Text>
-                      <Text style={styles.disclaimerText}>
-                        Technical Evidence Disclaimer: SkillSetu scores indicate the strength and presence of technical evidence found within your selected GitHub repository files. Scores do not represent or guarantee human coding proficiency.
-                      </Text>
-                    </View>
-
-                    {/* 5. AI SKILL EVIDENCE FROM REPOSITORIES */}
-                    {currentProfile.githubLinks.githubConnected && (
-                      <View style={styles.aiEvidenceSection}>
-                        <View style={styles.aiEvidenceHeader}>
-                          <Text style={styles.evidenceHeaderTitle}>Skill Evidence from Your Repositories</Text>
-                          <Text style={styles.evidenceHeaderSubtitle}>
-                            Strength of technical evidence found across your selected GitHub repositories.
-                          </Text>
-                        </View>
-
-                        {githubSkills.length > 0 ? (
-                          <View style={styles.skillsEvidenceList}>
-                            {githubSkills.map((skill, index) => {
-                              const isExpanded = expandedSkillIdx === index;
-                              return (
-                                <Pressable
-                                  key={index}
-                                  style={styles.evidenceSkillItem}
-                                  onPress={() => setExpandedSkillIdx(isExpanded ? null : index)}
-                                >
-                                  <View style={styles.evidenceInfoRow}>
-                                    <View style={{ flex: 1 }}>
-                                      <Text style={styles.evidenceSkillName}>{skill.name}</Text>
-                                      {skill.repository_count && (
-                                        <Text style={{ fontSize: 11, color: COLORS.gray600, marginTop: 2 }}>
-                                          Detected in {skill.repository_count} selected project{skill.repository_count > 1 ? 's' : ''} {isExpanded ? '▲' : '▼'}
-                                        </Text>
-                                      )}
-                                    </View>
-                                    <View style={styles.evidenceScoreBadgeRow}>
-                                      <Text style={styles.evidenceSkillPercentage}>{skill.score || skill.percentage}/100</Text>
-                                      <View style={[
-                                        styles.skillLevelPill,
-                                        (skill.score || skill.percentage) >= 85 ? styles.levelExpertPill :
-                                        (skill.score || skill.percentage) >= 70 ? styles.levelStrongPill : styles.levelGoodPill
-                                      ]}>
-                                        <Text style={[
-                                          styles.skillLevelPillText,
-                                          (skill.score || skill.percentage) >= 85 ? styles.levelExpertPillText :
-                                          (skill.score || skill.percentage) >= 70 ? styles.levelStrongPillText : styles.levelGoodPillText
-                                        ]}>{skill.rating || ((skill.score || skill.percentage) >= 85 ? 'Very Strong Evidence' : (skill.score || skill.percentage) >= 70 ? 'Strong Evidence' : 'Good Evidence')}</Text>
-                                      </View>
-                                    </View>
-                                  </View>
-                                  <View style={styles.evidenceProgressTrack}>
-                                    <View style={[styles.evidenceProgressBar, { width: `${skill.score || skill.percentage}%` }]} />
-                                  </View>
-
-                                  {isExpanded && (
-                                    <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
-                                      <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.navy, marginBottom: 4 }}>
-                                        Why SkillSetu detected this skill:
-                                      </Text>
-                                      {Array.isArray(skill.signals) && skill.signals.length > 0 ? (
-                                        skill.signals.map((sig, sIdx) => (
-                                          <View key={sIdx} style={{ marginVertical: 2 }}>
-                                            <Text style={{ fontSize: 11, color: COLORS.navy, fontWeight: '500' }}>
-                                              • [{sig.signal_type}] {sig.evidence_description} (+{sig.contribution_pts} pts)
-                                            </Text>
-                                            <Text style={{ fontSize: 10, color: COLORS.gray600, marginLeft: 10 }}>
-                                              Source: {sig.repository_name} ({sig.file_path})
-                                            </Text>
-                                          </View>
-                                        ))
-                                      ) : Array.isArray(skill.evidence_sources) && skill.evidence_sources.length > 0 ? (
-                                        skill.evidence_sources.map((reason, rIdx) => (
-                                          <Text key={rIdx} style={{ fontSize: 11, color: COLORS.gray700, marginVertical: 1 }}>
-                                            ✓ {reason}
-                                          </Text>
-                                        ))
-                                      ) : null}
-                                    </View>
-                                  )}
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        ) : (
-                          <Text style={styles.noSkillsText}>Skill analysis will appear after you select repositories and click Analyze Repositories.</Text>
-                        )}
-                      </View>
-                    )}
-                  </HoverableCard>
-
-                  {/* 4. PUBLIC REPOSITORY EVIDENCE */}
-                  {currentProfile.githubLinks.githubConnected && (
-                    <View style={styles.reposSelectionCard}>
-                      <View style={styles.reposCardHeaderRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.cardHeaderTitle}>Public Repository Evidence</Text>
-                          <Text style={styles.inputHelpText}>Select the repositories you want SkillSetu to use as evidence for your skills and project experience.</Text>
-                        </View>
-
-                        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                          <View style={styles.selectedCountBadge}>
-                            <Text style={styles.selectedCountBadgeText}>{selectedCount} of {totalCount} selected</Text>
-                          </View>
-                          <Pressable
-                            style={{
-                              backgroundColor: COLORS.teal,
-                              paddingHorizontal: 12,
-                              paddingVertical: 6,
-                              borderRadius: 6,
-                              opacity: isAnalyzingGithub ? 0.6 : 1
-                            }}
-                            onPress={analyzeSelectedGithubRepositories}
-                            disabled={isAnalyzingGithub}
-                          >
-                            <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 12 }}>
-                              {isAnalyzingGithub ? '⏳ Analyzing...' : '⚡ Analyze Repositories'}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </View>
-
-                      {totalCount > 0 && (
-                        <View style={styles.repoBatchActionsRow}>
-                          <Pressable
-                            style={styles.batchActionBtn}
-                            onPress={() => {
-                              const updatedRepos = currentProfile.githubLinks.repositories.map(r => ({ ...r, selected: true }));
-                              const selectedIds = updatedRepos.map(r => r.id);
-                              setProfileData(prev => ({
-                                ...prev,
-                                githubLinks: {
-                                  ...prev.githubLinks,
-                                  repositories: updatedRepos,
-                                },
-                              }));
-                              saveSelectedRepoIds(selectedIds);
-                            }}
-                          >
-                            <Text style={styles.batchActionBtnText}>Select All ({totalCount})</Text>
-                          </Pressable>
-                          <Text style={styles.batchActionDivider}>•</Text>
-                          <Pressable
-                            style={styles.batchActionBtn}
-                            onPress={() => {
-                              const updatedRepos = currentProfile.githubLinks.repositories.map(r => ({ ...r, selected: false }));
-                              setProfileData(prev => ({
-                                ...prev,
-                                githubLinks: {
-                                  ...prev.githubLinks,
-                                  repositories: updatedRepos,
-                                },
-                              }));
-                              saveSelectedRepoIds([]);
-                            }}
-                          >
-                            <Text style={styles.batchActionBtnText}>Clear All</Text>
-                          </Pressable>
-                        </View>
-                      )}
-
-                      {totalCount > 0 ? (
-                        <View style={styles.reposGridList}>
-                          {currentProfile.githubLinks.repositories.map((repo) => (
-                            <Pressable
-                              key={repo.id}
-                              style={[styles.repoListItem, repo.selected && styles.repoListItemSelected]}
-                              onPress={() => toggleRepositorySelected(repo.id)}
-                            >
-                              <View style={[styles.repoCheckbox, repo.selected && styles.repoCheckboxSelected]}>
-                                <Text style={[styles.repoCheckboxText, repo.selected && styles.repoCheckboxTextSelected]}>{repo.selected ? '✓' : ''}</Text>
-                              </View>
-                              <View style={styles.repoDetails}>
-                                <View style={styles.repoHeaderLine}>
-                                  <Text style={styles.repoNameText}>{repo.name}</Text>
-                                  {(repo.stars !== undefined || repo.forks !== undefined) && (
-                                    <View style={styles.repoStatsRow}>
-                                      {repo.stars !== undefined && <Text style={styles.repoStatItem}>⭐ {repo.stars}</Text>}
-                                      {repo.forks !== undefined && <Text style={styles.repoStatItem}>🍴 {repo.forks}</Text>}
-                                    </View>
-                                  )}
-                                </View>
-                                {Boolean(repo.description) && (
-                                  <Text style={styles.repoDescText}>{repo.description}</Text>
-                                )}
-                                {Array.isArray(repo.tags) && repo.tags.length > 0 && (
-                                  <View style={styles.repoTagsRow}>
-                                    {repo.tags.map((tag) => (
-                                      <View key={tag} style={styles.repoTag}>
-                                        <Text style={styles.repoTagText}>{tag}</Text>
-                                      </View>
-                                    ))}
-                                  </View>
-                                )}
-                              </View>
-                            </Pressable>
-                          ))}
-                        </View>
-                      ) : (
-                        <View style={styles.emptyReposPrompt}>
-                          <Text style={styles.emptyReposIcon}>📁</Text>
-                          <Text style={styles.emptyReposTitle}>No public repositories found</Text>
-                          <Text style={styles.emptyReposSub}>Make sure your GitHub profile contains public repositories so SkillSetu can analyze them.</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </View>
-              </View>
-            </View>
-          </View>
-        );
-
-      case 6:
-        return (
-          <View style={styles.step6Wrapper}>
-            {/* Header Titles */}
-            <View style={styles.step6Header}>
-              <Text style={styles.step6Title}>Review Your Profile</Text>
-              <Text style={styles.step6Subtitle}>Review your information before SkillSetu starts generating your personalized career intelligence.</Text>
-            </View>
-
-            <View style={[styles.step6Layout, !isTablet && styles.flexCol]}>
-              {/* Left Column: Profile Completion + 4 Grid Cards */}
-              <View style={styles.step6LeftCol}>
-                {/* Profile Completion Card */}
-                <View style={styles.step6CompletionCard}>
-                  <View style={styles.step6CompletionRow}>
-                    <Text style={styles.completionLabelLarge}>Profile Completion</Text>
-                    <Text style={styles.completionPercentLarge}>{calculateStepCompletionPercent()}%</Text>
-                  </View>
-                  <View style={styles.completionTrackLarge}>
-                    <View style={[styles.completionBarLarge, { width: `${calculateStepCompletionPercent()}%` }]} />
-                  </View>
-                </View>
-
-                {/* 4 Cards Grid */}
-                <View style={styles.cardsGrid}>
-                  {/* Card 1: Personal Info */}
-                  <View style={styles.summaryCard}>
-                    <View style={styles.summaryCardHeader}>
-                      <View style={styles.summaryCardTitleWrap}>
-                        <View style={styles.checkIconCircle}>
-                          <Text style={styles.checkIconText}>✓</Text>
-                        </View>
-                        <Text style={styles.summaryCardTitle}>Personal Info</Text>
-                      </View>
-                      <Pressable onPress={() => setActiveStep(1)} style={styles.pencilBtn}>
-                        <Text style={styles.pencilIcon}>✏️</Text>
-                      </Pressable>
-                    </View>
-                    <View style={styles.summaryCardContent}>
-                      <Text style={styles.summaryText}><Text style={styles.boldLabel}>Name:</Text> {currentProfile.personalInfo.fullName || 'Not provided'}</Text>
-                      <Text style={styles.summaryText}><Text style={styles.boldLabel}>Location:</Text> {currentProfile.personalInfo.location || 'Not provided'}</Text>
-                      <Text style={styles.summaryText}><Text style={styles.boldLabel}>Experience:</Text> {currentProfile.personalInfo.yearsOfExperience || 'Not provided'}</Text>
-                    </View>
-                  </View>
-
-                  {/* Card 2: Education */}
-                  <View style={styles.summaryCard}>
-                    <View style={styles.summaryCardHeader}>
-                      <View style={styles.summaryCardTitleWrap}>
-                        <View style={styles.checkIconCircle}>
-                          <Text style={styles.checkIconText}>✓</Text>
-                        </View>
-                        <Text style={styles.summaryCardTitle}>Education</Text>
-                      </View>
-                      <Pressable onPress={() => setActiveStep(2)} style={styles.pencilBtn}>
-                        <Text style={styles.pencilIcon}>✏️</Text>
-                      </Pressable>
-                    </View>
-                    <View style={styles.summaryCardContent}>
-                      {currentProfile.education.list.length > 0 ? (
-                        <>
-                          <Text style={styles.summaryText}><Text style={styles.boldLabel}>Degree:</Text> {renderVal(currentProfile.education.list[0].degree)}</Text>
-                          <Text style={styles.summaryText}><Text style={styles.boldLabel}>University:</Text> {renderVal(currentProfile.education.list[0].university)}</Text>
-                          <Text style={styles.summaryText}><Text style={styles.boldLabel}>Graduation:</Text> {renderVal(currentProfile.education.list[0].graduationYear)}</Text>
-                        </>
-                      ) : (
-                        <Text style={styles.summaryText}>No education listed</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Card 3: Career Goals */}
-                  <View style={styles.summaryCard}>
-                    <View style={styles.summaryCardHeader}>
-                      <View style={styles.summaryCardTitleWrap}>
-                        <View style={styles.checkIconCircle}>
-                          <Text style={styles.checkIconText}>✓</Text>
-                        </View>
-                        <Text style={styles.summaryCardTitle}>Career Goals</Text>
-                      </View>
-                      <Pressable onPress={() => setActiveStep(3)} style={styles.pencilBtn}>
-                        <Text style={styles.pencilIcon}>✏️</Text>
-                      </Pressable>
-                    </View>
-                    <View style={styles.summaryCardContent}>
-                      <Text style={styles.summaryText}><Text style={styles.boldLabel}>Target Role:</Text> {currentProfile.careerGoals.targetCareer || 'Not provided'}</Text>
-                      <Text style={styles.summaryText}><Text style={styles.boldLabel}>Industry:</Text> {currentProfile.careerGoals.industry || 'Not provided'}</Text>
-                      <Text style={styles.summaryText}><Text style={styles.boldLabel}>Timeline:</Text> {currentProfile.careerGoals.timeline || 'Not provided'}</Text>
-                    </View>
-                  </View>
-
-                  {/* Card 4: Tech Stack & GitHub */}
-                  <View style={styles.summaryCard}>
-                    <View style={styles.summaryCardHeader}>
-                      <View style={styles.summaryCardTitleWrap}>
-                        <View style={styles.checkIconCircle}>
-                          <Text style={styles.checkIconText}>✓</Text>
-                        </View>
-                        <Text style={styles.summaryCardTitle}>Tech Stack & GitHub</Text>
-                      </View>
-                      <Pressable onPress={() => setActiveStep(5)} style={styles.pencilBtn}>
-                        <Text style={styles.pencilIcon}>✏️</Text>
-                      </Pressable>
-                    </View>
-                    <View style={styles.summaryCardContent}>
-                      <View style={styles.techPillsRow}>
-                        {currentProfile.resumeAnalysis.extractedData.coreTechnologies.slice(0, 4).map((tech, idx) => (
-                          <View key={idx} style={styles.techPill}>
-                            <Text style={styles.techPillText}>{tech}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Right Column: AI Pre-Analysis + Confirm Checkbox & Complete Button */}
-              <View style={styles.step6RightCol}>
-                {/* AI Pre-Analysis Card */}
-                <View style={styles.aiPreAnalysisCard}>
-                  <View style={styles.aiHeaderRow}>
-                    <Text style={styles.sparkleIcon}>✨</Text>
-                    <Text style={styles.aiPreAnalysisTitle}>AI Pre-Analysis</Text>
-                  </View>
-
-                  <View style={styles.aiMetricRow}>
-                    <Text style={styles.aiMetricLabel}>Resume Score</Text>
-                    <Text style={styles.aiMetricVal}>{currentProfile.resumeAnalysis.score || 82}<Text style={styles.aiMetricValTotal}>/100</Text></Text>
-                  </View>
-
-                  {/* Teal Progress bar for score */}
-                  <View style={styles.aiProgressTrack}>
-                    <View style={[styles.aiProgressBar, { width: `${currentProfile.resumeAnalysis.score || 82}%` }]} />
-                  </View>
-
-                  <View style={styles.aiMetricRow}>
-                    <Text style={styles.aiMetricLabel}>Skills Detected</Text>
-                    <Text style={styles.aiMetricVal}>{currentProfile.githubLinks.githubConnected ? '18' : '12'}</Text>
-                  </View>
-
-                  <View style={styles.aiMetricRow}>
-                    <Text style={styles.aiMetricLabel}>Profile Confidence</Text>
-                    <Text style={[styles.aiMetricVal, { color: COLORS.teal }]}>{calculateProfileConfidence()}%</Text>
-                  </View>
-                </View>
-
-                {/* Confirm Card */}
-                <View style={styles.confirmActionCard}>
-                  <Pressable
-                    style={styles.checkboxRow}
-                    onPress={() => setIsConfirmed(!isConfirmed)}
-                  >
-                    <View style={[styles.customCheckbox, isConfirmed && styles.customCheckboxChecked]}>
-                      {isConfirmed && <Text style={styles.checkedTickText}>✓</Text>}
-                    </View>
-                    <Text style={styles.checkboxLabel}>I confirm information is accurate.</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={[styles.completeProfileBtn, !isConfirmed && styles.disabledCompleteBtn]}
-                    onPress={handleNext}
-                  >
-                    <Text style={styles.completeProfileBtnText}>Complete Profile ➔</Text>
-                  </Pressable>
-
-                  <Text style={styles.termsSubtext}>
-                    By completing, you agree to our Terms of Service and Privacy Policy.
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        );
-
-      default:
-        return null;
+  const renderStepContent = () => {
+    switch (activeStep) {
+      case 1: return renderStep1();
+      case 2: return renderStep2();
+      case 3: return renderStep3();
+      case 4: return renderStep4();
+      case 5: return renderStep5();
+      case 6: return renderStep6();
+      default: return null;
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // ATS breakdown sheet (used by wizard step 4 and profile view)
+  // ---------------------------------------------------------------------------
+  const diag = currentProfile.resumeAnalysis?.diagnostics || {};
+  const breakdown = currentProfile.resumeAnalysis?.scoreBreakdown || {};
+  const metric = (key) => (typeof diag?.[key]?.score === 'number' ? diag[key].score : typeof breakdown?.[key] === 'number' ? breakdown[key] : null);
+  const diagnostics = [
+    { key: 'semantic_match', label: 'Role alignment', icon: 'Target', tone: 'accent', fallback: 'How well your skills align with your target careers.' },
+    { key: 'impact_quantification', label: 'Measurable impact', icon: 'TrendingUp', tone: 'success', fallback: 'Numbers and outcomes in your project and experience bullets.' },
+    { key: 'technical_depth', label: 'Technical depth', icon: 'Code', tone: 'info', fallback: 'Breadth and depth of languages, frameworks and tools.' },
+    { key: 'readability_ats', label: 'ATS readability', icon: 'FileText', tone: 'warning', fallback: 'How cleanly an applicant-tracking system can parse your resume.' },
+  ].map((d) => ({ ...d, score: metric(d.key), description: diag?.[d.key]?.description || d.fallback }));
+
+  const atsSheet = (
+    <Sheet visible={showAtsModal} onClose={() => setShowAtsModal(false)} title="Resume analysis" subtitle={currentProfile.resumeAnalysis?.resumeFile} icon="FileText" tone="info">
+      <Row gap={space.lg}>
+        <Ring value={currentProfile.resumeAnalysis?.score || 0} size={92} stroke={9} tone="info">
+          <Txt variant="h2" tone="ink">{currentProfile.resumeAnalysis?.score || 0}</Txt>
+        </Ring>
+        <Txt variant="body" tone="muted" style={{ flex: 1 }}>
+          {currentProfile.resumeAnalysis?.scoreText || diag?.synthesis_note || 'Upload a resume to get a full analysis.'}
+        </Txt>
+      </Row>
+      {diagnostics.map((d) => (
+        <Card key={d.key} padding={space.lg}>
+          <Row justify="space-between">
+            <Row gap={8}>
+              <Icon name={d.icon} size={17} color={toneOf(d.tone).ink} />
+              <Txt variant="title" tone="ink">{d.label}</Txt>
+            </Row>
+            <Txt variant="title" tone="ink">{d.score != null ? `${d.score}/100` : '—'}</Txt>
+          </Row>
+          <ProgressBar value={d.score || 0} tone={d.tone} style={{ marginVertical: 8 }} />
+          <Txt variant="small" tone="muted">{d.description}</Txt>
+        </Card>
+      ))}
+    </Sheet>
+  );
+
+  // ---------------------------------------------------------------------------
+  // One-page profile view
+  // ---------------------------------------------------------------------------
   if (isViewingOnePageProfile) {
     const handleReanalyzeCV = async () => {
       setIsReanalyzingResume(true);
       try {
         if (user?.email) {
-          const res = await fetch('http://127.0.0.1:8000/api/v1/student/reanalyze-resume', {
+          const res = await fetch(`${API_BASE}/student/reanalyze-resume`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: user.email.trim() }),
@@ -2814,7 +1951,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
                 resume_score: typeof resData.score === 'number' ? resData.score : user.resume_score,
               });
             }
-            alert('AI Pre-Analysis & ATS calibration refreshed from latest student credentials.');
+            alert('Resume re-analysed with your latest details.');
           } else {
             alert(resData.detail || 'Could not re-analyze resume. Please ensure a CV is uploaded.');
           }
@@ -2827,1991 +1964,397 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
       }
     };
 
+    const p = currentProfile.personalInfo;
+    const cg = currentProfile.careerGoals;
+    const gl = currentProfile.githubLinks;
+    const ra = currentProfile.resumeAnalysis;
+    const first = currentProfile.education.list[0] || {};
+    const name = p.fullName || user?.name || 'Student';
+    const university = renderVal(first.university) || user?.university || '';
+    const degree = [renderVal(first.degree) || user?.degree, renderVal(first.branch) || user?.branch].filter(Boolean).join(' · ');
+    const careerIds = cg.targetCareerIds && cg.targetCareerIds.length ? cg.targetCareerIds : cg.targetCareer ? [cg.targetCareer] : [];
+    const careers = careerIds.map((id) => careerName(id)).filter(Boolean);
+    const resumeScore = typeof ra.score === 'number' && ra.resumeFile ? ra.score : user?.resume_score ? Number(user.resume_score) : null;
+    const githubSkills = gl.githubSkills || [];
+    const techs = (ra.extractedData?.coreTechnologies || []).map((t) => renderVal(t));
+    const repos = (gl.repositories || []).filter((r) => r.selected).length ? gl.repositories.filter((r) => r.selected) : gl.repositories || [];
+    const editProfile = (step = 1) => {
+      setActiveStep(step);
+      setIsViewingOnePageProfile(false);
+    };
+    const links = [
+      gl.linkedinUrl || user?.linkedin_url ? { icon: 'Link', label: 'LinkedIn', url: gl.linkedinUrl || user?.linkedin_url } : null,
+      gl.portfolioUrl || user?.portfolio_url ? { icon: 'Globe', label: 'Portfolio', url: gl.portfolioUrl || user?.portfolio_url } : null,
+      gl.githubConnected && gl.githubUsername ? { icon: 'GitBranch', label: `@${gl.githubUsername}`, url: `https://github.com/${gl.githubUsername}` } : null,
+    ].filter(Boolean);
+
+    const aside = (
+      <>
+        <SectionTitle title="At a glance" emoji="🧭" />
+        <EventCard
+          tone="accent"
+          icon="Target"
+          type="Career goals"
+          date={(TIMELINES.find((t) => t.id === cg.timeline) || {}).label || ''}
+          title={careers.length ? careers.join(' · ') : 'No target role yet'}
+          body={cg.careerGoal || 'Add a career goal so your mentor and matches can personalise guidance.'}
+          footer={
+            <Pressable onPress={() => editProfile(3)} style={[styles.footerLink, webOnly({ cursor: 'pointer' })]}>
+              <Icon name="Pencil" size={14} color={colors.ink} />
+              <Txt variant="small" weight={600} tone="ink">Edit goals</Txt>
+            </Pressable>
+          }
+        />
+        <EventCard
+          tone="warning"
+          icon="GraduationCap"
+          type="Education"
+          date={first.graduationYear ? `Class of ${renderVal(first.graduationYear)}` : ''}
+          title={degree || 'Education not added'}
+          body={[university, currentProfile.education.cgpaDetected && currentProfile.education.cgpaDetected !== 'Detected' ? `CGPA ${renderVal(currentProfile.education.cgpaDetected)}` : user?.cgpa_or_percentage ? `CGPA ${user.cgpa_or_percentage}` : null].filter(Boolean).join(' · ') || 'Upload a marksheet to verify your education.'}
+        />
+        <EventCard
+          tone="info"
+          icon="Link"
+          type="Links"
+          body={links.length ? null : 'Add LinkedIn, a portfolio or connect GitHub.'}
+          title={links.length ? `${links.length} profile${links.length > 1 ? 's' : ''} linked` : 'No links yet'}
+          footer={
+            links.length ? (
+              <Row gap={6} wrap justify="center">
+                {links.map((l) => (
+                  <Pressable key={l.label} onPress={() => openUrl(l.url)} style={[styles.linkChip, webOnly({ cursor: 'pointer' })]}>
+                    <Icon name={l.icon} size={13} color={colors.ink} />
+                    <Txt variant="caption" weight={600} tone="ink">{l.label}</Txt>
+                  </Pressable>
+                ))}
+              </Row>
+            ) : (
+              <Pressable onPress={() => editProfile(5)} style={[styles.footerLink, webOnly({ cursor: 'pointer' })]}>
+                <Icon name="Plus" size={14} color={colors.ink} />
+                <Txt variant="small" weight={600} tone="ink">Add links</Txt>
+              </Pressable>
+            )
+          }
+        />
+        {studentApplications.slice(0, 3).map((a, i) => (
+          <EventCard
+            key={a.id || i}
+            tone="success"
+            icon="Briefcase"
+            type={a.status || 'Application'}
+            date={a.dateApplied ? a.dateApplied.replace(/, \d{4}$/, '') : ''}
+            title={`${a.role || a.title || 'Internship'} · ${a.company || a.company_name || ''}`}
+            body={a.nextAction}
+          />
+        ))}
+      </>
+    );
+
     return (
-      <View style={{ flex: 1, backgroundColor: CLAY_COLORS.canvas, minHeight: '100%' }}>
-        {/* Ambient Animated Blob Background */}
-        <AmbientBackground />
-
-        <ScrollView
-          style={{ flex: 1, backgroundColor: 'transparent' }}
-          contentContainerStyle={{
-            paddingHorizontal: isWide ? 36 : (isTablet ? 24 : 16),
-            paddingTop: 24,
-            paddingBottom: 48,
-            maxWidth: 1440,
-            width: '100%',
-            alignSelf: 'center',
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Top Breadcrumbs & Header Actions */}
-          <ProfileHeaderNav
-            isVerified={currentProfile.verified}
-            onEditProfile={() => {
-              setActiveStep(1);
-              setIsViewingOnePageProfile(false);
-            }}
-            onShareProfile={() => setShowShareModal(true)}
-            onDownloadReport={() => setShowDownloadModal(true)}
-            isDownloading={isDownloadingReport}
-          />
-
-          {/* Student Profile Hero Card */}
-          <ProfileHero
-            user={user}
-            profileData={currentProfile}
-            onEditProfile={() => {
-              setActiveStep(1);
-              setIsViewingOnePageProfile(false);
-            }}
-            onShareProfile={() => setShowShareModal(true)}
-            onDownloadReport={() => setShowDownloadModal(true)}
-            isDownloading={isDownloadingReport}
-          />
-
-          {/* AI Pre-Analysis & Resume Diagnostics */}
-          <AIPreAnalysisCard
-            resumeAnalysis={currentProfile.resumeAnalysis}
-            user={user}
-            onReanalyze={handleReanalyzeCV}
-            onViewAtsBreakdown={() => setShowAtsModal(true)}
-            isReanalyzing={isReanalyzingResume}
-          />
-
-          {/* Main 2-Column Responsive Dashboard Grid */}
-          <View
-            style={{
-              flexDirection: isWide ? 'row' : 'column',
-              gap: 20,
-              alignItems: 'flex-start',
-            }}
-          >
-            {/* Left Column (Primary Evidence - 1.6fr) */}
-            <View style={{ flex: isWide ? 1.6 : 1, width: '100%', gap: 20 }}>
-              {/* 1. Cryptographic Matrix: Verified Skill Proofs & Readiness */}
-              
-
-
-              <VerifiedSkillProofsCard
-                profileData={currentProfile}
-                user={user}
-              />
-
-              {/* 2. Open Source Codebases: Public GitHub Repositories */}
-              <GitHubRepositoriesCard
-                githubLinks={currentProfile.githubLinks}
-                user={user}
-              />
+      <Page aside={aside}>
+        <Card padding={isTablet ? space.xxl : space.lg}>
+          <Row gap={space.lg} align="flex-start" wrap>
+            <View>
+              <Avatar name={name} uri={p.profileImage || user?.profile_image || undefined} size={isTablet ? 112 : 84} />
+              {currentProfile.verified ? (
+                <View style={styles.verifiedDot}>
+                  <Icon name="Check" size={14} color="#fff" strokeWidth={3} />
+                </View>
+              ) : null}
             </View>
+            <Stack gap={8} style={{ flex: 1, minWidth: 240 }}>
+              <Row gap={10} wrap>
+                <Txt variant="display" tone="ink">{name}</Txt>
+                {currentProfile.verified ? <Pill label="Verified" tone="success" icon="ShieldCheck" size="sm" /> : <Pill label="Not verified yet" tone="warning" size="sm" />}
+              </Row>
+              <Txt variant="title" tone="muted">{p.headline || user?.headline || (careers[0] ? `Aspiring ${careers[0]}` : 'Add a headline')}</Txt>
+              <Row gap={8} wrap>
+                {p.location || user?.location ? <Pill label={p.location || user?.location} icon="MapPin" size="sm" /> : null}
+                {university ? <Pill label={university} icon="Building" size="sm" /> : null}
+                {p.yearsOfExperience ? <Pill label={p.yearsOfExperience} icon="Briefcase" size="sm" /> : null}
+                {p.email || user?.email ? <Pill label={p.email || user?.email} icon="Mail" size="sm" /> : null}
+              </Row>
+            </Stack>
+            <Row gap={8}>
+              <Button label="Edit profile" icon="Pencil" onPress={() => editProfile(1)} />
+              <IconButton icon="Send" size={44} onPress={() => setShowShareModal(true)} accessibilityLabel="Share profile" />
+            </Row>
+          </Row>
+          {p.bio || user?.bio ? (
+            <Inset tone="neutral" style={{ marginTop: space.lg }}>
+              <Txt variant="body" tone="default">{p.bio || user?.bio}</Txt>
+            </Inset>
+          ) : null}
+        </Card>
 
-            {/* Right Column (Career, Academic & Professional - 1fr) */}
-            <View style={{ flex: isWide ? 1 : 1, width: '100%', gap: 20, minWidth: isWide ? 330 : '100%' }}>
-             
-
-              {/* 1. Active Applications Pipeline */}
-              <ActiveApplicationsCard
-                applications={studentApplications}
-                onViewApplications={() => alert('Navigating to Active Applications Pipeline...')}
-              />
-
-              {/* 2. Academic Credentials & Cryptographic Hash */}
-              <AcademicCredentialsCard
-                education={currentProfile.education}
-                user={user}
-              />
-
-              {/* 3. Verified Destinations & Professional Links */}
-              <ProfessionalLinksCard
-                githubLinks={currentProfile.githubLinks}
-                user={user}
-              />
-            </View>
-          </View>
-
-          {/* Footer */}
-          <ProfileFooter />
-        </ScrollView>
-
-        {/* Modals */}
-        <EditProfileModal
-          visible={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          profileData={currentProfile}
-          setProfileData={setProfileData}
-          user={user}
-          updateUser={updateUser}
+        <StatTrio
+          items={[
+            { value: resumeScore != null ? resumeScore : '—', label: 'Resume score', tone: 'info' },
+            { value: githubSkills.length || techs.length, label: 'Evidenced skills', tone: 'success' },
+            { value: studentApplications.length, label: 'Applications', dashed: true },
+          ]}
         />
 
-        <ShareProfileModal
+        <Card badge={{ icon: 'Sparkles', tone: 'accent' }}>
+          <Row justify="space-between" align="flex-start" wrap gap={space.md}>
+            <Stack gap={4} style={{ flex: 1, minWidth: 220 }}>
+              <Txt variant="h2" tone="ink">Resume analysis</Txt>
+              <Txt variant="body" tone="muted">
+                {ra.resumeFile ? ra.scoreText || diag?.synthesis_note || 'Diagnostics from your latest resume.' : 'Upload a resume to unlock ATS and role-fit diagnostics.'}
+              </Txt>
+            </Stack>
+            <Ring value={resumeScore || 0} size={88} stroke={9} tone="accent">
+              <Txt variant="h2" tone="ink">{resumeScore != null ? resumeScore : '—'}</Txt>
+            </Ring>
+          </Row>
+          <View style={[styles.metricGrid, twoCol ? { flexDirection: 'row', flexWrap: 'wrap' } : null]}>
+            {diagnostics.map((d) => (
+              <View key={d.key} style={[styles.metricCell, { backgroundColor: toneOf(d.tone).bg }, twoCol ? { width: '48.9%' } : null]}>
+                <Row justify="space-between">
+                  <Row gap={6}>
+                    <Icon name={d.icon} size={15} color={toneOf(d.tone).ink} />
+                    <Txt variant="small" weight={600} tone="ink">{d.label}</Txt>
+                  </Row>
+                  <Txt variant="small" weight={700} tone="ink">{d.score != null ? d.score : '—'}</Txt>
+                </Row>
+                <ProgressBar value={d.score || 0} tone={d.tone} track="rgba(255,255,255,0.7)" height={6} style={{ marginTop: 8 }} />
+              </View>
+            ))}
+          </View>
+          <Row gap={8} style={{ marginTop: space.lg }}>
+            {ra.resumeFile ? (
+              <>
+                <Button label="Full breakdown" icon="Eye" size="sm" onPress={() => setShowAtsModal(true)} />
+                <Button label="Re-analyse" icon="RefreshCw" size="sm" variant="secondary" onPress={handleReanalyzeCV} loading={isReanalyzingResume} />
+              </>
+            ) : (
+              <Button label="Upload resume" icon="Upload" size="sm" onPress={() => editProfile(4)} />
+            )}
+          </Row>
+        </Card>
+
+        <View style={[styles.grid, isWide ? styles.gridRow : null]}>
+          <View style={isWide ? { flex: 1, minWidth: 0 } : null}>
+            <Card badge={{ icon: 'Zap', tone: 'success' }}>
+              <Txt variant="h2" tone="ink">Skill evidence</Txt>
+              <Txt variant="small" tone="muted" style={{ marginBottom: space.md }}>
+                {githubSkills.length ? 'Signals found in the repositories you selected.' : 'Skills extracted from your resume.'}
+              </Txt>
+              {githubSkills.length ? (
+                renderSkillEvidence(githubSkills.slice(0, 8))
+              ) : techs.length ? (
+                <Row wrap gap={6}>
+                  {techs.map((t, i) => <Pill key={`${t}-${i}`} label={t} tone="success" size="sm" />)}
+                </Row>
+              ) : (
+                <EmptyState icon="Zap" title="No skill evidence yet" message="Upload a resume or connect GitHub to build evidence." action={<Button label="Add evidence" size="sm" onPress={() => editProfile(4)} />} />
+              )}
+            </Card>
+          </View>
+          <View style={isWide ? { flex: 1, minWidth: 0 } : null}>
+            <Card badge={{ icon: 'GitBranch', tone: 'neutral' }}>
+              <Txt variant="h2" tone="ink">Projects on GitHub</Txt>
+              <Txt variant="small" tone="muted" style={{ marginBottom: space.md }}>
+                {gl.githubConnected ? `${repos.length} repositor${repos.length === 1 ? 'y' : 'ies'} used as evidence` : 'Not connected'}
+              </Txt>
+              {gl.githubConnected && repos.length ? (
+                <Stack gap={8}>
+                  {repos.slice(0, 6).map((repo) => (
+                    <Pressable
+                      key={repo.id}
+                      onPress={() => openUrl(repo.html_url || (gl.githubUsername ? `https://github.com/${gl.githubUsername}/${repo.name}` : ''))}
+                      style={({ hovered }) => [styles.repoRow, hovered ? { backgroundColor: colors.surfaceMuted } : null, webOnly({ cursor: 'pointer' })]}
+                    >
+                      <Icon name="Code" size={18} color={colors.textMuted} />
+                      <Stack gap={2} style={{ flex: 1 }}>
+                        <Txt variant="small" weight={700} tone="ink" numberOfLines={1}>{repo.name}</Txt>
+                        {repo.description ? <Txt variant="caption" tone="muted" numberOfLines={1}>{repo.description}</Txt> : null}
+                      </Stack>
+                      {repo.language ? <Pill label={repo.language} size="sm" tone="info" /> : null}
+                      <Icon name="ArrowUpRight" size={16} color={colors.textMuted} />
+                    </Pressable>
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState icon="GitBranch" title={gl.githubConnected ? 'No repositories selected' : 'Connect GitHub'} message="Real projects are the strongest evidence for recruiters." action={<Button label={gl.githubConnected ? 'Select repositories' : 'Connect GitHub'} size="sm" onPress={() => editProfile(5)} />} />
+              )}
+            </Card>
+          </View>
+        </View>
+
+        {atsSheet}
+        <ShareSheet
           visible={showShareModal}
           onClose={() => setShowShareModal(false)}
-          profileUrl={Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/dossier/${user?.id || 'aryan-bhoge'}` : 'https://skillsetu.com/dossier/aryan-bhoge-v6'}
+          url={Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/dossier/${user?.id || ''}` : ''}
         />
-
-        <DownloadReportModal
-          visible={showDownloadModal}
-          onClose={() => setShowDownloadModal(false)}
-          studentName={currentProfile.personalInfo?.fullName || user?.name || 'Aryan Bhoge'}
-        />
-
-        <ATSBreakdownModal
-          visible={showAtsModal}
-          onClose={() => setShowAtsModal(false)}
-          resumeAnalysis={currentProfile.resumeAnalysis}
-        />
-      </View>
+      </Page>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Wizard layout
+  // ---------------------------------------------------------------------------
+  const [introTitle, introSub] = STEP_INTRO[activeStep] || ['', ''];
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
-
-      {/* Profile Flow Header Banner */}
-      {activeStep !== 6 && (
-        <View style={styles.profileHeaderBanner}>
-          <Text style={styles.bannerEmoji}>👤</Text>
-          <View style={styles.bannerTextWrap}>
-            <Text style={styles.bannerTitle}>
-              {currentProfile.verified ? 'Edit Your Professional Profile' : 'Set Up Your Professional Profile'}
-            </Text>
-            <Text style={styles.bannerSubtitle}>
-              {currentProfile.verified 
-                ? 'Keep your academic transcripts, target career preferences, and portfolio links updated.' 
-                : 'Complete the 6 simple steps below to unlock matches and get verified by our AI agent.'}
-            </Text>
-          </View>
-          {currentProfile.verified && (
-            <Pressable
-              style={styles.cancelEditBtn}
-              onPress={() => setIsViewingOnePageProfile(true)}
-            >
-              <Text style={styles.cancelEditBtnText}>✕ Exit to Profile</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-
-      {/* Stepper Steps Row */}
-      <View style={styles.stepperContainer}>
-        {stepsList.map((step) => {
-          const isActive = step.id === activeStep;
-          const isCompleted = step.id < activeStep || currentProfile.verified;
-          return (
-            <View key={step.id} style={[styles.stepItem, isWide && { flex: 1 }]}>
-              {/* Stepper Circle */}
-              <View style={[
-                styles.stepCircle,
-                isActive && styles.stepCircleActive,
-                isCompleted && styles.stepCircleCompleted
-              ]}>
-                {isCompleted ? (
-                  <Text style={styles.stepCircleTextCompleted}>✓</Text>
-                ) : (
-                  <Text style={[styles.stepCircleText, isActive && styles.stepCircleTextActive]}>{step.id}</Text>
-                )}
-              </View>
-              {isWide && <Text style={[styles.stepLabel, isActive && styles.stepLabelActive]}>{step.name}</Text>}
-            </View>
-          );
-        })}
-      </View>
-
-      {/* Step Progress Line for Mobile */}
-      {!isWide && (
-        <View style={styles.mobileStepperRow}>
-          <Text style={styles.mobileStepperText}>Step {activeStep} of 6: <Text style={styles.boldText}>{stepsList[activeStep - 1].name}</Text></Text>
-          <View style={styles.mobileProgressTrack}>
-            <View style={[styles.mobileProgressBar, { width: `${(activeStep / 6) * 100}%` }]} />
-          </View>
-        </View>
-      )}
-
-      {/* Main Step Render Container */}
-      <View style={styles.mainContentContainer}>
-        {renderStepContent()}
-      </View>
-
-      {/* Bottom Actions Bar */}
-      {activeStep !== 6 && (
-        <View style={styles.actionsBar}>
-          <Pressable
-            style={[styles.backBtn, activeStep === 1 && styles.disabledBtn]}
-            onPress={handleBack}
-            disabled={activeStep === 1}
-          >
-            <Text style={styles.backBtnText}>Back</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.saveBtn}
-            onPress={handleNext}
-          >
-            <Text style={styles.saveBtnText}>
-              Save & Continue ➔
-            </Text>
-          </Pressable>
-        </View>
-      )}
-    </ScrollView>
+    <Page scrollKey={activeStep}>
+      <SectionTitle
+        title={currentProfile.verified ? 'Edit your profile' : 'Set up your profile'}
+        emoji="🪪"
+        subtitle={currentProfile.verified ? 'Keep your details current so matches stay accurate.' : 'Six quick steps to unlock matches and verification.'}
+        right={currentProfile.verified ? <Button label="Back to profile" icon="X" variant="secondary" onPress={() => setIsViewingOnePageProfile(true)} /> : null}
+      />
+      <Stepper
+        steps={stepsList.map((s) => ({ id: s.id, label: s.name }))}
+        active={activeStep}
+        doneUntil={currentProfile.verified ? 6 : activeStep - 1}
+        compact={!isWide}
+        onStep={(id) => {
+          if (currentProfile.verified || id < activeStep) setActiveStep(id);
+        }}
+      />
+      <Stack gap={4}>
+        <Txt variant="h2" tone="ink">{introTitle}</Txt>
+        <Txt variant="body" tone="muted">{introSub}</Txt>
+      </Stack>
+      {renderStepContent()}
+      {activeStep !== 6 ? (
+        <Row justify="space-between">
+          <Button label="Back" icon="ArrowLeft" variant="secondary" onPress={handleBack} disabled={activeStep === 1} />
+          <Button label="Save & continue" iconRight="ArrowRight" onPress={handleNext} />
+        </Row>
+      ) : null}
+      {atsSheet}
+    </Page>
   );
 }
 
-// Styling definitions
+const TIMELINES = [
+  { id: 'immediately', label: 'Immediately' },
+  { id: 'within_1_month', label: 'Within 1 month' },
+  { id: '1_to_3_months', label: '1–3 months' },
+  { id: '3_to_6_months', label: '3–6 months' },
+  { id: '6_to_12_months', label: '6–12 months' },
+  { id: '12_plus_months', label: '12+ months' },
+];
+
+const OPPORTUNITY_TYPES = [
+  { id: 'internship', label: 'Internship' },
+  { id: 'fulltime', label: 'Full-time' },
+  { id: 'parttime', label: 'Part-time' },
+  { id: 'contract', label: 'Contract' },
+];
+
+const WORK_PREFS = [
+  { id: 'remote', label: 'Remote', icon: 'House' },
+  { id: 'hybrid', label: 'Hybrid', icon: 'RefreshCw' },
+  { id: 'onsite', label: 'On-site', icon: 'Building' },
+];
+
+function Grid({ twoCol, children }) {
+  return <View style={[styles.grid, twoCol ? styles.gridRow : null]}>{children}</View>;
+}
+
+function Col({ twoCol, flex = 1, children }) {
+  return <View style={twoCol ? { flex, minWidth: 0, gap: space.md } : { gap: space.md }}>{children}</View>;
+}
+
+function ShareSheet({ visible, onClose, url }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    try {
+      navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (e) {
+      alert(url);
+    }
+  };
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Share your profile" subtitle="Send this link to recruiters or mentors." icon="Send" tone="success" width={520}>
+      <Field icon="Link" value={url} editable={false} />
+      <Button label={copied ? 'Copied' : 'Copy link'} icon={copied ? 'Check' : 'Link'} onPress={copy} />
+    </Sheet>
+  );
+}
+
+function evidenceLabel(score) {
+  if (score >= 85) return 'Very strong';
+  if (score >= 70) return 'Strong';
+  if (score >= 50) return 'Good';
+  return 'Emerging';
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.canvas,
+  grid: {
+    gap: space.md,
   },
-  contentContainer: {
-    padding: 24,
-    paddingBottom: 64,
-  },
-  // Simulation Tools Styles
-  simulationHeader: {
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: COLORS.navy,
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  simulationTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.navy,
-    marginBottom: 12,
-  },
-  simulationButtonsRow: {
+  gridRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    alignItems: 'flex-start',
   },
-  simBtn: {
-    backgroundColor: COLORS.subtle,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  simBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  // Header Banner styles
-  profileHeaderBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.green,
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 24,
-    shadowColor: '#071f14',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  bannerEmoji: {
-    fontSize: 36,
-    marginRight: 20,
-  },
-  bannerTextWrap: {
-    flex: 1,
-  },
-  bannerTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: COLORS.paper,
-  },
-  bannerSubtitle: {
-    fontSize: 13,
-    color: COLORS.greenLight,
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  cancelEditBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-    marginLeft: 12,
-  },
-  cancelEditBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  // Stepper tracker
-  stepperContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    marginBottom: 24,
-  },
-  stepItem: {
-    alignItems: 'center',
-  },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.panel,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-  },
-  stepCircleActive: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.greenLight,
-  },
-  stepCircleCompleted: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.green,
-  },
-  stepCircleText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.muted,
-  },
-  stepCircleTextActive: {
-    color: COLORS.green,
-  },
-  stepCircleTextCompleted: {
-    fontSize: 13,
-    fontWeight: '850',
-    color: COLORS.paper,
-  },
-  stepLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.muted,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  stepLabelActive: {
-    color: COLORS.green,
-  },
-  // Mobile stepper styles
-  mobileStepperRow: {
-    backgroundColor: COLORS.paper,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    padding: 14,
-    marginBottom: 24,
-  },
-  mobileStepperText: {
-    fontSize: 13,
-    color: COLORS.ink,
-    marginBottom: 8,
-  },
-  mobileProgressTrack: {
-    height: 6,
-    backgroundColor: COLORS.subtle,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  mobileProgressBar: {
-    height: '100%',
-    backgroundColor: COLORS.green,
-    borderRadius: 3,
-  },
-  // Step Section Form Layout
-  mainContentContainer: {
-    backgroundColor: COLORS.paper,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    padding: 24,
-    shadowColor: COLORS.navy,
-    shadowOpacity: 0.02,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    marginBottom: 24,
-  },
-  stepContainer: {
-    gap: 18,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: COLORS.ink,
-
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    color: COLORS.muted,
-    marginTop: 8,
-    marginBottom: 8,
-    lineHeight: 18,
-  },
-  // Inputs
-  rowLayout: {
-    flexDirection: 'row',
-    gap: 16,
-    flexWrap: 'wrap',
-  },
-  inputWrap: {
-    flex: 1,
-    minWidth: 220,
-    gap: 6,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.navy,
-  },
-  textInput: {
-    height: 46,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: COLORS.ink,
-    backgroundColor: COLORS.canvas,
-  },
-  inputErrorBorder: {
-    borderColor: COLORS.rose,
-  },
-  textArea: {
-    height: 100,
-    paddingVertical: 12,
-    textAlignVertical: 'top',
-  },
-  inputHelpText: {
-    fontSize: 12,
-    color: COLORS.muted,
-    lineHeight: 16,
-  },
-  errorText: {
-    color: COLORS.rose,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  // Form Icons
-  iconInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 10,
-    backgroundColor: COLORS.canvas,
-    overflow: 'hidden',
-  },
-  inputIconEmoji: {
-    paddingHorizontal: 12,
-    fontSize: 16,
-    color: COLORS.muted,
-  },
-  // Avatar Upload
-  avatarUploadRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 10,
-  },
-  avatarInitials: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.greenLight,
-    borderWidth: 2,
-    borderColor: COLORS.green,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: COLORS.green,
-  },
-  avatarInitialsText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: COLORS.green,
-  },
-  uploadBtn: {
-    backgroundColor: COLORS.panel,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  uploadBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  // Step 2 Education Marksheet Card
-  extractedBoxCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 12,
-  },
-  simulationUploadBox: {
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-  },
-  extractBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.teal,
-    backgroundColor: COLORS.mint,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  extractionDescription: {
-    fontSize: 13,
-    color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  extractBtn: {
-    backgroundColor: COLORS.greenLight,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  extractBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  extractedFlexRow: {
-    flexDirection: 'row',
-    gap: 20,
-    alignItems: 'center',
-  },
-  extractedFileLeft: {
-    alignItems: 'center',
-    gap: 8,
-    paddingRight: 20,
-    borderRightWidth: Platform.OS === 'web' ? 1.5 : 0,
-    borderRightColor: COLORS.subtle,
-    minWidth: 150,
-  },
-  pdfThumbnail: {
-    width: 60,
-    height: 70,
-    backgroundColor: COLORS.paper,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  pdfIcon: {
-    fontSize: 32,
-  },
-  pdfCheckedCircle: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: COLORS.teal,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pdfCheckedText: {
-    color: COLORS.paper,
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  pdfFileName: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.navy,
-    textAlign: 'center',
-  },
-  replaceBtn: {
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  replaceBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.muted,
-  },
-  extractedChecklistRight: {
-    flex: 1,
-    gap: 8,
-  },
-  extractedBadge: {
-    backgroundColor: COLORS.mint,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  extractedBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: COLORS.teal,
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  greenCheck: {
-    color: COLORS.teal,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  checkText: {
-    fontSize: 13,
-    color: COLORS.ink,
-  },
-  boldText: {
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  // Education item Card
-  educationCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 14,
-    padding: 16,
-    gap: 6,
-  },
-  eduHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  eduDegreeText: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  trashIcon: {
-    fontSize: 16,
-    padding: 4,
-  },
-  eduInfoLine: {
-    fontSize: 13,
-    color: COLORS.muted,
-  },
-  manualEduForm: {
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 16,
-    padding: 18,
-    backgroundColor: COLORS.canvas,
-    gap: 12,
-  },
-  formSectionTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: COLORS.navy,
-  },
-  addEduBtn: {
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderStyle: 'dashed',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: COLORS.paper,
-  },
-  addEduBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.muted,
-  },
-  // Step 3 Cards
-  gridTwoColumns: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  flexCol: {
-    flexDirection: 'column',
-    gap: 16,
-  },
-  prefCard: {
-    flex: 1,
-    backgroundColor: COLORS.canvas,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    padding: 16,
-    gap: 12,
+  summaryGrid: {
+    gap: space.md,
     justifyContent: 'space-between',
   },
-  fullWidthCard: {
-    backgroundColor: COLORS.canvas,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    padding: 16,
+  evidenceRow: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.md,
+    padding: space.sm,
+  },
+  repoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+    padding: 12,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceMuted,
   },
-  cardHeaderTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tagBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.blueLight,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    gap: 6,
-  },
-  tagBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.blue,
-  },
-  closeTagEmoji: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.blue,
-  },
-  addTagBtn: {
-    backgroundColor: COLORS.greenLight,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addTagBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  choicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  choiceBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '47%',
-    minWidth: 110,
-    backgroundColor: COLORS.paper,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 10,
-    padding: 10,
-    gap: 8,
-    position: 'relative',
-  },
-  choiceBtnSelected: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.greenLight,
-  },
-  choiceBtnIcon: {
-    fontSize: 16,
-  },
-  choiceBtnLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.muted,
-  },
-  choiceBtnLabelSelected: {
-    color: COLORS.green,
-    fontWeight: '800',
-  },
-  checkedBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: COLORS.green,
-    width: 14,
-    height: 14,
+  repoCheck: {
+    width: 22,
+    height: 22,
     borderRadius: 7,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkedTextMini: {
-    color: COLORS.paper,
-    fontSize: 9,
-    fontWeight: '900',
+  metricGrid: {
+    gap: space.sm,
+    marginTop: space.lg,
+    justifyContent: 'space-between',
   },
-  // Step 4: Resume
-  leftColResume: {
-    flex: 1,
-    minWidth: 260,
-    gap: 16,
+  metricCell: {
+    borderRadius: radii.md,
+    padding: space.md,
   },
-  rightColResume: {
-    flex: 2,
-    minWidth: 320,
-  },
-  resumeScoreCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 18,
-    padding: 20,
-    alignItems: 'center',
-    gap: 14,
-  },
-  scoreHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.muted,
-    textTransform: 'uppercase',
-  },
-  progressRingLarge: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    borderWidth: 8,
-    borderColor: COLORS.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scoreTextDescription: {
-    fontSize: 12,
-    color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  viewAnalysisBtn: {
-    backgroundColor: COLORS.paper,
-    borderWidth: 1.5,
-    borderColor: COLORS.green,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
-  viewAnalysisBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  noResumeCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderStyle: 'dashed',
-    borderRadius: 18,
-    padding: 30,
-    alignItems: 'center',
-    gap: 12,
-  },
-  noResumeIcon: {
-    fontSize: 36,
-  },
-  noResumeText: {
-    fontSize: 13,
-    color: COLORS.muted,
-  },
-  uploadResumeBtn: {
-    backgroundColor: COLORS.greenLight,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-  },
-  uploadResumeBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  fileRepCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
+  verifiedDot: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    width: 28,
+    height: 28,
     borderRadius: 14,
-    padding: 12,
-    gap: 12,
-  },
-  fileRepIcon: {
-    fontSize: 24,
-  },
-  fileRepDetails: {
-    flex: 1,
-  },
-  fileRepName: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.navy,
-  },
-  fileRepTime: {
-    fontSize: 10,
-    color: COLORS.muted,
-  },
-  extractedProfileDataCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 18,
-    padding: 20,
-    gap: 16,
-  },
-  extractedHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    backgroundColor: colors.success,
+    borderWidth: 3,
+    borderColor: colors.surface,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  extractedHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: COLORS.ink,
+  footerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  editExtractedBtn: {
+  linkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surface,
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-  },
-  editExtractedBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.teal,
-  },
-  saveExtractedBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: COLORS.teal,
-  },
-  saveExtractedBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.paper,
-  },
-  extractedDataList: {
-    gap: 14,
-  },
-  extractedSection: {
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.subtle,
-    paddingBottom: 12,
-  },
-  sectionHeaderWrap: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  extractedSectionLabel: {
-    fontSize: 11,
-    fontWeight: '850',
-    color: COLORS.muted,
-  },
-  extractedCountBadge: {
-    backgroundColor: COLORS.greenLight,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  extractedCountText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  extractedItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  checkedBullet: {
-    color: COLORS.amber,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  extractedItemText: {
-    fontSize: 13,
-    color: COLORS.ink,
-  },
-  extractedItemTextBold: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  extractedItemSubtext: {
-    fontSize: 11,
-    color: COLORS.muted,
-  },
-  domainItem: {
-    gap: 4,
-  },
-  domainInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  domainName: {
-    fontSize: 12,
-    color: COLORS.ink,
-  },
-  domainVal: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  domainProgressTrack: {
-    height: 6,
-    backgroundColor: COLORS.subtle,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  domainProgressBar: {
-    height: '100%',
-    backgroundColor: COLORS.green,
-    borderRadius: 3,
-  },
-  // Step 5: Professional Evidence & Links
-  stepHeaderWrap: {
-    marginBottom: 8,
-  },
-  githubProfilePreviewCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.paper,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 14,
-    padding: 16,
-    gap: 14,
-    marginTop: 4,
-  },
-  publicBadge: {
-    backgroundColor: COLORS.greenLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  publicBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  githubVerifiedSubText: {
-    fontSize: 11,
-    color: COLORS.teal,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  emptyGithubPrompt: {
-    backgroundColor: COLORS.panel,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  emptyGithubPromptTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.navy,
-  },
-  emptyGithubPromptSub: {
-    fontSize: 11,
-    color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  noSkillsText: {
-    fontSize: 12,
-    color: COLORS.muted,
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  connectGithubPrimaryBtn: {
-    backgroundColor: COLORS.green,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  connectGithubPrimaryBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.paper,
-  },
-  connectedHeaderActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  refreshBtn: {
-    backgroundColor: COLORS.panel,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-    paddingVertical: 4,
     paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  refreshBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.teal,
-  },
-  disconnectBtn: {
-    backgroundColor: '#fee2e2',
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  disconnectBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#dc2626',
-  },
-  bannerInfoNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 12,
-    gap: 8,
-  },
-  bannerInfoNoteIcon: {
-    fontSize: 14,
-  },
-  bannerInfoNoteText: {
-    fontSize: 12,
-    color: COLORS.green,
-    fontWeight: '600',
-    flex: 1,
-  },
-  cardHeaderGroup: {
-    gap: 4,
-    marginBottom: 4,
-  },
-  cardHeaderSub: {
-    fontSize: 12,
-    color: COLORS.muted,
-    lineHeight: 16,
-  },
-  inputLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  optionalBadgeText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontWeight: '600',
-  },
-  validStatusText: {
-    fontSize: 11,
-    color: COLORS.green,
-    fontWeight: '700',
-  },
-  invalidStatusText: {
-    fontSize: 11,
-    color: COLORS.rose,
-    fontWeight: '700',
-  },
-  inputIconPrefix: {
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.panel,
-    borderTopLeftRadius: 10,
-    borderBottomLeftRadius: 10,
-    borderRightWidth: 1,
-    borderRightColor: COLORS.subtle,
-  },
-  iconTextInput: {
-    flex: 1,
-    borderWidth: 0,
-    borderTopLeftRadius: 0,
-    borderBottomLeftRadius: 0,
-  },
-  inputValidBorder: {
-    borderColor: COLORS.green,
-    borderWidth: 1.5,
-  },
-  supportedProfilesPill: {
-    backgroundColor: COLORS.panel,
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  supportedProfilesText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    lineHeight: 15,
-  },
-  githubIconBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  githubSecurityNote: {
-    fontSize: 11,
-    color: COLORS.muted,
-    marginTop: 4,
-  },
-  githubAvatarWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.panel,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-  },
-  githubTitleBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  reconnectBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: COLORS.panel,
-    borderWidth: 1,
-    borderColor: COLORS.subtle,
-  },
-  reconnectBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.navy,
-  },
-  githubAnalysisExplanation: {
-    fontSize: 12,
-    color: COLORS.muted,
-    lineHeight: 18,
-  },
-  metricSubText: {
-    fontSize: 10,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  aiEvidenceHeader: {
-    gap: 2,
-    marginBottom: 4,
-  },
-  evidenceHeaderSubtitle: {
-    fontSize: 11,
-    color: COLORS.muted,
-  },
-  skillsEvidenceList: {
-    gap: 12,
-  },
-  evidenceScoreBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  skillLevelPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  levelExpertPill: {
-    backgroundColor: '#dcfce7',
-  },
-  levelStrongPill: {
-    backgroundColor: '#e0f2fe',
-  },
-  levelGoodPill: {
-    backgroundColor: '#fef3c7',
-  },
-  skillLevelPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  levelExpertPillText: {
-    color: '#15803d',
-  },
-  levelStrongPillText: {
-    color: '#0369a1',
-  },
-  levelGoodPillText: {
-    color: '#b45309',
-  },
-  evidenceDisclaimerCard: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: COLORS.panel,
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'flex-start',
-    marginTop: 4,
-  },
-  disclaimerIcon: {
-    fontSize: 13,
-    color: COLORS.muted,
-    fontWeight: '700',
-  },
-  disclaimerText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    lineHeight: 15,
-    flex: 1,
-  },
-  reposCardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  selectedCountBadge: {
-    backgroundColor: COLORS.greenLight,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  selectedCountBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  repoBatchActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: -4,
-  },
-  batchActionBtn: {
-    paddingVertical: 2,
-  },
-  batchActionBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.teal,
-  },
-  batchActionDivider: {
-    fontSize: 12,
-    color: COLORS.muted,
-  },
-  emptyReposWrap: {
-    padding: 24,
-    alignItems: 'center',
-    gap: 6,
-  },
-  emptyReposIcon: {
-    fontSize: 28,
-  },
-  emptyReposTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  emptyReposSub: {
-    fontSize: 11,
-    color: COLORS.muted,
-    textAlign: 'center',
-  },
-  repoHeaderLine: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  repoStatsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  repoStatItem: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontWeight: '600',
-  },
-  repoCheckboxSelected: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.green,
-  },
-  repoCheckboxTextSelected: {
-    color: COLORS.paper,
-  },
-  repoUpdatedText: {
-    fontSize: 10,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-
-  // Step 5: Links
-  leftColLinks: {
-    flex: 1,
-    minWidth: 260,
-  },
-  rightColLinks: {
-    flex: 2,
-    minWidth: 320,
-  },
-  linksCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 18,
-    padding: 20,
-    gap: 16,
-  },
-  noGithubCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderStyle: 'dashed',
-    borderRadius: 18,
-    padding: 30,
-    alignItems: 'center',
-    gap: 12,
-  },
-  githubIconEmoji: {
-    fontSize: 36,
-  },
-  githubHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  githubDescription: {
-    fontSize: 12,
-    color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  connectGithubBtn: {
-    backgroundColor: COLORS.greenLight,
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-  connectGithubBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  githubCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 18,
-    padding: 20,
-    gap: 16,
-  },
-  githubCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  githubInfoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  githubAvatarIcon: {
-    fontSize: 28,
-  },
-  githubTitleText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  githubSubText: {
-    fontSize: 12,
-    color: COLORS.muted,
-  },
-  connectedBadge: {
-    backgroundColor: COLORS.greenLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  connectedBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  githubMetricsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  metricSquare: {
-    flex: 1,
-    backgroundColor: COLORS.paper,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 12,
-    padding: 12,
-    gap: 4,
-  },
-  metricLabelText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.muted,
-  },
-  metricValueTextLarge: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  aiEvidenceSection: {
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.subtle,
-    paddingTop: 16,
-  },
-  evidenceHeaderTitle: {
-    fontSize: 12,
-    fontWeight: '850',
-    color: COLORS.muted,
-  },
-  evidenceSkillItem: {
-    gap: 4,
-  },
-  evidenceInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  evidenceSkillName: {
-    fontSize: 12,
-    color: COLORS.ink,
-  },
-  evidenceSkillPercentage: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  evidenceProgressTrack: {
-    height: 6,
-    backgroundColor: COLORS.subtle,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  evidenceProgressBar: {
-    height: '100%',
-    backgroundColor: COLORS.green,
-    borderRadius: 3,
-  },
-  reposSelectionCard: {
-    backgroundColor: COLORS.canvas,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 18,
-    padding: 20,
-    gap: 12,
-  },
-  reposList: {
-    gap: 10,
-    marginTop: 6,
-  },
-  repoListItem: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.paper,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  repoListItemSelected: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.greenLight,
-  },
-  repoCheckbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: COLORS.muted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.paper,
-    marginTop: 2,
-  },
-  repoCheckboxText: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: COLORS.green,
-  },
-  repoDetails: {
-    flex: 1,
-    gap: 4,
-  },
-  repoNameText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  repoDescText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    lineHeight: 14,
-  },
-  repoTagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-  },
-  repoTag: {
-    backgroundColor: COLORS.panel,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  repoTagText: {
-    fontSize: 9,
-    color: COLORS.muted,
-    fontWeight: '700',
-  },
-  // Step 6: Review Your Profile Design Layout
-  step6Wrapper: {
-    gap: 20,
-  },
-  step6Header: {
-    marginBottom: 8,
-  },
-  step6Title: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  step6Subtitle: {
-    fontSize: 13,
-    color: COLORS.muted,
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  step6Layout: {
-    flexDirection: 'row',
-    gap: 24,
-  },
-  step6LeftCol: {
-    flex: 2,
-    gap: 20,
-  },
-  step6RightCol: {
-    flex: 1,
-    minWidth: 280,
-    gap: 20,
-  },
-  step6CompletionCard: {
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    padding: 20,
-    gap: 12,
-  },
-  step6CompletionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  completionLabelLarge: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  completionPercentLarge: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: COLORS.teal,
-  },
-  completionTrackLarge: {
-    height: 8,
-    backgroundColor: COLORS.subtle,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  completionBarLarge: {
-    height: '100%',
-    backgroundColor: COLORS.green,
-    borderRadius: 4,
-  },
-  // Grid of 4 Cards
-  cardsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  summaryCard: {
-    width: '48%',
-    minWidth: 220,
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    padding: 16,
-    gap: 12,
-    flexGrow: 1,
-  },
-  summaryCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.subtle,
-    paddingBottom: 8,
-  },
-  summaryCardTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  checkIconCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: COLORS.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.green,
-  },
-  checkIconText: {
-    color: COLORS.green,
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  summaryCardTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.green,
-  },
-  pencilBtn: {
-    padding: 2,
-  },
-  pencilIcon: {
-    fontSize: 13,
-    color: COLORS.muted,
-  },
-  summaryCardContent: {
-    gap: 6,
-  },
-  summaryText: {
-    fontSize: 12,
-    color: COLORS.muted,
-    lineHeight: 16,
-  },
-  boldLabel: {
-    fontWeight: '800',
-    color: COLORS.ink,
-  },
-  techPillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  techPill: {
-    backgroundColor: COLORS.panel,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  techPillText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontWeight: '700',
-  },
-  // AI Pre-Analysis Card
-  aiPreAnalysisCard: {
-    backgroundColor: COLORS.mint,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#bbf7d0', // Light green borders
-    padding: 20,
-    gap: 16,
-  },
-  aiHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sparkleIcon: {
-    fontSize: 16,
-  },
-  aiPreAnalysisTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  aiMetricRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  aiMetricLabel: {
-    fontSize: 13,
-    color: COLORS.muted,
-  },
-  aiMetricVal: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: COLORS.ink,
-  },
-  aiMetricValTotal: {
-    fontSize: 10,
-    color: COLORS.muted,
-    fontWeight: '600',
-  },
-  aiProgressTrack: {
-    height: 6,
-    backgroundColor: COLORS.paper,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginTop: -8,
-  },
-  aiProgressBar: {
-    height: '100%',
-    backgroundColor: COLORS.teal,
-    borderRadius: 3,
-  },
-  // Confirm action card
-  confirmActionCard: {
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    padding: 20,
-    gap: 16,
-    shadowColor: COLORS.navy,
-    shadowOpacity: 0.02,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  customCheckbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: COLORS.muted,
-    backgroundColor: COLORS.paper,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  customCheckboxChecked: {
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.greenLight,
-  },
-  checkedTickText: {
-    color: COLORS.green,
-    fontSize: 12,
-    fontWeight: '950',
-  },
-  checkboxLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.ink,
-  },
-  completeProfileBtn: {
-    backgroundColor: COLORS.teal,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: COLORS.teal,
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  disabledCompleteBtn: {
-    opacity: 0.5,
-  },
-  completeProfileBtnText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: COLORS.paper,
-  },
-  termsSubtext: {
-    fontSize: 10,
-    color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-  // Actions bottom bar
-  actionsBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  backBtn: {
-    borderWidth: 1.5,
-    borderColor: COLORS.subtle,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    backgroundColor: COLORS.paper,
-  },
-  disabledBtn: {
-    opacity: 0.4,
-  },
-  backBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.muted,
-  },
-  saveBtn: {
-    backgroundColor: COLORS.green,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    shadowColor: COLORS.green,
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  saveBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.paper,
+    borderRadius: radii.pill,
   },
 });

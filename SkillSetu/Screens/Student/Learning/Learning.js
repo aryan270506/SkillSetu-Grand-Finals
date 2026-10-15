@@ -1,65 +1,45 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import {
   fetchCareerIntelligence,
   enrollInCourse,
   updateCourseProgress,
   refreshLearningPath,
-  fetchAssignments,
   submitAssignment,
-  fetchAssessments,
   fetchAssessmentDetail,
   submitAssessment,
-  fetchProjects,
   startProjectTrack,
   submitProjectTrack,
   fetchAvailableProjectRepos,
 } from '../services/careerIntelligenceService';
 import { verifyCourseCertificate } from '../services/internshipService';
-
+import { extractQuestionOptions } from '../Skill/components/AssessmentSheet';
 import {
-  CLAY_COLORS,
-  CLAY_FONTS,
-  CLAY_RADII,
-  CLAY_SHADOWS,
-  ClayBadge,
-  ClayButton,
-  ClayCard,
-  ensureLearningGlobalStyles,
-} from './components/LearningDesignTokens';
-
-import LearningHero from './components/LearningHero';
-import LearningSummaryMetrics from './components/LearningSummaryMetrics';
-import ContinueLearningHero from './components/ContinueLearningHero';
-import CompetencyBlueprintSection from './components/CompetencyBlueprintSection';
-import SkillGapsSection from './components/SkillGapsSection';
-import CareerRoadmapSection from './components/CareerRoadmapSection';
-import ActiveCoursesSection from './components/ActiveCoursesSection';
-import RecommendedStepsSection from './components/RecommendedStepsSection';
-import PracticeLabSection from './components/PracticeLabSection';
-import AssessmentCenterSection from './components/AssessmentCenterSection';
-import ProjectLabSection from './components/ProjectLabSection';
-import VerifiedEvidenceSection from './components/VerifiedEvidenceSection';
-import LearningFooter from './components/LearningFooter';
-import {
-  CourseProgressModal,
-  AssignmentSandboxModal,
-  AllAssignmentsModal,
-  AssessmentRunnerModal,
-  AllAssessmentsModal,
-  ProjectSpecsModal,
-} from './components/LearningModals';
+  Button,
+  Card,
+  ChipGroup,
+  EmptyState,
+  EventCard,
+  FeatureCard,
+  Icon,
+  IconButton,
+  Inset,
+  Page,
+  Pill,
+  ProgressBar,
+  Ring,
+  Row,
+  SearchField,
+  SectionTitle,
+  SegmentedTabs,
+  Sheet,
+  Skeleton,
+  Stack,
+  StatTrio,
+  Timeline,
+  Txt,
+} from '../../../ui/components';
+import { colors, radii, space, webOnly } from '../../../ui/theme';
 
 // Safe string extractors
 const getCareerName = (c) => {
@@ -87,10 +67,6 @@ export default function Learning({ profileData, user, setProfileData, navigation
   const isDesktop = width >= 1024;
   const studentEmail = user?.email || profileData?.personalInfo?.email || '';
 
-  // Inject Google Fonts and Claymorphism CSS styles
-  useEffect(() => {
-    ensureLearningGlobalStyles();
-  }, []);
 
   // Career Intelligence State
   const [careerIntel, setCareerIntel] = useState(null);
@@ -279,7 +255,7 @@ export default function Learning({ profileData, user, setProfileData, navigation
   // -------------------------------------------------------------
   const handleOpenAssignmentSandbox = (assign) => {
     setSelectedAssignmentForSandbox(assign);
-    setSandboxCode(assign.starter_code || '// Complete your implementation\nfunction solve() {\n  return true;\n}\n');
+    setSandboxCode(assign.starter_code || '');
     setSandboxTestResults(null);
   };
 
@@ -291,16 +267,13 @@ export default function Learning({ profileData, user, setProfileData, navigation
       const res = await submitAssignment(selectedAssignmentForSandbox.id, studentEmail, sandboxCode);
       if (res && res.status === 'success') {
         setSandboxTestResults({
-          score: res.score || 100,
-          xp_earned: res.xp_earned || 50,
-          is_passed: true,
-          test_results: res.test_results || [
-            { id: 'tc_1', name: 'Syntax & Module Execution', status: 'PASSED' },
-            { id: 'tc_2', name: 'Edge Case & Error Handling Verification', status: 'PASSED' },
-          ],
-          message: res.message || 'Workflow verified and graded with automated test suite.',
+          score: res.score ?? null,
+          xp_earned: res.xp_earned ?? null,
+          is_passed: res.is_passed ?? res.passed ?? true,
+          test_results: res.test_results || [],
+          message: res.message || '',
         });
-        setPathActionMessage(`+50 XP Earned! Verified assignment: ${selectedAssignmentForSandbox.title}`);
+        setPathActionMessage(`${res.xp_earned ? `+${res.xp_earned} XP · ` : ''}Submitted: ${selectedAssignmentForSandbox.title}`);
         await loadData(activeCareerName);
         setTimeout(() => setPathActionMessage(''), 5000);
       } else {
@@ -374,8 +347,8 @@ export default function Learning({ profileData, user, setProfileData, navigation
       const res = await submitAssessment(activeAssessmentRunner.id, studentEmail, userSelectedAnswers);
       if (res && res.status === 'success') {
         setAssessmentEvaluationResult({
-          score: res.score != null ? res.score : 85,
-          correct_answers: res.correct_answers || assessmentQuestions.length,
+          score: res.score ?? null,
+          correct_answers: res.correct_answers ?? null,
           total_questions: res.total_questions || assessmentQuestions.length,
           assessment_status: res.assessment_status || 'VERIFIED',
           skill_name: res.skill_name || activeAssessmentRunner.skill_name,
@@ -397,14 +370,14 @@ export default function Learning({ profileData, user, setProfileData, navigation
 
   const handleStartSkillAssessment = (skillItem) => {
     const skName = (skillItem?.skill_name || skillItem?.name || '').toLowerCase().trim();
-    const matchedTest = assessmentTests.find((t) => {
+    const matchedTest = diagnosticTests.find((t) => {
       const tSkill = (t.skill_name || t.skill || t.title || '').toLowerCase().trim();
       return tSkill.includes(skName) || skName.includes(tSkill);
     });
     if (matchedTest) {
       handleStartAssessment(matchedTest);
-    } else if (assessmentTests.length > 0) {
-      handleStartAssessment(assessmentTests[0]);
+    } else if (diagnosticTests.length > 0) {
+      handleStartAssessment(diagnosticTests[0]);
     } else {
       setIsAllAssessmentsModalOpen(true);
     }
@@ -514,8 +487,8 @@ export default function Learning({ profileData, user, setProfileData, navigation
   // DERIVED DYNAMIC VALUES
   // -------------------------------------------------------------
   const readinessData = careerIntel?.career_readiness;
-  const readinessScore = readinessData?.score != null ? readinessData.score / 100 : 0.82;
-  const targetFitScore = readinessData?.target_fit_score || Math.round(readinessScore * 100);
+  const readinessScore = readinessData?.score != null ? readinessData.score / 100 : null;
+  const readinessPct = readinessScore != null ? Math.round(readinessScore * 100) : null;
   const skills = careerIntel?.all_required_skills || careerIntel?.skills || [];
   const targetCareers = careerIntel?.target_careers || [];
   const learningPath = careerIntel?.learning_path;
@@ -523,7 +496,7 @@ export default function Learning({ profileData, user, setProfileData, navigation
   const stepProgression = careerIntel?.step_progression;
   const learningProgress = careerIntel?.learning_progress;
 
-  const displayCareerName = activeCareerName || getCareerName(careerIntel?.active_career) || 'Full Stack Developer';
+  const displayCareerName = activeCareerName || getCareerName(careerIntel?.active_career) || '';
 
   // Deduplicated Courses
   const coursesList = useMemo(() => {
@@ -649,446 +622,697 @@ export default function Learning({ profileData, user, setProfileData, navigation
     });
   }, [diagnosticTests, assessmentsFilterTab]);
 
-  // -------------------------------------------------------------
-  // LOADING / ERROR STATES
-  // -------------------------------------------------------------
+  const openProgress = (c) => {
+    setSelectedItemForProgress(c);
+    setNewProgressPercent(Math.round(c.progress_percent || 0));
+  };
+  const switchCareer = (careerName) => {
+    if (careerName !== activeCareerName) {
+      setActiveCareerName(careerName);
+      setCareerIntel(null);
+      loadData(careerName);
+    }
+  };
+  const courseState = (c) => {
+    const pct = Math.round(c.progress_percent || 0);
+    if (pct >= 100 || c.status === 'completed') return { label: 'Completed 👏', tone: 'success', badge: 'Check' };
+    if (pct > 0 || c.status === 'in_progress') return { label: `In progress · ${pct}%`, tone: 'info', badge: 'Play' };
+    return { label: 'Upcoming', tone: 'neutral', icon: 'Clock', badge: 'Lock' };
+  };
+
   if (isLoading && !careerIntel) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={CLAY_COLORS.primary} />
-        <Text style={styles.loadingText}>
-          Synchronizing Learning Intelligence & Career Models...
-        </Text>
-      </View>
+      <Page>
+        <Skeleton height={40} width="40%" />
+        <Row gap={space.md}>
+          <Skeleton height={104} style={{ flex: 1 }} radius={radii.lg} />
+          <Skeleton height={104} style={{ flex: 1 }} radius={radii.lg} />
+          <Skeleton height={104} style={{ flex: 1 }} radius={radii.lg} />
+        </Row>
+        <Skeleton height={200} radius={radii.xl} />
+        <Skeleton height={200} radius={radii.xl} />
+      </Page>
     );
   }
 
   if (loadError && !careerIntel) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={{ fontSize: 36, marginBottom: 12 }}>⚠️</Text>
-        <Text style={styles.errorTitle}>Unable to Load Learning Hub</Text>
-        <Text style={styles.errorSubtitle}>{loadError}</Text>
-        <ClayButton
-          style={styles.retryBtn}
-          onPress={() => loadData(activeCareerName)}
-        >
-          <Text style={styles.retryBtnText}>Retry Connection</Text>
-        </ClayButton>
-      </View>
+      <Page>
+        <Card>
+          <EmptyState icon="CircleAlert" tone="danger" title="Couldn't load your learning plan" message={loadError} action={<Button label="Retry" icon="RefreshCw" onPress={() => loadData(activeCareerName)} />} />
+        </Card>
+      </Page>
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.mainContainer}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* 1. LEARNING INTELLIGENCE HERO */}
-      <LearningHero
-        displayCareerName={displayCareerName}
-        readinessScore={readinessScore}
-        targetFitScore={targetFitScore}
-        targetCareers={targetCareers}
-        activeCareerName={activeCareerName}
-        onSelectCareer={(careerName) => {
-          if (careerName !== activeCareerName) {
-            setActiveCareerName(careerName);
-            setCareerIntel(null);
-            loadData(careerName);
-          }
-        }}
-        onContinueLearning={() => {
-          if (activeFeaturedCourse) {
-            setSelectedItemForProgress(activeFeaturedCourse);
-            setNewProgressPercent(activeFeaturedCourse.progress_percent || 0);
-          } else if (curatedNextSteps.length > 0) {
-            const topStep = curatedNextSteps[0];
-            if (topStep.action === 'Enroll Free') {
-              handleEnrollCourse(topStep.course_id, topStep);
-            } else if (topStep.canonical_url) {
-              handleOpenUrl(topStep.canonical_url);
-            }
-          } else {
-            handleRefreshPath();
-          }
-        }}
-        isDesktop={isDesktop}
-        isMobile={isMobile}
-      />
+  const upcoming = coursesList.length - completedCourses.length;
+  const tabs = [
+    { id: 'Overview', label: 'Plan', icon: 'Route' },
+    { id: 'Assignments', label: 'Practice', icon: 'Code', badge: practicalAssignments.length },
+    { id: 'MockTests', label: 'Tests', icon: 'Target', badge: diagnosticTests.length },
+    { id: 'Projects', label: 'Projects', icon: 'Rocket', badge: capstoneProjects.length },
+    { id: 'Credentials', label: 'Credentials', icon: 'Award', badge: validatedCredentials.length },
+  ];
 
-      {/* Action Message Banner */}
-      {pathActionMessage ? (
-        <View style={styles.actionBanner}>
-          <Text style={styles.actionBannerText}>⚡ {pathActionMessage}</Text>
+  // ---- Events panel ------------------------------------------------------
+  const nextTests = diagnosticTests.filter((t) => !t.is_completed && !t.is_locked).slice(0, 2);
+  const openAssignments = practicalAssignments.slice(0, 2);
+  const openProjects = capstoneProjects.filter((p) => p.status !== 'completed').slice(0, 2);
+  const eventsPanel = (
+    <>
+      <SectionTitle title="My Events" emoji="🧐" />
+      {nextTests.map((t) => (
+        <EventCard
+          key={`t-${t.id}`}
+          tone="info"
+          icon="Target"
+          type="Assessment"
+          date={t.duration || `${t.duration_minutes || 45} min`}
+          body={`${t.title}${t.meta ? ` — ${t.meta}` : ''}`}
+          footer={
+            <Pressable onPress={() => handleStartAssessment(t)} style={[styles.footerBtn, webOnly({ cursor: 'pointer' })]}>
+              <Icon name="Play" size={14} color={colors.ink} />
+              <Txt variant="small" weight={600} tone="ink">{t.action || 'Begin test'}</Txt>
+            </Pressable>
+          }
+        />
+      ))}
+      {openAssignments.map((a) => (
+        <EventCard key={`a-${a.id}`} tone="accent" icon="AudioLines" type="Practice" date={a.difficulty} body={a.title} onPress={() => handleOpenAssignmentSandbox(a)} />
+      ))}
+      {openProjects.map((p) => (
+        <EventCard key={`p-${p.id}`} tone="warning" icon="Pin" type="Project" date={p.xp ? `+${p.xp} XP` : ''} body={p.title} onPress={() => (p.status === 'not_started' ? handleStartProjectTrackCta(p) : handleOpenProjectSpecs(p))} />
+      ))}
+      {!nextTests.length && !openAssignments.length && !openProjects.length ? (
+        <View style={styles.emptyEvents}>
+          <EmptyState icon="Calendar" title="All caught up" message="New tests, practice and projects appear here as your plan grows." />
         </View>
       ) : null}
+    </>
+  );
 
-      {/* 2. SUB-NAVIGATION TABS */}
-      <View style={styles.subNavBar}>
-        {[
-          { key: 'Overview', label: 'Overview' },
-          { key: 'MyCourses', label: `My Courses (${coursesList.length})` },
-          { key: 'PathSteps', label: `Path Steps (${milestoneSteps.length})` },
-          { key: 'Assignments', label: `Assignments (${practicalAssignments.length})` },
-          { key: 'MockTests', label: `Mock Tests (${diagnosticTests.length})` },
-          { key: 'Projects', label: `Projects (${capstoneProjects.length})` },
-          { key: 'Credentials', label: `Credentials (${validatedCredentials.length})` },
-        ].map((tab) => {
-          const isActive = activeSubTab === tab.key;
-          return (
-            <Pressable
-              key={tab.key}
-              style={[styles.subNavItem, isActive && styles.subNavItemActive]}
-              onPress={() => setActiveSubTab(tab.key)}
-            >
-              <Text style={[styles.subNavText, isActive && styles.subNavTextActive]}>
-                {tab.label}
-              </Text>
+  // ---- Plan tab ----------------------------------------------------------
+  const roadmapCourses = filteredCourses.filter((c) => !activeFeaturedCourse || c.course_id !== activeFeaturedCourse.course_id || searchQuery.trim());
+  const timelineItems = [];
+  if (activeFeaturedCourse && !searchQuery.trim()) {
+    const pct = Math.round(activeFeaturedCourse.progress_percent || 0);
+    timelineItems.push({
+      key: 'featured',
+      done: pct >= 100,
+      content: (
+        <FeatureCard tilt={isDesktop} onPress={() => openProgress(activeFeaturedCourse)}>
+          <Row align="flex-start" gap={space.md}>
+            <Stack gap={6} style={{ flex: 1 }}>
+              <Txt variant="h2" tone="ink" numberOfLines={2}>{activeFeaturedCourse.title}</Txt>
+              <Txt variant="small" color={colors.lilacInk} numberOfLines={2}>
+                {activeFeaturedCourse.reason || `Closes your ${activeFeaturedCourse.covered_skills?.join(', ')} gap`}
+              </Txt>
+            </Stack>
+            <Pressable onPress={() => handleOpenUrl(activeFeaturedCourse.canonical_url)} style={[styles.playDisc, webOnly({ cursor: 'pointer' })]} accessibilityLabel="Open course">
+              <Icon name="Play" size={26} color={colors.ink} />
             </Pressable>
-          );
-        })}
+          </Row>
+          <Row justify="space-between" style={{ marginTop: space.lg }} wrap gap={8}>
+            <View style={styles.watchChip}>
+              <Icon name="Clock" size={15} color={colors.ink} />
+              <Txt variant="small" weight={600} tone="ink">{pct > 0 ? `Progress ${pct}%` : 'Not started'} · {activeFeaturedCourse.provider_name}</Txt>
+            </View>
+            <Row gap={4}>
+              {(activeFeaturedCourse.covered_skills || []).slice(0, 3).map((s) => (
+                <Pill key={s} label={s} size="sm" style={{ backgroundColor: 'rgba(255,255,255,0.75)' }} />
+              ))}
+            </Row>
+          </Row>
+        </FeatureCard>
+      ),
+    });
+  }
+  roadmapCourses.forEach((c) => {
+    const st = courseState(c);
+    const enrolled = c.is_enrolled !== false && (c.status !== 'not_started' || c.progress_percent > 0 || c.learning_path_item_id);
+    timelineItems.push({
+      key: `c-${c.course_id}`,
+      done: st.tone === 'success',
+      content: (
+        <Card badge={{ icon: st.badge, tone: st.tone === 'neutral' ? 'neutral' : st.tone }}>
+          <Stack gap={6}>
+            <Txt variant="h2" tone="ink" numberOfLines={2}>{c.title}</Txt>
+            <Txt variant="body" tone="muted" numberOfLines={2}>{c.reason || c.course?.description || `${c.stage || 'Course'} · ${c.provider_name}`}</Txt>
+          </Stack>
+          <Row justify="space-between" style={{ marginTop: space.lg }}>
+            <Pill label={st.label} tone={st.tone} icon={st.icon} />
+            <Row gap={8}>
+              <IconButton icon="Ellipsis" onPress={() => handleOpenUrl(c.canonical_url)} accessibilityLabel="Open course" />
+              {enrolled ? (
+                <IconButton icon="Check" variant="dark" onPress={() => openProgress(c)} accessibilityLabel="Update progress" />
+              ) : (
+                <Button label="Enroll" size="sm" onPress={() => handleEnrollCourse(c.course_id, c)} loading={enrollingCourseId === c.course_id} />
+              )}
+            </Row>
+          </Row>
+        </Card>
+      ),
+    });
+  });
+
+  const planTab = (
+    <View style={[styles.grid, isDesktop ? styles.gridRow : null]}>
+      <View style={isDesktop ? { flex: 1.1, minWidth: 0 } : null}>
+        {timelineItems.length ? (
+          <Timeline items={timelineItems} gap={space.lg} />
+        ) : (
+          <Card>
+            <EmptyState
+              icon="BookOpen"
+              title={searchQuery.trim() ? 'No courses match your search' : 'No courses in your plan yet'}
+              message={searchQuery.trim() ? 'Try a different skill or course name.' : 'Refresh your path to generate courses from your current skill gaps.'}
+              action={<Button label="Refresh path" icon="RefreshCw" onPress={handleRefreshPath} loading={isUpdatingItem} />}
+            />
+          </Card>
+        )}
       </View>
+      <View style={isDesktop ? { flex: 1, minWidth: 0, gap: space.md } : { gap: space.md }}>
+        <StatTrio
+          items={[
+            { value: coursesList.length, label: 'Total', tone: 'info' },
+            { value: completedCourses.length, label: 'Completed', tone: 'success' },
+            { value: upcoming, label: 'Upcoming', dashed: true },
+          ]}
+        />
+        <Card>
+          <Row justify="space-between" align="flex-start">
+            <Stack gap={4} style={{ flex: 1 }}>
+              <Txt variant="overline" tone="subtle">Readiness</Txt>
+              <Txt variant="h3" tone="ink">{displayCareerName}</Txt>
+              <Txt variant="small" tone="muted">{verifiedSkills.length} of {skills.length} skills verified · {learningProgress?.xp_earned ?? 0} XP</Txt>
+            </Stack>
+            <Ring value={readinessPct ?? 0} size={72} stroke={8} tone="success">
+              <Txt variant="title" tone="ink">{readinessPct != null ? `${readinessPct}%` : '—'}</Txt>
+            </Ring>
+          </Row>
+          <Row gap={8} style={{ marginTop: space.md }}>
+            <Button label="Refresh path" icon="RefreshCw" size="sm" variant="secondary" onPress={handleRefreshPath} loading={isUpdatingItem} />
+            <Button label="Skill gaps" icon="Zap" size="sm" variant="secondary" onPress={() => onNavigate && onNavigate('Skills')} />
+          </Row>
+        </Card>
+        {milestoneSteps.map((m) => (
+          <Card key={m.id || m.title} padding={space.lg} tone={m.status === 'completed' ? 'success' : undefined}>
+            <Row justify="space-between">
+              <Txt variant="title" tone="ink">{m.title}</Txt>
+              <Pill label={m.status === 'completed' ? 'Completed' : m.status === 'in_progress' ? 'In progress' : 'Upcoming'} tone={m.status === 'completed' ? 'success' : m.status === 'in_progress' ? 'info' : 'neutral'} size="sm" />
+            </Row>
+            {m.description ? <Txt variant="small" tone="muted" style={{ marginTop: 4 }}>{m.description}</Txt> : null}
+            <ProgressBar value={m.progress || 0} tone="success" style={{ marginTop: 10 }} track={m.status === 'completed' ? 'rgba(255,255,255,0.6)' : undefined} />
+            {(m.skills || []).length ? (
+              <Row wrap gap={6} style={{ marginTop: 10 }}>
+                {m.skills.map((s) => (
+                  <Pressable key={s.skill_id || s.skill_name} onPress={() => handleStartSkillAssessment(s)} style={webOnly({ cursor: 'pointer' })}>
+                    <Pill label={`${s.skill_name} · ${Math.round(s.current_score || 0)}%`} tone={s.is_verified ? 'success' : 'warning'} icon={s.is_verified ? 'Check' : 'Target'} size="sm" />
+                  </Pressable>
+                ))}
+              </Row>
+            ) : null}
+          </Card>
+        ))}
+        {curatedNextSteps.length ? (
+          <Card>
+            <Txt variant="h3" tone="ink">Recommended next</Txt>
+            <Stack gap={8} style={{ marginTop: space.sm }}>
+              {curatedNextSteps.map((s) => (
+                <Inset key={s.step_number} tone="neutral" padding={space.sm}>
+                  <Row justify="space-between" gap={8}>
+                    <Stack gap={2} style={{ flex: 1 }}>
+                      <Txt variant="caption" tone="subtle">{s.step_badge}</Txt>
+                      <Txt variant="small" weight={700} tone="ink" numberOfLines={2}>{s.title}</Txt>
+                      <Txt variant="caption" tone="muted">{s.meta}</Txt>
+                    </Stack>
+                    {s.is_enrolled ? (
+                      <Button label="Progress" size="sm" variant="secondary" onPress={() => openProgress(s)} />
+                    ) : (
+                      <Button label={s.action || 'Enroll'} size="sm" onPress={() => handleEnrollCourse(s.course_id, s)} loading={enrollingCourseId === s.course_id} />
+                    )}
+                  </Row>
+                </Inset>
+              ))}
+            </Stack>
+          </Card>
+        ) : null}
+      </View>
+    </View>
+  );
 
-      {/* 3. TOP LEARNING SUMMARY METRICS */}
-      <LearningSummaryMetrics
-        displayCareerName={displayCareerName}
-        targetFitScore={targetFitScore}
-        verifiedSkillsCount={verifiedSkills.length}
-        inProgressCoursesCount={inProgressCourses.length}
-        totalCoursesCount={coursesList.length}
-        xpEarned={learningProgress?.xp_earned || 400}
-        validatedCredentialsCount={validatedCredentials.length}
-        readinessPct={Math.round(readinessScore * 100)}
-        isDesktop={isDesktop}
-        isTablet={isTablet}
+  // ---- Other tabs --------------------------------------------------------
+  const practiceTab = (
+    <Stack gap={space.md}>
+      <ChipGroup options={['All', 'Beginner', 'Intermediate', 'Advanced']} value={assignmentsFilterDifficulty} multiple={false} onChange={setAssignmentsFilterDifficulty} tone="accent" />
+      {modalFilteredAssignments.length ? (
+        <View style={styles.cardGrid}>
+          {modalFilteredAssignments.map((a) => (
+            <Card key={a.id} style={styles.gridCard} badge={{ icon: 'Code', tone: 'accent' }} onPress={() => handleOpenAssignmentSandbox(a)}>
+              <Txt variant="overline" tone="subtle">{a.skill_name}</Txt>
+              <Txt variant="h3" tone="ink" style={{ marginTop: 4 }}>{a.title}</Txt>
+              <Txt variant="small" tone="muted" numberOfLines={3} style={{ marginTop: 4 }}>{a.subtitle || a.description}</Txt>
+              <Row justify="space-between" style={{ marginTop: space.md }}>
+                <Pill label={a.difficulty || 'Practice'} tone="warning" size="sm" />
+                <IconButton icon="ArrowRight" variant="dark" size={32} onPress={() => handleOpenAssignmentSandbox(a)} />
+              </Row>
+            </Card>
+          ))}
+        </View>
+      ) : (
+        <Card><EmptyState icon="Code" title="No practice workflows" message="Practice workflows are generated from your skill gaps." /></Card>
+      )}
+    </Stack>
+  );
+
+  const testsTab = (
+    <Stack gap={space.md}>
+      <SegmentedTabs options={['All', 'Available', 'Completed', 'Locked'].map((x) => ({ id: x, label: x }))} value={assessmentsFilterTab} onChange={setAssessmentsFilterTab} size="sm" />
+      {modalFilteredAssessments.length ? (
+        <View style={styles.cardGrid}>
+          {modalFilteredAssessments.map((t) => (
+            <Card key={t.id} style={styles.gridCard} tone={t.is_completed ? 'success' : undefined} badge={{ icon: t.is_locked ? 'Lock' : t.is_completed ? 'Check' : 'Target', tone: t.is_locked ? 'neutral' : t.is_completed ? 'success' : 'info' }}>
+              <Txt variant="overline" tone="subtle">{t.type || t.category}</Txt>
+              <Txt variant="h3" tone="ink" style={{ marginTop: 4 }}>{t.title}</Txt>
+              <Txt variant="small" tone="muted" style={{ marginTop: 4 }}>{t.meta}</Txt>
+              {t.is_locked && (t.prerequisites || []).length ? <Txt variant="caption" tone="subtle" style={{ marginTop: 4 }}>Requires: {t.prerequisites.map((x) => (typeof x === 'string' ? x : x.title || x.skill_name || x.name || '')).filter(Boolean).join(', ')}</Txt> : null}
+              <Row justify="space-between" wrap gap={8} style={{ marginTop: space.md }}>
+                <Pill label={t.is_completed ? `Score ${t.score ?? '—'}%` : t.is_locked ? 'Locked' : t.status_badge || 'Available'} tone={t.is_completed ? 'success' : t.is_locked ? 'neutral' : 'info'} icon={t.is_locked ? 'Lock' : undefined} size="sm" />
+                {t.is_locked ? null : <Button label={t.is_completed ? 'Retake' : t.action || 'Begin'} size="sm" onPress={() => handleStartAssessment(t)} />}
+              </Row>
+            </Card>
+          ))}
+        </View>
+      ) : (
+        <Card><EmptyState icon="Target" title="No assessments here" /></Card>
+      )}
+    </Stack>
+  );
+
+  const projectsTab = capstoneProjects.length ? (
+    <Stack gap={space.md}>
+      {capstoneProjects.map((p) => (
+        <Card key={p.id} badge={{ icon: 'Rocket', tone: p.is_primary ? 'warning' : 'neutral' }}>
+          <Row wrap gap={6}>
+            {(p.tags || []).map((t) => <Pill key={t} label={t} size="sm" />)}
+          </Row>
+          <Txt variant="h2" tone="ink" style={{ marginTop: space.sm }}>{p.title}</Txt>
+          <Txt variant="body" tone="muted" style={{ marginTop: 4 }}>{p.desc}</Txt>
+          <Row wrap gap={6} style={{ marginTop: space.sm }}>
+            {(p.skills || []).map((s) => <Pill key={s} label={s} tone="accent" size="sm" />)}
+          </Row>
+          <Row justify="space-between" style={{ marginTop: space.lg }}>
+            <Pill label={p.status === 'completed' ? 'Completed' : p.status === 'not_started' ? 'Not started' : 'In progress'} tone={p.status === 'completed' ? 'success' : p.status === 'not_started' ? 'neutral' : 'info'} icon={p.xp ? 'Zap' : undefined} />
+            <Row gap={8}>
+              <Button label="Specs" size="sm" variant="secondary" onPress={() => handleOpenProjectSpecs(p)} />
+              {p.status === 'not_started' ? <Button label={p.btn_label || 'Start project'} size="sm" onPress={() => handleStartProjectTrackCta(p)} /> : <Button label="Submit repo" icon="GitBranch" size="sm" onPress={() => handleOpenProjectSpecs(p)} />}
+            </Row>
+          </Row>
+        </Card>
+      ))}
+    </Stack>
+  ) : (
+    <Card><EmptyState icon="Rocket" title="No projects yet" message="Capstone projects unlock as your plan progresses." /></Card>
+  );
+
+  const credentialsTab = (
+    <Stack gap={space.md}>
+      <StatTrio
+        items={[
+          { value: validatedCredentials.length, label: 'Credentials', tone: 'success' },
+          { value: learningProgress?.xp_earned ?? 0, label: 'XP earned', tone: 'warning' },
+          { value: `${learningProgress?.learning_streak ?? 0}d`, label: 'Streak', dashed: true },
+        ]}
+      />
+      {validatedCredentials.length ? (
+        <View style={styles.cardGrid}>
+          {validatedCredentials.map((c) => (
+            <Card key={c.skill_id || c.title} style={styles.gridCard} tone="success">
+              <Row gap={10}>
+                <View style={styles.credIcon}><Icon name="Award" size={20} color={colors.mintInk} /></View>
+                <Stack gap={2} style={{ flex: 1 }}>
+                  <Txt variant="title" tone="ink">{c.title}</Txt>
+                  <Txt variant="caption" color={colors.mintInk}>{c.badge} · {c.date}</Txt>
+                </Stack>
+              </Row>
+            </Card>
+          ))}
+        </View>
+      ) : (
+        <Card><EmptyState icon="Award" title="No credentials yet" message="Pass assessments and finish projects to earn verified credentials." /></Card>
+      )}
+    </Stack>
+  );
+
+  const timerText = `${String(Math.floor(assessmentTimerSeconds / 60)).padStart(2, '0')}:${String(assessmentTimerSeconds % 60).padStart(2, '0')}`;
+  const runnerQ = assessmentQuestions[currentQuestionIndex];
+  const runnerOptions = extractQuestionOptions(runnerQ);
+
+  return (
+    <Page aside={eventsPanel}>
+      <SectionTitle
+        title="My Learning Plan"
+        emoji="⏰"
+        subtitle={`For ${displayCareerName}`}
+        right={<SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder="Search courses or skills" style={{ width: isMobile ? '100%' : 280 }} />}
       />
 
-      {/* SUBTAB FILTERING: If user clicked a specific tab or is on Overview */}
-      {(activeSubTab === 'Overview' || activeSubTab === 'MyCourses') && activeFeaturedCourse && (
-        /* 4. CONTINUE LEARNING HERO CARD */
-        <ContinueLearningHero
-          activeCourse={activeFeaturedCourse}
-          onContinueCourse={(c) => {
-            setSelectedItemForProgress(c);
-            setNewProgressPercent(c.progress_percent || 0);
-          }}
-          onOpenCourseUrl={handleOpenUrl}
-          displayCareerName={displayCareerName}
-          isDesktop={isDesktop}
+      {targetCareers.length > 1 ? (
+        <SegmentedTabs
+          options={targetCareers.map((c) => ({ id: getCareerName(c), label: getCareerName(c), icon: 'Target' }))}
+          value={displayCareerName}
+          onChange={switchCareer}
+          scrollable={isMobile}
         />
-      )}
+      ) : null}
 
-      {(activeSubTab === 'Overview' || activeSubTab === 'PathSteps') && (
-        <>
-          {/* 5. COMPETENCY BLUEPRINT */}
-          <CompetencyBlueprintSection
-            skills={skills}
-            verifiedSkills={verifiedSkills}
-            gapSkills={gapSkills}
-            readinessScore={readinessScore}
-            displayCareerName={displayCareerName}
-            onNavigateToSkills={onNavigate}
-            isDesktop={isDesktop}
-          />
+      {pathActionMessage ? (
+        <Inset tone="success" padding={space.sm}>
+          <Row gap={8}>
+            <Icon name="Sparkles" size={16} color={colors.mintInk} />
+            <Txt variant="small" weight={600} color={colors.mintInk} style={{ flex: 1 }}>{pathActionMessage}</Txt>
+          </Row>
+        </Inset>
+      ) : null}
 
-          {/* 6. SKILL GAPS TO CLOSE */}
-          <SkillGapsSection
-            gapSkills={gapSkills}
-            verifiedSkills={verifiedSkills}
-            totalSkillsCount={skills.length}
-            onSelectSkillForSearch={(skillName) => {
-              setSearchQuery(skillName);
-              setSelectedStatusFilter('all');
-            }}
-            onNavigateToSkills={onNavigate}
-            isDesktop={isDesktop}
-          />
+      <SegmentedTabs options={tabs} value={activeSubTab === 'MyCourses' || activeSubTab === 'PathSteps' ? 'Overview' : activeSubTab} onChange={setActiveSubTab} scrollable={isMobile} />
 
-          {/* 7. CAREER ROADMAP TIMELINE */}
-          <CareerRoadmapSection
-            milestones={milestoneSteps}
-            displayCareerName={displayCareerName}
-            onRefreshPath={handleRefreshPath}
-            onTrackCourseProgress={(c, pct) => {
-              setSelectedItemForProgress(c);
-              setNewProgressPercent(pct);
-            }}
-            onOpenCourseUrl={handleOpenUrl}
-            onNavigateToSkills={onNavigate}
-            onStartAssessment={handleStartSkillAssessment}
-            onUploadCertificate={handleUploadCertificateForCourse}
-          />
-        </>
-      )}
+      {activeSubTab === 'Assignments' ? practiceTab : activeSubTab === 'MockTests' ? testsTab : activeSubTab === 'Projects' ? projectsTab : activeSubTab === 'Credentials' ? credentialsTab : planTab}
 
-      {(activeSubTab === 'Overview' || activeSubTab === 'MyCourses') && (
-        <>
-          {/* 8. ACTIVE COURSES */}
-          <ActiveCoursesSection
-            coursesList={coursesList}
-            filteredCourses={filteredCourses}
-            inProgressCourses={inProgressCourses}
-            completedCourses={completedCourses}
-            selectedStatusFilter={selectedStatusFilter}
-            setSelectedStatusFilter={setSelectedStatusFilter}
-            selectedProviderFilter={selectedProviderFilter}
-            setSelectedProviderFilter={setSelectedProviderFilter}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            onSelectCourseForProgress={(c) => {
-              setSelectedItemForProgress(c);
-              setNewProgressPercent(c.progress_percent || 0);
-            }}
-            onOpenCourseUrl={handleOpenUrl}
-            onNavigateToSkills={onNavigate}
-            displayCareerName={displayCareerName}
-            isDesktop={isDesktop}
-          />
-
-          {/* 9. RECOMMENDED FOR YOU */}
-          <RecommendedStepsSection
-            curatedNextSteps={curatedNextSteps}
-            stepProgression={stepProgression}
-            displayCareerName={displayCareerName}
-            enrollingCourseId={enrollingCourseId}
-            onEnrollCourse={handleEnrollCourse}
-            onOpenCourseUrl={handleOpenUrl}
-            onSelectCourseForProgress={(c) => {
-              setSelectedItemForProgress(c);
-              setNewProgressPercent(c.progress_percent || 0);
-            }}
-            isDesktop={isDesktop}
-          />
-        </>
-      )}
-
-      {(activeSubTab === 'Overview' || activeSubTab === 'Assignments') && (
-        /* 10. PRACTICE LAB */
-        <PracticeLabSection
-          assignments={practicalAssignments}
-          onOpenSandbox={handleOpenAssignmentSandbox}
-          onViewAllAssignments={() => setIsAllAssignmentsModalOpen(true)}
-        />
-      )}
-
-      {(activeSubTab === 'Overview' || activeSubTab === 'MockTests') && (
-        /* 11. ASSESSMENT CENTER */
-        <AssessmentCenterSection
-          diagnosticTests={diagnosticTests}
-          onStartAssessment={handleStartAssessment}
-          onBrowseAllAssessments={() => setIsAllAssessmentsModalOpen(true)}
-          isDesktop={isDesktop}
-        />
-      )}
-
-      {(activeSubTab === 'Overview' || activeSubTab === 'Projects') && (
-        /* 12. PROJECT LAB */
-        <ProjectLabSection
-          projects={capstoneProjects}
-          displayCareerName={displayCareerName}
-          onStartProjectTrack={handleStartProjectTrackCta}
-          onOpenProjectSpecs={handleOpenProjectSpecs}
-          isDesktop={isDesktop}
-        />
-      )}
-
-      {(activeSubTab === 'Overview' || activeSubTab === 'Credentials') && (
-        /* 13. VERIFIED EVIDENCE & CREDENTIALS */
-        <VerifiedEvidenceSection
-          credentials={validatedCredentials}
-          xpEarned={learningProgress?.xp_earned || 400}
-          verifiedSkillsCount={verifiedSkills.length}
-          onNavigateToSkills={onNavigate}
-          isDesktop={isDesktop}
-        />
-      )}
-
-      {/* 14. FOOTER */}
-      <LearningFooter />
-
-      {/* ========================================================================= */}
-      {/* ALL MODALS (6 MODALS PRESERVED AND CLAYMORPHICALLY REDESIGNED)            */}
-      {/* ========================================================================= */}
-      <CourseProgressModal
+      {/* Course progress */}
+      <Sheet
         visible={!!selectedItemForProgress}
-        course={selectedItemForProgress}
-        progressPercent={newProgressPercent}
-        onChangeProgress={setNewProgressPercent}
-        onSave={handleSaveProgress}
         onClose={() => setSelectedItemForProgress(null)}
-        isUpdating={isUpdatingItem}
-      />
+        title="Update progress"
+        subtitle={selectedItemForProgress?.title}
+        icon="BookOpen"
+        tone="info"
+        width={520}
+        footer={
+          <>
+            <Button label="Cancel" variant="secondary" onPress={() => setSelectedItemForProgress(null)} />
+            <Button label="Save progress" icon="Check" onPress={handleSaveProgress} loading={isUpdatingItem} />
+          </>
+        }
+      >
+        <Row justify="center">
+          <Ring value={newProgressPercent} size={120} stroke={12} tone="info">
+            <Txt variant="display" tone="ink">{newProgressPercent}%</Txt>
+          </Ring>
+        </Row>
+        <ChipGroup
+          options={[0, 25, 50, 75, 100].map((v) => ({ id: v, label: v === 100 ? 'Finished' : `${v}%` }))}
+          value={newProgressPercent}
+          multiple={false}
+          tone="info"
+          onChange={setNewProgressPercent}
+          style={{ justifyContent: 'center' }}
+        />
+        <Row gap={8} justify="center">
+          <IconButton icon="Minus" onPress={() => setNewProgressPercent((p) => Math.max(0, p - 5))} />
+          <IconButton icon="Plus" onPress={() => setNewProgressPercent((p) => Math.min(100, p + 5))} />
+        </Row>
+        {selectedItemForProgress?.canonical_url ? <Button label="Open course" icon="ExternalLink" variant="ghost" onPress={() => handleOpenUrl(selectedItemForProgress.canonical_url)} style={{ alignSelf: 'center' }} /> : null}
+      </Sheet>
 
-      <AssignmentSandboxModal
+      {/* Practice workflow */}
+      <Sheet
         visible={!!selectedAssignmentForSandbox}
-        assignment={selectedAssignmentForSandbox}
-        sandboxCode={sandboxCode}
-        onChangeCode={setSandboxCode}
-        onSubmit={handleSubmitAssignmentSandbox}
         onClose={() => setSelectedAssignmentForSandbox(null)}
-        isSubmitting={isSubmittingSandbox}
-        testResults={sandboxTestResults}
-      />
+        title={selectedAssignmentForSandbox?.title}
+        subtitle={[selectedAssignmentForSandbox?.skill_name, selectedAssignmentForSandbox?.difficulty].filter(Boolean).join(' · ')}
+        icon="Code"
+        tone="accent"
+        width={760}
+        footer={
+          <>
+            <Button label="Close" variant="secondary" onPress={() => setSelectedAssignmentForSandbox(null)} />
+            <Button label="Submit for grading" icon="Send" onPress={handleSubmitAssignmentSandbox} loading={isSubmittingSandbox} />
+          </>
+        }
+      >
+        {selectedAssignmentForSandbox?.instructions ? (
+          <Inset tone="neutral">
+            <Stack gap={4}>
+              {String(selectedAssignmentForSandbox.instructions).split('\n').filter((l) => l.trim()).map((line, i) => (
+                <Txt key={i} variant={line.startsWith('#') ? 'bodyStrong' : 'small'} tone="default">{line.replace(/^#+\s*/, '')}</Txt>
+              ))}
+            </Stack>
+          </Inset>
+        ) : (
+          <Txt variant="body" tone="muted">{selectedAssignmentForSandbox?.description}</Txt>
+        )}
+        <View style={styles.editor}>
+          <TextInput value={sandboxCode} onChangeText={setSandboxCode} multiline autoCapitalize="none" autoCorrect={false} spellCheck={false} style={[styles.codeInput, webOnly({ outlineStyle: 'none' })]} />
+        </View>
+        {sandboxTestResults ? (
+          <Inset tone={sandboxTestResults.is_passed ? 'success' : 'warning'}>
+            <Txt variant="bodyStrong" tone="ink">
+              {sandboxTestResults.score != null ? `Score ${sandboxTestResults.score}%` : 'Submitted'}{sandboxTestResults.xp_earned ? ` · +${sandboxTestResults.xp_earned} XP` : ''}
+            </Txt>
+            {sandboxTestResults.message ? <Txt variant="small" tone="muted">{sandboxTestResults.message}</Txt> : null}
+            {(sandboxTestResults.test_results || []).map((t, i) => (
+              <Row key={t.id || i} gap={8} style={{ marginTop: 6 }}>
+                <Icon name={String(t.status).toUpperCase() === 'PASSED' || t.passed ? 'CircleCheck' : 'X'} size={15} color={String(t.status).toUpperCase() === 'PASSED' || t.passed ? colors.mintInk : '#B4232A'} />
+                <Txt variant="small" tone="default">{t.name || t.description}</Txt>
+              </Row>
+            ))}
+          </Inset>
+        ) : null}
+      </Sheet>
 
-      <AllAssignmentsModal
-        visible={isAllAssignmentsModalOpen}
-        assignments={modalFilteredAssignments}
-        filterDifficulty={assignmentsFilterDifficulty}
-        onChangeDifficulty={setAssignmentsFilterDifficulty}
-        onSelectAssignment={(assign) => {
-          setIsAllAssignmentsModalOpen(false);
-          handleOpenAssignmentSandbox(assign);
-        }}
-        onClose={() => setIsAllAssignmentsModalOpen(false)}
-      />
-
-      <AssessmentRunnerModal
+      {/* Timed assessment */}
+      <Sheet
         visible={!!activeAssessmentRunner}
-        assessment={activeAssessmentRunner}
-        questions={assessmentQuestions}
-        currentIndex={currentQuestionIndex}
-        userAnswers={userSelectedAnswers}
-        timerSeconds={assessmentTimerSeconds}
-        evaluationResult={assessmentEvaluationResult}
-        onSelectAnswer={handleSelectAnswerOption}
-        onPrevQuestion={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
-        onNextQuestion={() => setCurrentQuestionIndex((prev) => Math.min(assessmentQuestions.length - 1, prev + 1))}
-        onSubmit={handleSubmitAssessmentRunner}
         onClose={() => {
           setActiveAssessmentRunner(null);
           setAssessmentEvaluationResult(null);
         }}
-        isSubmitting={isSubmittingAssessment}
-      />
+        title={activeAssessmentRunner?.title}
+        subtitle={assessmentEvaluationResult ? 'Result' : `${assessmentQuestions.length} questions · pass ${activeAssessmentRunner?.pass_score || 70}%`}
+        icon="Target"
+        tone="info"
+        footer={
+          assessmentEvaluationResult ? (
+            <Button label="Done" onPress={() => { setActiveAssessmentRunner(null); setAssessmentEvaluationResult(null); }} />
+          ) : (
+            <>
+              <Button label="Previous" variant="secondary" icon="ArrowLeft" onPress={() => setCurrentQuestionIndex((p) => Math.max(0, p - 1))} disabled={currentQuestionIndex === 0} />
+              {currentQuestionIndex >= assessmentQuestions.length - 1 ? (
+                <Button label="Submit" icon="Send" onPress={handleSubmitAssessmentRunner} loading={isSubmittingAssessment} />
+              ) : (
+                <Button label="Next" iconRight="ArrowRight" onPress={() => setCurrentQuestionIndex((p) => Math.min(assessmentQuestions.length - 1, p + 1))} />
+              )}
+            </>
+          )
+        }
+      >
+        {assessmentEvaluationResult ? (
+          <Stack gap={space.md} style={{ alignItems: 'center' }}>
+            <Ring value={assessmentEvaluationResult.score ?? 0} size={128} stroke={12} tone="info">
+              <Txt variant="display" tone="ink">{assessmentEvaluationResult.score != null ? `${Math.round(assessmentEvaluationResult.score)}%` : '—'}</Txt>
+            </Ring>
+            <Pill label={assessmentEvaluationResult.assessment_status || 'Evaluated'} tone="success" icon="ShieldCheck" />
+            <Txt variant="body" tone="muted">{assessmentEvaluationResult.correct_answers ?? '—'} of {assessmentEvaluationResult.total_questions ?? assessmentQuestions.length} correct</Txt>
+          </Stack>
+        ) : runnerQ ? (
+          <Stack gap={space.md}>
+            <Row justify="space-between">
+              <Txt variant="overline" tone="subtle">Question {currentQuestionIndex + 1} of {assessmentQuestions.length}</Txt>
+              <Pill label={timerText} tone={assessmentTimerSeconds < 300 ? 'danger' : 'neutral'} icon="Clock" size="sm" />
+            </Row>
+            <ProgressBar value={((currentQuestionIndex + 1) / assessmentQuestions.length) * 100} tone="info" />
+            <Txt variant="h3" tone="ink">{runnerQ.question_text || runnerQ.question}</Txt>
+            <Stack gap={8}>
+              {runnerOptions.map((opt) => {
+                const selected = userSelectedAnswers[String(runnerQ.id)] === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => handleSelectAnswerOption(runnerQ.id, opt.key)}
+                    style={({ hovered }) => [styles.option, webOnly({ cursor: 'pointer' }), selected ? { backgroundColor: colors.sky, borderColor: colors.skyStrong } : hovered ? { backgroundColor: colors.surfaceMuted } : null]}
+                  >
+                    <View style={[styles.optKey, selected ? { backgroundColor: colors.ink } : null]}>
+                      <Txt variant="small" weight={700} color={selected ? '#fff' : colors.text}>{opt.key}</Txt>
+                    </View>
+                    <Txt variant="body" tone="ink" style={{ flex: 1 }}>{opt.text}</Txt>
+                  </Pressable>
+                );
+              })}
+            </Stack>
+          </Stack>
+        ) : null}
+      </Sheet>
 
-      <AllAssessmentsModal
-        visible={isAllAssessmentsModalOpen}
-        assessments={modalFilteredAssessments}
-        activeTab={assessmentsFilterTab}
-        onChangeTab={setAssessmentsFilterTab}
-        onStartAssessment={(test) => {
-          setIsAllAssessmentsModalOpen(false);
-          handleStartAssessment(test);
-        }}
-        onClose={() => setIsAllAssessmentsModalOpen(false)}
-      />
-
-      <ProjectSpecsModal
+      {/* Capstone project */}
+      <Sheet
         visible={!!selectedProjectForSpecs}
-        project={selectedProjectForSpecs}
-        connectedGitHubAccount={connectedGitHubAccount}
-        availableRepos={availableRepos}
-        selectedRepo={selectedRepo}
-        onSelectRepo={setSelectedRepo}
-        onSubmitRepo={handleSubmitProjectRepo}
         onClose={() => setSelectedProjectForSpecs(null)}
-        onNavigateToProfile={() => {
-          setSelectedProjectForSpecs(null);
-          if (onNavigate) onNavigate('Profile', {});
-        }}
-        isLoadingRepos={isLoadingRepos}
-        isSubmitting={isSubmittingProject}
-        successMsg={projectActionSuccessMsg}
-      />
-    </ScrollView>
+        title={selectedProjectForSpecs?.title}
+        subtitle={selectedProjectForSpecs?.xp ? `+${selectedProjectForSpecs.xp} XP on verification` : 'Capstone project'}
+        icon="Rocket"
+        tone="warning"
+        width={720}
+        footer={
+          <>
+            <Button label="Close" variant="secondary" onPress={() => setSelectedProjectForSpecs(null)} />
+            <Button label="Submit repository" icon="Send" onPress={handleSubmitProjectRepo} loading={isSubmittingProject} disabled={!selectedRepo} />
+          </>
+        }
+      >
+        {projectActionSuccessMsg ? (
+          <Inset tone="success"><Txt variant="small" weight={600} color={colors.mintInk}>{projectActionSuccessMsg}</Txt></Inset>
+        ) : null}
+        <Txt variant="body" tone="muted">{selectedProjectForSpecs?.desc}</Txt>
+        {(selectedProjectForSpecs?.milestones || []).length ? (
+          <Timeline
+            gap={space.sm}
+            items={selectedProjectForSpecs.milestones.map((m) => ({
+              key: m.milestone || m.title,
+              done: m.status === 'completed',
+              content: (
+                <View style={styles.moduleRow}>
+                  <Txt variant="small" weight={700} tone="ink">{m.milestone ? `${m.milestone} · ` : ''}{m.title}</Txt>
+                  {m.deliverable ? <Txt variant="caption" tone="muted">{m.deliverable}</Txt> : null}
+                </View>
+              ),
+            }))}
+          />
+        ) : null}
+        <Txt variant="h3" tone="ink">Choose a repository</Txt>
+        {isLoadingRepos ? (
+          <Skeleton height={60} />
+        ) : availableRepos.length ? (
+          <Stack gap={8}>
+            {connectedGitHubAccount?.username ? <Txt variant="caption" tone="muted">From @{connectedGitHubAccount.username}</Txt> : null}
+            {availableRepos.map((r) => {
+              const sel = selectedRepo?.id === r.id;
+              return (
+                <Pressable key={r.id} onPress={() => setSelectedRepo(r)} style={({ hovered }) => [styles.repoRow, webOnly({ cursor: 'pointer' }), sel ? { backgroundColor: colors.butter } : hovered ? { backgroundColor: colors.surfaceMuted } : null]}>
+                  <Icon name={sel ? 'CircleCheck' : 'Circle'} size={18} color={sel ? colors.butterInk : colors.textSubtle} />
+                  <Stack gap={1} style={{ flex: 1 }}>
+                    <Txt variant="small" weight={700} tone="ink">{r.name}</Txt>
+                    {r.description ? <Txt variant="caption" tone="muted" numberOfLines={1}>{r.description}</Txt> : null}
+                  </Stack>
+                  {r.language ? <Pill label={r.language} size="sm" /> : null}
+                  {r.already_submitted ? <Pill label="Submitted" tone="success" size="sm" /> : null}
+                </Pressable>
+              );
+            })}
+          </Stack>
+        ) : (
+          <EmptyState
+            icon="GitBranch"
+            title="No repositories available"
+            message="Connect GitHub in your profile to submit project work."
+            action={<Button label="Go to profile" size="sm" onPress={() => { setSelectedProjectForSpecs(null); if (onNavigate) onNavigate('Profile', {}); }} />}
+          />
+        )}
+      </Sheet>
+    </Page>
   );
 }
 
+const mono = Platform.select({ web: 'ui-monospace, SFMono-Regular, Menlo, monospace', ios: 'Menlo', default: 'monospace' });
+
 const styles = StyleSheet.create({
-  mainContainer: {
-    flex: 1,
-    backgroundColor: CLAY_COLORS.canvas,
+  grid: {
+    gap: space.xl,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 60,
-    maxWidth: 1280,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: CLAY_COLORS.canvas,
-    padding: 40,
-    minHeight: 400,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontFamily: CLAY_FONTS.body,
-    fontSize: 14,
-    color: CLAY_COLORS.muted,
-    fontWeight: '600',
-  },
-  errorTitle: {
-    fontFamily: CLAY_FONTS.heading,
-    fontSize: 20,
-    fontWeight: '800',
-    color: CLAY_COLORS.danger,
-    marginBottom: 6,
-  },
-  errorSubtitle: {
-    fontFamily: CLAY_FONTS.body,
-    fontSize: 13,
-    color: CLAY_COLORS.muted,
-    textAlign: 'center',
-    marginBottom: 18,
-  },
-  retryBtn: {
-    backgroundColor: CLAY_COLORS.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: CLAY_RADII.button,
-  },
-  retryBtnText: {
-    fontFamily: CLAY_FONTS.heading,
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  actionBanner: {
-    backgroundColor: CLAY_COLORS.primaryLight,
-    borderWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: CLAY_RADII.button,
-    marginBottom: 16,
-  },
-  actionBannerText: {
-    fontFamily: CLAY_FONTS.heading,
-    fontSize: 13,
-    fontWeight: '700',
-    color: CLAY_COLORS.primaryDark,
-  },
-  subNavBar: {
+  gridRow: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: CLAY_COLORS.cardBorder,
-    marginBottom: 18,
-    gap: 6,
-    overflow: 'scroll',
+    alignItems: 'flex-start',
   },
-  subNavItem: {
-    paddingVertical: 10,
+  playDisc: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 8,
+    borderColor: 'rgba(255,255,255,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    paddingVertical: 9,
     paddingHorizontal: 14,
-    borderBottomWidth: 2.5,
-    borderBottomColor: 'transparent',
+    borderRadius: radii.pill,
   },
-  subNavItemActive: {
-    borderBottomColor: CLAY_COLORS.primary,
+  footerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  subNavText: {
-    fontFamily: CLAY_FONTS.heading,
+  emptyEvents: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.borderStrong,
+    borderRadius: radii.xl,
+  },
+  cardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.md,
+  },
+  gridCard: {
+    flexGrow: 1,
+    flexBasis: 300,
+  },
+  credIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editor: {
+    backgroundColor: colors.frame,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+  },
+  codeInput: {
+    minHeight: 220,
+    color: '#E8E8EA',
+    fontFamily: mono,
     fontSize: 13,
-    fontWeight: '700',
-    color: CLAY_COLORS.muted,
+    lineHeight: 20,
+    padding: 14,
+    textAlignVertical: 'top',
   },
-  subNavTextActive: {
-    color: CLAY_COLORS.primary,
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  optKey: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moduleRow: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.md,
+    padding: space.sm,
+  },
+  repoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceMuted,
   },
 });

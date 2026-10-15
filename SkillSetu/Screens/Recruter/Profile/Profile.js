@@ -1,112 +1,29 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Modal,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Linking, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { recruiterService } from '../services/recruiterService';
-
-const COLORS = {
-  headerBg: '#FFFFFF',
-  border: '#E2E8F0',
-  textMain: '#0F172A',
-  textMuted: '#64748B',
-  primaryTeal: '#004D40',
-  primaryTealLight: '#005C4B',
-  mintBg: '#E6F4F1',
-  mintBadge: '#D1FAE5',
-  mintBadgeText: '#065F46',
-  pageBg: '#F8FAFC',
-  amberBg: '#FEF3C7',
-  amberText: '#92400E',
-  blueBg: '#EFF6FF',
-  blueText: '#1E40AF',
-  cardBg: '#FFFFFF',
-  grayTagBg: '#F1F5F9',
-  grayTagText: '#334155',
-  accentGreen: '#10B981',
-  dangerRed: '#EF4444',
-};
-
-// Hover Animated Card Wrapper
-function HoverCard({ children, style }) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handleMouseEnter = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1.015,
-      friction: 8,
-      tension: 80,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start();
-  };
-
-  const handleMouseLeave = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 8,
-      tension: 80,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start();
-  };
-
-  return (
-    <Animated.View
-      style={[style, { transform: [{ scale: scaleAnim }] }]}
-      // @ts-ignore - Web interactive props
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {children}
-    </Animated.View>
-  );
-}
-
-// Hover Animated Button
-function HoverButton({ children, style, onPress }) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handleMouseEnter = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1.04,
-      friction: 7,
-      tension: 90,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start();
-  };
-
-  const handleMouseLeave = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 7,
-      tension: 90,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress}>
-      <Animated.View
-        style={[style, { transform: [{ scale: scaleAnim }] }]}
-        // @ts-ignore - Web interactive props
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      >
-        {children}
-      </Animated.View>
-    </Pressable>
-  );
-}
+import {
+  Avatar,
+  Button,
+  Card,
+  Checkbox,
+  ChipGroup,
+  EventCard,
+  Field,
+  Icon,
+  IconButton,
+  Inset,
+  Page,
+  Pill,
+  Ring,
+  Row,
+  SectionTitle,
+  Sheet,
+  Skeleton,
+  Stack,
+  Timeline,
+  Txt,
+} from '../../../ui/components';
+import { colors, radii, space, webOnly } from '../../../ui/theme';
 
 export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab }) {
   const { width } = useWindowDimensions();
@@ -119,15 +36,15 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
 
   // 1. Company Identity & Details
   const [companyInfo, setCompanyInfo] = useState({
-    name: user?.companyName || user?.company_name || 'My Organization',
-    industry: 'Information Technology & Software',
-    location: 'Pune, Maharashtra',
-    founded: '2015',
-    employees: '500-1,000 employees',
-    website: 'company.com',
-    email: user?.email || 'careers@company.com',
-    companyType: 'Private Ltd',
-    workLocations: 'Pune, Maharashtra',
+    name: user?.companyName || user?.company_name || '',
+    industry: '',
+    location: '',
+    founded: '',
+    employees: '',
+    website: '',
+    email: '',
+    companyType: '',
+    workLocations: '',
   });
 
   // 2. About Company
@@ -171,10 +88,10 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
 
   // 9. Trust & Safety Verification
   const [verificationData, setVerificationData] = useState({
-    company_email_verified: true,
-    website_verified: true,
-    business_verified: true,
-    recruiter_verified: true,
+    company_email_verified: false,
+    website_verified: false,
+    business_verified: false,
+    recruiter_verified: false,
   });
 
   // 10. Active Postings
@@ -215,13 +132,13 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
       setCompanyInfo({
         name: data.company.name || '',
         industry: data.company.industry || '',
-        location: data.company.headquarters || data.company.location || 'Pune, Maharashtra',
-        founded: data.company.founded || '2015',
-        employees: data.company.employees || data.company.company_size || '500-1,000 employees',
+        location: data.company.headquarters || data.company.location || '',
+        founded: data.company.founded || data.company.founded_year || '',
+        employees: data.company.employees || data.company.company_size || '',
         website: data.company.website || '',
         email: data.company.email || '',
-        companyType: data.company.company_type || 'Private Ltd',
-        workLocations: data.company.work_locations || data.company.headquarters || 'Pune, Maharashtra',
+        companyType: data.company.company_type || '',
+        workLocations: data.company.work_locations || data.company.headquarters || '',
       });
     }
 
@@ -455,1892 +372,416 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
     }
   };
 
-  const handleToggleVerification = async (key) => {
-    try {
-      const payload = { [key]: !verificationData[key] };
-      const res = await recruiterService.updateVerification(token, payload);
-      applyProfileData(res);
-      showSuccessFeedback('✓ Verification status updated in database.');
-    } catch (err) {
-      alert(err.message || 'Failed to update verification.');
-    }
+  const setF = (key) => (v) => setModalForm((f) => ({ ...f, [key]: v }));
+  const pct = completion.percentage || 0;
+  const SECTION_EDIT = {
+    'Company Identity': 'company',
+    'About Company': 'about',
+    'Company Details & Locations': 'location_add',
+    'Culture & Benefits': 'culture',
+    'Internship Preferences': 'preferences',
+    'Hiring Process': 'process',
+  };
+  const editFor = (sec) => {
+    const k = Object.keys(SECTION_EDIT).find((s) => String(sec).toLowerCase().includes(s.toLowerCase().split(' ')[0]));
+    return k ? SECTION_EDIT[k] : 'company';
+  };
+  const openUrl = (u) => {
+    if (!u) return;
+    const url = /^https?:\/\//.test(u) ? u : `https://${u}`;
+    if (Platform.OS === 'web') window.open(url, '_blank', 'noopener,noreferrer');
+    else Linking.openURL(url).catch(() => {});
+  };
+
+  const sectionHeader = (title, section, icon, extra) => (
+    <Row justify="space-between" style={{ marginBottom: space.md }}>
+      <Row gap={8}>
+        <Icon name={icon} size={18} color={colors.ink} />
+        <Txt variant="h3" tone="ink">{title}</Txt>
+      </Row>
+      <Row gap={6}>
+        {extra}
+        {section ? <IconButton icon="Pencil" size={34} onPress={() => handleOpenEdit(section)} accessibilityLabel={`Edit ${title}`} /> : null}
+      </Row>
+    </Row>
+  );
+  const chips = (list, tone) =>
+    list && list.length ? (
+      <Row wrap gap={6}>{list.map((x) => <Pill key={x} label={x} tone={tone} size="sm" />)}</Row>
+    ) : (
+      <Txt variant="small" tone="subtle">Not added yet</Txt>
+    );
+
+  if (loading) {
+    return (
+      <Page>
+        <Skeleton height={160} radius={radii.xl} />
+        <Skeleton height={120} radius={radii.xl} />
+        <Skeleton height={120} radius={radii.xl} />
+      </Page>
+    );
+  }
+
+  const verifyItems = [
+    ['company_email_verified', 'Company email'],
+    ['website_verified', 'Website'],
+    ['business_verified', 'Business'],
+    ['recruiter_verified', 'Recruiter'],
+  ];
+  const links = [
+    ['website', 'Globe'],
+    ['linkedin', 'Link'],
+    ['github', 'GitBranch'],
+    ['twitter', 'Link'],
+    ['instagram', 'Link'],
+  ].filter(([k]) => socialLinks[k]);
+
+  const aside = (
+    <>
+      <SectionTitle title="Profile status" emoji="🏢" />
+      <Card tone={completion.is_complete ? 'success' : 'warning'}>
+        <Row justify="space-between" align="flex-start">
+          <Stack gap={4} style={{ flex: 1 }}>
+            <Txt variant="h3" tone="ink">{completion.is_complete ? 'Workspace active' : 'Almost there'}</Txt>
+            <Txt variant="small" tone="muted">{completion.is_complete ? 'You can publish internships and review candidates.' : 'Complete the required sections to unlock hiring.'}</Txt>
+          </Stack>
+          <Ring value={pct} size={68} stroke={7} tone="dark" track="rgba(255,255,255,0.6)">
+            <Txt variant="small" weight={700} tone="ink">{pct}%</Txt>
+          </Ring>
+        </Row>
+        {completion.missing_required_sections?.length ? (
+          <Stack gap={6} style={{ marginTop: space.md }}>
+            {completion.missing_required_sections.map((sec) => (
+              <Pressable key={sec} onPress={() => handleOpenEdit(editFor(sec))} style={[styles.missingRow, webOnly({ cursor: 'pointer' })]}>
+                <Icon name="CircleAlert" size={15} color={colors.butterInk} />
+                <Txt variant="small" weight={600} tone="ink" style={{ flex: 1 }}>{sec}</Txt>
+                <Icon name="ArrowRight" size={14} color={colors.textMuted} />
+              </Pressable>
+            ))}
+          </Stack>
+        ) : null}
+        {completion.is_complete && onNavigateTab ? <Button label="Go to internships" size="sm" iconRight="ArrowRight" onPress={() => onNavigateTab('Internships')} style={{ marginTop: space.md }} /> : null}
+      </Card>
+      <EventCard
+        tone="info"
+        icon="ShieldCheck"
+        type="Verification"
+        body="Verification is reviewed by SkillSetu administrators."
+        footer={
+          <Row wrap gap={6} justify="center" style={{ width: '100%' }}>
+            {verifyItems.map(([k, label]) => (
+              <Pill key={k} label={label} tone={verificationData[k] ? 'success' : 'neutral'} icon={verificationData[k] ? 'Check' : 'Clock'} size="sm" />
+            ))}
+          </Row>
+        }
+      />
+      <EventCard
+        tone="accent"
+        icon="Link"
+        type="Links"
+        title={links.length ? `${links.length} linked` : 'No links yet'}
+        footer={
+          links.length ? (
+            <Row wrap gap={6} justify="center" style={{ width: '100%' }}>
+              {links.map(([k, icon]) => (
+                <Pressable key={k} onPress={() => openUrl(socialLinks[k])} style={[styles.linkChip, webOnly({ cursor: 'pointer' })]}>
+                  <Icon name={icon} size={13} color={colors.ink} />
+                  <Txt variant="caption" weight={600} tone="ink">{k}</Txt>
+                </Pressable>
+              ))}
+              <Pressable onPress={() => handleOpenEdit('social')} style={[styles.linkChip, webOnly({ cursor: 'pointer' })]}>
+                <Icon name="Pencil" size={13} color={colors.ink} />
+              </Pressable>
+            </Row>
+          ) : (
+            <Pressable onPress={() => handleOpenEdit('social')} style={[styles.footerBtn, webOnly({ cursor: 'pointer' })]}>
+              <Icon name="Plus" size={14} color={colors.ink} />
+              <Txt variant="small" weight={600} tone="ink">Add links</Txt>
+            </Pressable>
+          )
+        }
+      />
+    </>
+  );
+
+  const editTitles = {
+    about: 'About the company',
+    company: 'Company details',
+    culture: 'Culture & perks',
+    preferences: 'Internship preferences',
+    process: 'Hiring process',
+    social: 'Links',
+    location_add: 'Add location',
+    team_add: 'Add team member',
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primaryTeal} />
-          <Text style={styles.loadingText}>Restoring company profile from PostgreSQL...</Text>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Success Banner Notification */}
-          {saveSuccessMsg ? (
-            <View style={styles.successToast}>
-              <Text style={styles.successToastText}>{saveSuccessMsg}</Text>
-            </View>
-          ) : null}
+    <Page aside={aside}>
+      {saveSuccessMsg ? (
+        <Inset tone="success" padding={space.sm}>
+          <Row gap={8}>
+            <Icon name="CircleCheck" size={16} color={colors.mintInk} />
+            <Txt variant="small" weight={600} color={colors.mintInk}>{saveSuccessMsg.replace(/^✓\s*/, '')}</Txt>
+          </Row>
+        </Inset>
+      ) : null}
 
-          {/* Page Header */}
-          <View style={styles.headerSection}>
-            <View>
-              <Text style={styles.breadcrumb}>
-                RECRUITER WORKSPACE • Organization Settings & Public Showcase
-              </Text>
-              <Text style={styles.pageTitle}>Company Profile</Text>
-              <Text style={styles.pageSub}>
-                Manage your company's information, showcase culture, and configure hiring presence on SkillSetu.
-              </Text>
-            </View>
-            <View style={styles.headerActionsRight}>
-              <View style={styles.completionContainer}>
-                <Text style={styles.completionLabel}>Authoritative DB Completion</Text>
-                <Text style={[styles.completionValue, completion.is_complete && { color: COLORS.accentGreen }]}>
-                  {completion.percentage}% {completion.is_complete ? '✓ Complete' : ''}
-                </Text>
-              </View>
-              <HoverButton
-                style={styles.editProfileMainBtn}
-                onPress={() => handleOpenEdit('company')}
-              >
-                <Text style={styles.editProfileMainBtnText}>✏️ Edit Profile</Text>
-              </HoverButton>
-            </View>
+      <Card padding={isCompact ? space.lg : space.xxl}>
+        <Row gap={space.lg} align="flex-start" wrap>
+          <Avatar name={companyInfo.name} size={isCompact ? 72 : 96} tone="accent" />
+          <Stack gap={8} style={{ flex: 1, minWidth: 240 }}>
+            <Txt variant="display" tone="ink">{companyInfo.name || 'Your company'}</Txt>
+            <Txt variant="title" tone="muted">{[companyInfo.industry, companyInfo.companyType].filter(Boolean).join(' · ') || 'Add your industry'}</Txt>
+            <Row wrap gap={6}>
+              {companyInfo.location ? <Pill label={companyInfo.location} icon="MapPin" size="sm" /> : null}
+              {companyInfo.employees ? <Pill label={companyInfo.employees} icon="Users" size="sm" /> : null}
+              {companyInfo.founded ? <Pill label={`Since ${companyInfo.founded}`} icon="Calendar" size="sm" /> : null}
+              {companyInfo.website ? <Pill label={companyInfo.website} icon="Globe" size="sm" /> : null}
+              {companyInfo.email ? <Pill label={companyInfo.email} icon="Mail" size="sm" /> : null}
+            </Row>
+          </Stack>
+          <Button label="Edit details" icon="Pencil" onPress={() => handleOpenEdit('company')} />
+        </Row>
+      </Card>
+
+      <Card>
+        {sectionHeader('About', 'about', 'Info')}
+        <Txt variant="body" tone={aboutData.description ? 'default' : 'subtle'}>{aboutData.description || 'Tell students what your company does (at least 20 characters).'}</Txt>
+        {aboutData.mission || aboutData.vision ? (
+          <View style={[styles.twoCol, isCompact ? null : { flexDirection: 'row' }]}>
+            {aboutData.mission ? (
+              <Inset tone="accent" style={{ flex: 1 }}>
+                <Txt variant="overline" color={colors.lilacInk}>Mission</Txt>
+                <Txt variant="small" tone="ink" style={{ marginTop: 4 }}>{aboutData.mission}</Txt>
+              </Inset>
+            ) : null}
+            {aboutData.vision ? (
+              <Inset tone="info" style={{ flex: 1 }}>
+                <Txt variant="overline" color={colors.skyInk}>Vision</Txt>
+                <Txt variant="small" tone="ink" style={{ marginTop: 4 }}>{aboutData.vision}</Txt>
+              </Inset>
+            ) : null}
           </View>
+        ) : null}
+      </Card>
 
-          {/* Checklist of Mandatory Sections */}
-          <View style={styles.checklistCard}>
-            <View style={styles.checklistHeader}>
-              <Text style={styles.checklistTitle}>
-                {completion.is_complete ? '🎉 Company Profile Complete & Verified' : '📋 Profile Completion Checklist'}
-              </Text>
-              <Text style={styles.checklistStatus}>
-                {completion.is_complete ? 'Workspace Unlocked' : `${completion.percentage}% Completed (Required: 80%+)`}
-              </Text>
-            </View>
-            <View style={styles.checklistGrid}>
-              {[
-                { title: 'Company Identity', key: 'company', done: !!(companyInfo.name && companyInfo.email && companyInfo.website) },
-                { title: 'Company Description & Vision', key: 'about', done: !!(aboutData.description && aboutData.description.length >= 20) },
-                { title: 'Details & Locations', key: 'location_add', done: !!(companyInfo.location && locationsList.length >= 1) },
-                { title: 'Culture & Benefits', key: 'culture', done: cultureData.cultureTags.length >= 1 && cultureData.perks.length >= 1 },
-                { title: 'Internship Preferences', key: 'preferences', done: preferencesData.domains.length >= 1 && preferencesData.skills.length >= 1 },
-                { title: 'Hiring Process', key: 'process', done: hiringProcessSteps.length >= 1 },
-                { title: 'Trust & Verification', key: 'verification', done: !!verificationData.company_email_verified },
-              ].map((item, idx) => (
-                <Pressable
-                  key={idx}
-                  onPress={() => handleOpenEdit(item.key)}
-                  style={[styles.checklistItem, item.done ? styles.checklistItemDone : styles.checklistItemPending]}
-                >
-                  <Text style={item.done ? styles.checkIconDone : styles.checkIconPending}>
-                    {item.done ? '✓' : '○'}
-                  </Text>
-                  <Text style={[styles.checklistLabel, item.done && styles.checklistLabelDone]}>
-                    {item.title}
-                  </Text>
-                </Pressable>
+      <View style={[styles.twoCol, isCompact ? null : { flexDirection: 'row' }]}>
+        <Card style={{ flex: 1 }}>
+          {sectionHeader('Culture & perks', 'culture', 'Sparkles')}
+          <Txt variant="overline" tone="subtle" style={{ marginBottom: 6 }}>Culture</Txt>
+          {chips(cultureData.cultureTags, 'accent')}
+          <Txt variant="overline" tone="subtle" style={{ marginVertical: 6, marginTop: space.md }}>Perks</Txt>
+          {chips(cultureData.perks, 'warning')}
+        </Card>
+        <Card style={{ flex: 1 }}>
+          {sectionHeader('Internship preferences', 'preferences', 'Target')}
+          <Txt variant="overline" tone="subtle" style={{ marginBottom: 6 }}>Domains</Txt>
+          {chips(preferencesData.domains, 'info')}
+          <Txt variant="overline" tone="subtle" style={{ marginVertical: 6, marginTop: space.md }}>Skills</Txt>
+          {chips(preferencesData.skills, 'success')}
+          <Row gap={6} style={{ marginTop: space.md }}>
+            {preferencesData.workMode ? <Pill label={preferencesData.workMode} icon="House" size="sm" /> : null}
+            {preferencesData.duration ? <Pill label={preferencesData.duration} icon="Clock" size="sm" /> : null}
+          </Row>
+        </Card>
+      </View>
+
+      <Card>
+        {sectionHeader('Hiring process', 'process', 'Route')}
+        {hiringProcessSteps.length ? (
+          <Timeline
+            gap={space.sm}
+            items={hiringProcessSteps.map((st, i) => ({
+              key: st.id || i,
+              done: true,
+              content: (
+                <View style={styles.stepRow}>
+                  <Txt variant="small" weight={700} tone="ink">{i + 1}. {st.title}</Txt>
+                  {st.desc ? <Txt variant="caption" tone="muted">{st.desc}</Txt> : null}
+                </View>
+              ),
+            }))}
+          />
+        ) : (
+          <Txt variant="small" tone="subtle">Add the stages candidates go through.</Txt>
+        )}
+      </Card>
+
+      <View style={[styles.twoCol, isCompact ? null : { flexDirection: 'row' }]}>
+        <Card style={{ flex: 1 }}>
+          {sectionHeader('Locations', null, 'MapPin', <IconButton icon="Plus" size={34} onPress={() => handleOpenEdit('location_add')} accessibilityLabel="Add location" />)}
+          {locationsList.length ? (
+            <Stack gap={8}>
+              {locationsList.map((loc) => (
+                <Inset key={loc.id} tone="neutral" padding={space.sm}>
+                  <Row gap={10}>
+                    <Stack gap={0} style={{ flex: 1 }}>
+                      <Txt variant="small" weight={700} tone="ink">{loc.title}</Txt>
+                      {loc.sub ? <Txt variant="caption" tone="muted">{loc.sub}</Txt> : null}
+                    </Stack>
+                    {loc.badge ? <Pill label={loc.badge} size="sm" tone={loc.badge === 'HQ' || loc.is_primary ? 'accent' : 'neutral'} /> : null}
+                    <IconButton icon="Trash" size={30} variant="ghost" onPress={() => handleDeleteLocation(loc.id)} accessibilityLabel="Delete location" />
+                  </Row>
+                </Inset>
               ))}
-            </View>
-          </View>
+            </Stack>
+          ) : (
+            <Txt variant="small" tone="subtle">At least one location is required.</Txt>
+          )}
+        </Card>
+        <Card style={{ flex: 1 }}>
+          {sectionHeader('Hiring team', null, 'Users', <IconButton icon="Plus" size={34} onPress={() => handleOpenEdit('team_add')} accessibilityLabel="Add team member" />)}
+          {hiringTeam.length ? (
+            <Stack gap={8}>
+              {hiringTeam.map((m) => (
+                <Row key={m.id || m.name} gap={10}>
+                  <Avatar name={m.name} size={36} />
+                  <Stack gap={0} style={{ flex: 1 }}>
+                    <Txt variant="small" weight={700} tone="ink">{m.name}</Txt>
+                    <Txt variant="caption" tone="muted">{m.role}</Txt>
+                  </Stack>
+                  {m.tag ? <Pill label={m.tag} size="sm" /> : null}
+                </Row>
+              ))}
+            </Stack>
+          ) : (
+            <Txt variant="small" tone="subtle">Only you so far.</Txt>
+          )}
+        </Card>
+      </View>
 
-          {/* Hero Card */}
-          <HoverCard style={styles.heroCard}>
-            <View style={styles.heroContentRow}>
-              <View style={styles.logoSquare}>
-                <Text style={styles.logoSquareText}>
-                  {companyInfo.name ? companyInfo.name.substring(0, 3).toUpperCase() : 'COM'}
-                </Text>
-                <Text style={styles.logoSquareSub}>
-                  {companyInfo.companyType ? companyInfo.companyType.substring(0, 4) : 'Org'}
-                </Text>
-              </View>
-              <View style={styles.heroInfoColumn}>
-                <View style={styles.heroTitleRow}>
-                  <Text style={styles.companyNameText}>{companyInfo.name || 'Your Company Name'}</Text>
-                  {verificationData.company_email_verified && (
-                    <View style={styles.verifiedBadge}>
-                      <Text style={styles.verifiedBadgeText}>✓ Verified Company</Text>
-                    </View>
-                  )}
-                  <View style={styles.activeProfileBadge}>
-                    <View style={styles.greenDotSmall} />
-                    <Text style={styles.activeProfileBadgeText}>
-                      {completion.is_complete ? 'Workspace Active' : 'Profile Setup In Progress'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.heroMetaRow}>
-                  <Text style={styles.heroMetaItem}>🏢 {companyInfo.industry || 'Tech'}</Text>
-                  <Text style={styles.heroMetaDot}>•</Text>
-                  <Text style={styles.heroMetaItem}>📍 {companyInfo.location || 'Pune, India'}</Text>
-                  <Text style={styles.heroMetaDot}>•</Text>
-                  <Text style={styles.heroMetaItem}>📅 Founded: {companyInfo.founded}</Text>
-                  <Text style={styles.heroMetaDot}>•</Text>
-                  <Text style={styles.heroMetaItem}>👥 {companyInfo.employees}</Text>
-                  <Text style={styles.heroMetaDot}>•</Text>
-                  <Text style={styles.heroMetaLink}>🌐 {companyInfo.website || 'website.com'}</Text>
-                </View>
-              </View>
-              <View style={styles.heroRightActions}>
-                <HoverButton style={styles.previewBtn} onPress={() => handleOpenEdit('company')}>
-                  <Text style={styles.previewBtnText}>✏️ Edit Identity</Text>
-                </HoverButton>
-              </View>
-            </View>
-          </HoverCard>
-
-          {/* Metric Cards Grid */}
-          <View style={styles.metricsRow}>
-            <HoverCard style={styles.metricCard}>
-              <View style={styles.metricHeader}>
-                <Text style={styles.metricTitle}>ACTIVE INTERNSHIPS</Text>
-                <View style={styles.metricIconBgTeal}>
-                  <Text style={styles.metricIcon}>💼</Text>
-                </View>
-              </View>
-              <Text style={styles.metricValue}>{hiringProcessSteps.length >= 1 ? '1' : '0'}</Text>
-              <Text style={styles.metricSub}>Accepting applicants</Text>
-            </HoverCard>
-
-            <HoverCard style={styles.metricCard}>
-              <View style={styles.metricHeader}>
-                <Text style={styles.metricTitle}>TOTAL APPLICATIONS</Text>
-                <View style={styles.metricIconBgBlue}>
-                  <Text style={styles.metricIcon}>👥</Text>
-                </View>
-              </View>
-              <Text style={styles.metricValue}>0</Text>
-              <Text style={styles.metricSubBlue}>Connected to PostgreSQL</Text>
-            </HoverCard>
-
-            <HoverCard style={styles.metricCard}>
-              <View style={styles.metricHeader}>
-                <Text style={styles.metricTitle}>HIRING TEAM MEMBERS</Text>
-                <View style={styles.metricIconBgGreen}>
-                  <Text style={styles.metricIcon}>🎓</Text>
-                </View>
-              </View>
-              <Text style={styles.metricValue}>{hiringTeam.length}</Text>
-              <Text style={styles.metricSub}>Recruiters in company</Text>
-            </HoverCard>
-
-            <HoverCard style={styles.metricCard}>
-              <View style={styles.metricHeader}>
-                <Text style={styles.metricTitle}>OFFICES & LOCATIONS</Text>
-                <View style={styles.metricIconBgAmber}>
-                  <Text style={styles.metricIcon}>📍</Text>
-                </View>
-              </View>
-              <Text style={styles.metricValue}>{locationsList.length}</Text>
-              <Text style={styles.metricSubAmber}>Configured hubs</Text>
-            </HoverCard>
-          </View>
-
-          {/* Main Content 2-Column Grid */}
-          <View style={[styles.mainGrid, isCompact && styles.mainGridCompact]}>
-            {/* Left Main Column */}
-            <View style={styles.leftColumn}>
-              {/* Card 1: About Company */}
-              <HoverCard style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.cardHeaderTitleRow}>
-                    <Text style={styles.cardHeaderIcon}>ℹ️</Text>
-                    <Text style={styles.cardHeaderTitle}>About Company</Text>
-                  </View>
-                  <HoverButton
-                    style={styles.pencilEditBtn}
-                    onPress={() => handleOpenEdit('about')}
-                  >
-                    <Text style={styles.pencilEditBtnText}>✏️ Edit</Text>
-                  </HoverButton>
-                </View>
-                <Text style={styles.aboutParagraph}>
-                  {aboutData.description || 'Add your company overview and story to introduce your engineering organization to prospective interns.'}
-                </Text>
-                <View style={styles.missionVisionRow}>
-                  <View style={styles.missionCard}>
-                    <Text style={styles.mvTitle}>💡 OUR MISSION</Text>
-                    <Text style={styles.mvText}>"{aboutData.mission || 'Define your company mission.'}"</Text>
-                  </View>
-                  <View style={styles.visionCard}>
-                    <Text style={styles.mvTitle}>👁️ OUR VISION</Text>
-                    <Text style={styles.mvText}>"{aboutData.vision || 'Define your company vision.'}"</Text>
-                  </View>
-                </View>
-              </HoverCard>
-
-              {/* Card 2: Culture & Benefits */}
-              <HoverCard style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.cardHeaderTitleRow}>
-                    <Text style={styles.cardHeaderIcon}>🌱</Text>
-                    <Text style={styles.cardHeaderTitle}>Culture & Benefits</Text>
-                  </View>
-                  <HoverButton
-                    style={styles.pencilEditBtn}
-                    onPress={() => handleOpenEdit('culture')}
-                  >
-                    <Text style={styles.pencilEditBtnText}>✏️ Edit</Text>
-                  </HoverButton>
-                </View>
-                <Text style={styles.sectionSubTitle}>COMPANY CULTURE</Text>
-                <Text style={styles.sectionDescText}>
-                  The core values shaping your engineering and intern experience.
-                </Text>
-                <View style={styles.tagsFlexRow}>
-                  {cultureData.cultureTags.length > 0 ? (
-                    cultureData.cultureTags.map((tag, idx) => (
-                      <View key={idx} style={styles.culturePill}>
-                        <Text style={styles.culturePillText}>💡 {tag}</Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.emptyPromptText}>No culture tags added yet. Click Edit to add.</Text>
-                  )}
-                </View>
-
-                <Text style={[styles.sectionSubTitle, { marginTop: 20 }]}>BENEFITS & PERKS</Text>
-                <View style={styles.perksGrid}>
-                  {cultureData.perks.length > 0 ? (
-                    cultureData.perks.map((perk, idx) => (
-                      <View key={idx} style={styles.perkBox}>
-                        <Text style={styles.perkBoxText}>✓ {perk}</Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.emptyPromptText}>No perks added yet. Click Edit to add.</Text>
-                  )}
-                </View>
-              </HoverCard>
-
-              {/* Card 3: Internship Preferences */}
-              <HoverCard style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.cardHeaderTitleRow}>
-                    <Text style={styles.cardHeaderIcon}>🎯</Text>
-                    <Text style={styles.cardHeaderTitle}>Internship Preferences</Text>
-                  </View>
-                  <HoverButton
-                    style={styles.pencilEditBtn}
-                    onPress={() => handleOpenEdit('preferences')}
-                  >
-                    <Text style={styles.pencilEditBtnText}>✏️ Edit</Text>
-                  </HoverButton>
-                </View>
-                <View style={styles.prefTwoCol}>
-                  <View style={styles.prefCol}>
-                    <Text style={styles.prefLabel}>PREFERRED DOMAINS</Text>
-                    <View style={styles.tagsFlexRow}>
-                      {preferencesData.domains.length > 0 ? (
-                        preferencesData.domains.map((dom, idx) => (
-                          <View key={idx} style={styles.grayTag}>
-                            <Text style={styles.grayTagText}>{dom}</Text>
-                          </View>
-                        ))
-                      ) : (
-                        <Text style={styles.emptyPromptText}>Add preferred domains</Text>
-                      )}
-                    </View>
-                    <Text style={[styles.prefLabel, { marginTop: 16 }]}>PREFERRED WORK MODE</Text>
-                    <View style={styles.tagsFlexRow}>
-                      {['Remote', 'Hybrid', 'On-site'].map((mode) => {
-                        const isSel = (preferencesData.workMode || '').includes(mode);
-                        return (
-                          <View
-                            key={mode}
-                            style={[styles.modeTag, isSel && styles.modeTagActive]}
-                          >
-                            <Text style={[styles.modeTagText, isSel && styles.modeTagActiveText]}>
-                              {isSel ? '✓ ' : ''}{mode}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  <View style={styles.prefCol}>
-                    <Text style={styles.prefLabel}>CANONICAL PREFERRED SKILLS</Text>
-                    <View style={styles.tagsFlexRow}>
-                      {preferencesData.skills.length > 0 ? (
-                        preferencesData.skills.map((sk, idx) => (
-                          <View key={idx} style={styles.mintTag}>
-                            <Text style={styles.mintTagText}>⚡ {sk}</Text>
-                          </View>
-                        ))
-                      ) : (
-                        <Text style={styles.emptyPromptText}>Add canonical skills</Text>
-                      )}
-                    </View>
-                    <Text style={[styles.prefLabel, { marginTop: 16 }]}>PREFERRED DURATION</Text>
-                    <View style={styles.durationBadge}>
-                      <Text style={styles.durationBadgeText}>
-                        ⏱️ {preferencesData.duration || '3-6 Months'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </HoverCard>
-
-              {/* Card 4: Hiring Process */}
-              <HoverCard style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.cardHeaderTitleRow}>
-                    <Text style={styles.cardHeaderIcon}>⚙️</Text>
-                    <Text style={styles.cardHeaderTitle}>Hiring Process</Text>
-                  </View>
-                  <HoverButton
-                    style={styles.pencilEditBtn}
-                    onPress={() => handleOpenEdit('process')}
-                  >
-                    <Text style={styles.pencilEditBtnText}>✏️ Edit Hiring Process</Text>
-                  </HoverButton>
-                </View>
-                <Text style={styles.sectionDescText}>
-                  Standardized candidate selection funnel for technical cohorts in PostgreSQL.
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.processScroll}>
-                  <View style={styles.processStepsRow}>
-                    {hiringProcessSteps.length > 0 ? (
-                      hiringProcessSteps.map((step, index) => (
-                        <View key={step.id || index} style={styles.processStepCard}>
-                          <View style={styles.stepHeaderRow}>
-                            <Text style={styles.stepNumText}>{step.id || `${index + 1}`}</Text>
-                            <Text style={styles.stepCheckIcon}>
-                              {index === hiringProcessSteps.length - 1 ? '✓' : '•'}
-                            </Text>
-                          </View>
-                          <Text style={styles.stepTitleText}>{step.title}</Text>
-                          <Text style={styles.stepDescText}>{step.desc}</Text>
-                        </View>
-                      ))
-                    ) : (
-                      <View style={styles.emptyStepPrompt}>
-                        <Text style={styles.emptyPromptText}>No stages configured. Click Edit to create your workflow.</Text>
-                      </View>
-                    )}
-                  </View>
-                </ScrollView>
-              </HoverCard>
-            </View>
-
-            {/* Right Sidebar Column */}
-            <View style={styles.rightColumn}>
-              {/* Trust & Safety Box */}
-              <View style={styles.trustCard}>
-                <View style={styles.trustHeader}>
-                  <Text style={styles.trustShieldIcon}>🛡️</Text>
-                  <View>
-                    <Text style={styles.trustTitle}>SKILLSETU TRUST & SAFETY</Text>
-                    <Text style={styles.trustSub}>
-                      {verificationData.company_email_verified ? '✓ Verified Company' : 'Verification Required'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.trustDesc}>
-                  Authoritative verification records maintained in PostgreSQL.
-                </Text>
-                
-                <Pressable onPress={() => handleToggleVerification('company_email_verified')} style={styles.trustItem}>
-                  <Text style={styles.trustItemText}>
-                    {verificationData.company_email_verified ? '✓' : '○'} Company Email Verified
-                  </Text>
-                  <Text style={verificationData.company_email_verified ? styles.trustBadgeGreen : styles.trustBadgePending}>
-                    {verificationData.company_email_verified ? 'Active' : 'Verify'}
-                  </Text>
-                </Pressable>
-
-                <Pressable onPress={() => handleToggleVerification('website_verified')} style={styles.trustItem}>
-                  <Text style={styles.trustItemText}>
-                    {verificationData.website_verified ? '✓' : '○'} Website Verified
-                  </Text>
-                  <Text style={verificationData.website_verified ? styles.trustBadgeGreen : styles.trustBadgePending}>
-                    {verificationData.website_verified ? 'SSL OK' : 'Verify'}
-                  </Text>
-                </Pressable>
-
-                <Pressable onPress={() => handleToggleVerification('business_verified')} style={styles.trustItem}>
-                  <Text style={styles.trustItemText}>
-                    {verificationData.business_verified ? '✓' : '○'} Business Information Verified
-                  </Text>
-                  <Text style={verificationData.business_verified ? styles.trustBadgeGreen : styles.trustBadgePending}>
-                    {verificationData.business_verified ? 'CIN Confirmed' : 'Verify'}
-                  </Text>
-                </Pressable>
-
-                <Pressable onPress={() => handleToggleVerification('recruiter_verified')} style={styles.trustItem}>
-                  <Text style={styles.trustItemText}>
-                    {verificationData.recruiter_verified ? '✓' : '○'} Recruiter Identity Verified
-                  </Text>
-                  <Text style={verificationData.recruiter_verified ? styles.trustBadgeGreen : styles.trustBadgePending}>
-                    {verificationData.recruiter_verified ? 'Govt ID' : 'Verify'}
-                  </Text>
-                </Pressable>
-
-                <View style={styles.trustFooterBadge}>
-                  <Text style={styles.trustFooterText}>
-                    🔒 Verified badge gives your internship postings up to 3.4x higher student trust & engagement.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Company Details Sidebar */}
-              <HoverCard style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.sidebarCardTitle}>Company Details</Text>
-                  <HoverButton
-                    style={styles.pencilEditBtn}
-                    onPress={() => handleOpenEdit('company')}
-                  >
-                    <Text style={styles.pencilEditBtnText}>✏️</Text>
-                  </HoverButton>
-                </View>
-                <View style={styles.detailRowGrid}>
-                  <View style={styles.detailCol}>
-                    <Text style={styles.detailLabel}>Industry</Text>
-                    <Text style={styles.detailValue}>{companyInfo.industry}</Text>
-                  </View>
-                  <View style={styles.detailCol}>
-                    <Text style={styles.detailLabel}>Company Type</Text>
-                    <Text style={styles.detailValue}>{companyInfo.companyType}</Text>
-                  </View>
-                </View>
-                <View style={[styles.detailRowGrid, { marginTop: 12 }]}>
-                  <View style={styles.detailCol}>
-                    <Text style={styles.detailLabel}>Company Size</Text>
-                    <Text style={styles.detailValue}>{companyInfo.employees}</Text>
-                  </View>
-                  <View style={styles.detailCol}>
-                    <Text style={styles.detailLabel}>Founded Year</Text>
-                    <Text style={styles.detailValue}>{companyInfo.founded}</Text>
-                  </View>
-                </View>
-                <View style={{ marginTop: 12 }}>
-                  <Text style={styles.detailLabel}>Headquarters</Text>
-                  <Text style={styles.detailValue}>{companyInfo.location}</Text>
-                </View>
-                <View style={{ marginTop: 12 }}>
-                  <Text style={styles.detailLabel}>Official Website</Text>
-                  <Text style={styles.detailLink}>{companyInfo.website}</Text>
-                </View>
-                <View style={{ marginTop: 12 }}>
-                  <Text style={styles.detailLabel}>Company Email</Text>
-                  <Text style={styles.detailValue}>{companyInfo.email}</Text>
-                </View>
-              </HoverCard>
-
-              {/* Hiring Team Sidebar */}
-              <HoverCard style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.cardHeaderTitleRow}>
-                    <Text style={styles.sidebarCardTitle}>Hiring Team</Text>
-                    <Text style={styles.teamCountBadge}>{hiringTeam.length}</Text>
-                  </View>
-                  <HoverButton style={styles.addRecruiterBtn} onPress={() => handleOpenEdit('team_add')}>
-                    <Text style={styles.addRecruiterBtnText}>+ Add Recruiter</Text>
-                  </HoverButton>
-                </View>
-
-                {hiringTeam.map((member) => (
-                  <View key={member.id} style={styles.teamMemberRow}>
-                    <View style={styles.memberAvatar}>
-                      <Text style={styles.memberAvatarText}>{member.avatar || 'R'}</Text>
-                    </View>
-                    <View style={styles.memberInfo}>
-                      <Text style={styles.memberName}>{member.name}</Text>
-                      <Text style={styles.memberRole}>{member.role}</Text>
-                    </View>
-                    <View style={member.tag === 'You' ? styles.tagYou : styles.tagActive}>
-                      <Text style={member.tag === 'You' ? styles.tagYouText : styles.tagActiveText}>
-                        {member.tag}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </HoverCard>
-
-              {/* Company Locations */}
-              <HoverCard style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.sidebarCardTitle}>Company Locations</Text>
-                  <HoverButton style={styles.addLocationBtn} onPress={() => handleOpenEdit('location_add')}>
-                    <Text style={styles.addLocationBtnText}>+ Add Location</Text>
-                  </HoverButton>
-                </View>
-
-                {locationsList.length > 0 ? (
-                  locationsList.map((loc) => (
-                    <View key={loc.id} style={styles.locationCard}>
-                      <Text style={styles.locationIcon}>📍</Text>
-                      <View style={styles.locationTextCol}>
-                        <Text style={styles.locationTitle}>{loc.title}</Text>
-                        {loc.sub ? <Text style={styles.locationSub}>{loc.sub}</Text> : null}
-                      </View>
-                      <View style={styles.locationBadge}>
-                        <Text style={styles.locationBadgeText}>{loc.badge}</Text>
-                      </View>
-                      <Pressable
-                        onPress={() => handleDeleteLocation(loc.id)}
-                        style={styles.deleteLocBtn}
-                      >
-                        <Text style={styles.deleteLocText}>✕</Text>
-                      </Pressable>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.emptyPromptText}>No additional locations added yet.</Text>
-                )}
-              </HoverCard>
-
-              {/* Social & External Links */}
-              <HoverCard style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.sidebarCardTitle}>Social & External Links</Text>
-                  <HoverButton
-                    style={styles.pencilEditBtn}
-                    onPress={() => handleOpenEdit('social')}
-                  >
-                    <Text style={styles.pencilEditBtnText}>✏️</Text>
-                  </HoverButton>
-                </View>
-
-                <View style={styles.socialLinkRow}>
-                  <Text style={styles.socialIcon}>🌐</Text>
-                  <Text style={styles.socialLabel}>Website</Text>
-                  <Text style={styles.socialValue}>{socialLinks.website || 'Not set'}</Text>
-                </View>
-
-                <View style={styles.socialLinkRow}>
-                  <Text style={styles.socialIcon}>💼</Text>
-                  <Text style={styles.socialLabel}>LinkedIn</Text>
-                  <Text style={styles.socialValue}>{socialLinks.linkedin || 'Not set'}</Text>
-                </View>
-
-                <View style={styles.socialLinkRow}>
-                  <Text style={styles.socialIcon}>💻</Text>
-                  <Text style={styles.socialLabel}>GitHub</Text>
-                  <Text style={styles.socialValue}>{socialLinks.github || 'Not set'}</Text>
-                </View>
-
-                <View style={styles.socialLinkRow}>
-                  <Text style={styles.socialIcon}>📸</Text>
-                  <Text style={styles.socialLabel}>Instagram</Text>
-                  <Text style={styles.socialValue}>{socialLinks.instagram || 'Not set'}</Text>
-                </View>
-
-                <View style={styles.socialLinkRow}>
-                  <Text style={styles.socialIcon}>🐦</Text>
-                  <Text style={styles.socialLabel}>X (Twitter)</Text>
-                  <Text style={styles.socialValue}>{socialLinks.twitter || 'Not set'}</Text>
-                </View>
-              </HoverCard>
-            </View>
-          </View>
-        </ScrollView>
-      )}
-
-      {/* Dynamic Section Modal */}
-      <Modal
-        visible={editModalSection !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEditModalSection(null)}
+      <Sheet
+        visible={!!editModalSection}
+        onClose={() => setEditModalSection(null)}
+        title={editTitles[editModalSection] || 'Edit'}
+        icon="Pencil"
+        tone="accent"
+        footer={
+          <>
+            <Button label="Cancel" variant="secondary" onPress={() => setEditModalSection(null)} />
+            <Button label="Save" icon="Check" onPress={handleSaveModal} loading={saving} />
+          </>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                ✏️ Edit {
-                  editModalSection === 'about' ? 'About Company' :
-                  editModalSection === 'company' ? 'Company Details & Identity' :
-                  editModalSection === 'culture' ? 'Culture & Benefits' :
-                  editModalSection === 'preferences' ? 'Internship Preferences' :
-                  editModalSection === 'process' ? 'Hiring Process Workflow' :
-                  editModalSection === 'location_add' ? 'Add Company Location' :
-                  editModalSection === 'team_add' ? 'Add Hiring Team Member' :
-                  'Social & External Links'
-                }
-              </Text>
-              <Pressable onPress={() => setEditModalSection(null)}>
-                <Text style={styles.modalCloseText}>✕</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              {editModalSection === 'about' && (
-                <>
-                  <Text style={styles.inputLabel}>Company Overview & Story *</Text>
-                  <TextInput
-                    style={[styles.input, { height: 120 }]}
-                    multiline
-                    placeholder="Provide a comprehensive description of your company..."
-                    value={modalForm.description}
-                    onChangeText={(text) => setModalForm({ ...modalForm, description: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Our Mission</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Empowering developers with scalable cloud tools..."
-                    value={modalForm.mission}
-                    onChangeText={(text) => setModalForm({ ...modalForm, mission: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Our Vision</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. To be the leading engineering talent launchpad..."
-                    value={modalForm.vision}
-                    onChangeText={(text) => setModalForm({ ...modalForm, vision: text })}
-                  />
-                </>
-              )}
-
-              {editModalSection === 'company' && (
-                <>
-                  <Text style={styles.inputLabel}>Company Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={modalForm.name}
-                    onChangeText={(text) => setModalForm({ ...modalForm, name: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Industry *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={modalForm.industry}
-                    onChangeText={(text) => setModalForm({ ...modalForm, industry: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Company Type</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Private Ltd, Public Ltd, Startup"
-                    value={modalForm.companyType}
-                    onChangeText={(text) => setModalForm({ ...modalForm, companyType: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Headquarters Location *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Pune, Maharashtra"
-                    value={modalForm.location}
-                    onChangeText={(text) => setModalForm({ ...modalForm, location: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Company Size *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 500-1,000 employees"
-                    value={modalForm.employees}
-                    onChangeText={(text) => setModalForm({ ...modalForm, employees: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Founded Year</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 2015"
-                    value={modalForm.founded}
-                    onChangeText={(text) => setModalForm({ ...modalForm, founded: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Official Website *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. abctechnologies.io"
-                    value={modalForm.website}
-                    onChangeText={(text) => setModalForm({ ...modalForm, website: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Company Careers Email *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. careers@abctechnologies.io"
-                    value={modalForm.email}
-                    onChangeText={(text) => setModalForm({ ...modalForm, email: text })}
-                  />
-                </>
-              )}
-
-              {editModalSection === 'culture' && (
-                <>
-                  <Text style={styles.inputLabel}>Company Culture Tags (comma separated)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Collaborative, Fast-Paced, Mentorship-Driven"
-                    value={modalForm.cultureTags}
-                    onChangeText={(text) => setModalForm({ ...modalForm, cultureTags: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Benefits & Perks (comma separated)</Text>
-                  <TextInput
-                    style={[styles.input, { height: 80 }]}
-                    multiline
-                    placeholder="Monthly Stipend, 1:1 Mentorship, MacBook Pro, PPO Opportunities"
-                    value={modalForm.perks}
-                    onChangeText={(text) => setModalForm({ ...modalForm, perks: text })}
-                  />
-                </>
-              )}
-
-              {editModalSection === 'preferences' && (
-                <>
-                  <Text style={styles.inputLabel}>Preferred Domains (comma separated)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Software Development, AI / ML, Data Science, Cloud Engineering"
-                    value={modalForm.domains}
-                    onChangeText={(text) => setModalForm({ ...modalForm, domains: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Canonical Skills (comma separated)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="React, Node.js, Python, PostgreSQL, Docker, FastAPI"
-                    value={modalForm.skills}
-                    onChangeText={(text) => setModalForm({ ...modalForm, skills: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Preferred Work Mode</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Hybrid, Remote, or On-site"
-                    value={modalForm.workMode}
-                    onChangeText={(text) => setModalForm({ ...modalForm, workMode: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Preferred Duration</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="3-6 Months"
-                    value={modalForm.duration}
-                    onChangeText={(text) => setModalForm({ ...modalForm, duration: text })}
-                  />
-                </>
-              )}
-
-              {editModalSection === 'process' && (
-                <>
-                  <Text style={styles.inputLabel}>
-                    Hiring Stages (One stage per line in format: Title | Description)
-                  </Text>
-                  <TextInput
-                    style={[styles.input, { height: 160 }]}
-                    multiline
-                    placeholder="Application | Via platform&#10;Resume Screening | AI verified criteria&#10;Online Assessment | DSA & core skills&#10;Technical Interview | System design & live coding&#10;Final Selection | Offer roll-out"
-                    value={modalForm.stagesText}
-                    onChangeText={(text) => setModalForm({ ...modalForm, stagesText: text })}
-                  />
-                </>
-              )}
-
-              {editModalSection === 'location_add' && (
-                <>
-                  <Text style={styles.inputLabel}>Location Title (City, State) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Bangalore, Karnataka"
-                    value={modalForm.title}
-                    onChangeText={(text) => setModalForm({ ...modalForm, title: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Address / Hub Details</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Koramangala 4th Block, Tech Hub"
-                    value={modalForm.sub}
-                    onChangeText={(text) => setModalForm({ ...modalForm, sub: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Location Badge</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. HQ, R&D Center, Branch"
-                    value={modalForm.badge}
-                    onChangeText={(text) => setModalForm({ ...modalForm, badge: text })}
-                  />
-                </>
-              )}
-
-              {editModalSection === 'team_add' && (
-                <>
-                  <Text style={styles.inputLabel}>Recruiter Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Priya Sharma"
-                    value={modalForm.name}
-                    onChangeText={(text) => setModalForm({ ...modalForm, name: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Recruiter Work Email *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. priya.sharma@company.com"
-                    value={modalForm.email}
-                    onChangeText={(text) => setModalForm({ ...modalForm, email: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Phone Number</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. +91 98765 43210"
-                    value={modalForm.phone}
-                    onChangeText={(text) => setModalForm({ ...modalForm, phone: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Designation / Role</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Technical Recruiter, HR Manager"
-                    value={modalForm.designation}
-                    onChangeText={(text) => setModalForm({ ...modalForm, designation: text })}
-                  />
-                </>
-              )}
-
-              {editModalSection === 'social' && (
-                <>
-                  <Text style={styles.inputLabel}>Company Website</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={modalForm.website}
-                    onChangeText={(text) => setModalForm({ ...modalForm, website: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>LinkedIn Handle</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={modalForm.linkedin}
-                    onChangeText={(text) => setModalForm({ ...modalForm, linkedin: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>GitHub Organization</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={modalForm.github}
-                    onChangeText={(text) => setModalForm({ ...modalForm, github: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>Instagram</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={modalForm.instagram}
-                    onChangeText={(text) => setModalForm({ ...modalForm, instagram: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>X (Twitter)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={modalForm.twitter}
-                    onChangeText={(text) => setModalForm({ ...modalForm, twitter: text })}
-                  />
-                </>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <Pressable
-                style={styles.cancelModalBtn}
-                onPress={() => setEditModalSection(null)}
-              >
-                <Text style={styles.cancelModalBtnText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.saveModalBtn, saving && { opacity: 0.6 }]}
-                onPress={handleSaveModal}
-                disabled={saving}
-              >
-                <Text style={styles.saveModalBtnText}>
-                  {saving ? 'Saving to Database...' : 'Save Changes'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+        {editModalSection === 'about' ? (
+          <>
+            <Field label="Description" multiline placeholder="What does your company do? (20+ characters)" value={modalForm.description || ''} onChangeText={setF('description')} />
+            <Field label="Mission" multiline value={modalForm.mission || ''} onChangeText={setF('mission')} />
+            <Field label="Vision" multiline value={modalForm.vision || ''} onChangeText={setF('vision')} />
+          </>
+        ) : null}
+        {editModalSection === 'company' ? (
+          <>
+            <Field label="Company name" icon="Building" value={modalForm.name || ''} onChangeText={setF('name')} />
+            <Field label="Industry" icon="Briefcase" placeholder="e.g. Information Technology" value={modalForm.industry || ''} onChangeText={setF('industry')} />
+            <Stack gap={6}>
+              <Txt variant="small" weight={600} tone="ink">Company type</Txt>
+              <ChipGroup options={['Startup', 'Private Ltd', 'Public Ltd', 'MNC', 'Government', 'NGO']} value={modalForm.companyType} multiple={false} onChange={setF('companyType')} />
+            </Stack>
+            <Stack gap={6}>
+              <Txt variant="small" weight={600} tone="ink">Company size</Txt>
+              <ChipGroup options={['1-10', '11-50', '51-200', '201-500', '500-1,000 employees', '1,000+']} value={modalForm.employees} multiple={false} tone="info" onChange={setF('employees')} />
+            </Stack>
+            <Row gap={space.sm} align="flex-start">
+              <Field style={{ flex: 1 }} label="Founded" placeholder="YYYY" keyboardType="number-pad" value={modalForm.founded || ''} onChangeText={setF('founded')} />
+              <Field style={{ flex: 2 }} label="Headquarters" icon="MapPin" placeholder="City, State" value={modalForm.location || ''} onChangeText={setF('location')} />
+            </Row>
+            <Field label="Website" icon="Globe" autoCapitalize="none" value={modalForm.website || ''} onChangeText={setF('website')} />
+            <Field label="Company email" icon="Mail" autoCapitalize="none" keyboardType="email-address" value={modalForm.email || ''} onChangeText={setF('email')} />
+          </>
+        ) : null}
+        {editModalSection === 'culture' ? (
+          <>
+            <Field label="Culture tags" hint="Comma separated, e.g. Remote-first, Mentorship" multiline value={modalForm.cultureTags || ''} onChangeText={setF('cultureTags')} />
+            <Field label="Perks" hint="Comma separated, e.g. Stipend, Certificate, PPO" multiline value={modalForm.perks || ''} onChangeText={setF('perks')} />
+          </>
+        ) : null}
+        {editModalSection === 'preferences' ? (
+          <>
+            <Field label="Domains" hint="Comma separated, e.g. Web, AI/ML" value={modalForm.domains || ''} onChangeText={setF('domains')} />
+            <Field label="Skills" hint="Comma separated, e.g. React, Python, SQL" multiline value={modalForm.skills || ''} onChangeText={setF('skills')} />
+            <Stack gap={6}>
+              <Txt variant="small" weight={600} tone="ink">Work mode</Txt>
+              <ChipGroup options={['Remote', 'Hybrid', 'On-site']} value={modalForm.workMode} multiple={false} onChange={setF('workMode')} />
+            </Stack>
+            <Stack gap={6}>
+              <Txt variant="small" weight={600} tone="ink">Duration</Txt>
+              <ChipGroup options={['1-3 Months', '3-6 Months', '6+ Months']} value={modalForm.duration} multiple={false} tone="info" onChange={setF('duration')} />
+            </Stack>
+          </>
+        ) : null}
+        {editModalSection === 'process' ? (
+          <Field
+            label="Stages"
+            hint="One stage per line: Title | short description"
+            multiline
+            inputStyle={{ minHeight: 160 }}
+            placeholder={'Application review | We check your verified profile\nTechnical assessment | 40-minute coding round'}
+            value={modalForm.stagesText || ''}
+            onChangeText={setF('stagesText')}
+          />
+        ) : null}
+        {editModalSection === 'social' ? (
+          <>
+            {['website', 'linkedin', 'github', 'twitter', 'instagram'].map((k) => (
+              <Field key={k} label={k[0].toUpperCase() + k.slice(1)} icon={k === 'website' ? 'Globe' : k === 'github' ? 'GitBranch' : 'Link'} autoCapitalize="none" value={modalForm[k] || ''} onChangeText={setF(k)} />
+            ))}
+          </>
+        ) : null}
+        {editModalSection === 'location_add' ? (
+          <>
+            <Field label="Location" icon="MapPin" placeholder="e.g. Pune, Maharashtra" value={modalForm.title || ''} onChangeText={setF('title')} />
+            <Field label="Address / note" placeholder="Optional" value={modalForm.sub || ''} onChangeText={setF('sub')} />
+            <Stack gap={6}>
+              <Txt variant="small" weight={600} tone="ink">Type</Txt>
+              <ChipGroup options={['HQ', 'Branch', 'Remote hub']} value={modalForm.badge} multiple={false} onChange={setF('badge')} />
+            </Stack>
+            <Checkbox checked={!!modalForm.is_primary} onChange={setF('is_primary')} label="Primary location" />
+          </>
+        ) : null}
+        {editModalSection === 'team_add' ? (
+          <>
+            <Field label="Name" icon="User" value={modalForm.name || ''} onChangeText={setF('name')} />
+            <Field label="Email" icon="Mail" autoCapitalize="none" keyboardType="email-address" value={modalForm.email || ''} onChangeText={setF('email')} />
+            <Field label="Phone" icon="Phone" keyboardType="phone-pad" value={modalForm.phone || ''} onChangeText={setF('phone')} />
+            <Field label="Designation" icon="Briefcase" value={modalForm.designation || ''} onChangeText={setF('designation')} />
+          </>
+        ) : null}
+      </Sheet>
+    </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.pageBg,
+  twoCol: {
+    gap: space.md,
+    marginTop: space.md,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-    gap: 16,
+  stepRow: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.md,
+    padding: space.sm,
   },
-  loadingText: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 60,
-  },
-  successToast: {
-    backgroundColor: COLORS.mintBadge,
-    borderColor: COLORS.accentGreen,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  successToastText: {
-    color: COLORS.mintBadgeText,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  headerSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  breadcrumb: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: COLORS.primaryTeal,
-    marginBottom: 4,
-  },
-  pageTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: COLORS.textMain,
-    marginBottom: 4,
-  },
-  pageSub: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-  },
-  headerActionsRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  completionContainer: {
-    alignItems: 'flex-end',
-  },
-  completionLabel: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  completionValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.primaryTeal,
-  },
-  editProfileMainBtn: {
-    backgroundColor: COLORS.primaryTeal,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  editProfileMainBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  // Checklist Card
-  checklistCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
-    marginBottom: 20,
-  },
-  checklistHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  checklistTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.textMain,
-  },
-  checklistStatus: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primaryTeal,
-  },
-  checklistGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  checklistItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
-    borderWidth: 1,
-  },
-  checklistItemDone: {
-    backgroundColor: COLORS.mintBg,
-    borderColor: COLORS.accentGreen,
-  },
-  checklistItemPending: {
-    backgroundColor: '#F8FAFC',
-    borderColor: COLORS.border,
-  },
-  checkIconDone: {
-    color: COLORS.accentGreen,
-    fontWeight: '900',
-    fontSize: 12,
-  },
-  checkIconPending: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-  },
-  checklistLabel: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  checklistLabelDone: {
-    color: COLORS.primaryTeal,
-    fontWeight: '700',
-  },
-
-  // Hero Card
-  heroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 20,
-  },
-  heroContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-    flexWrap: 'wrap',
-  },
-  logoSquare: {
-    width: 72,
-    height: 72,
-    borderRadius: 12,
-    backgroundColor: '#0F172A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoSquareText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  logoSquareSub: {
-    color: '#94A3B8',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  heroInfoColumn: {
-    flex: 1,
-    minWidth: 280,
-  },
-  heroTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flexWrap: 'wrap',
-    marginBottom: 6,
-  },
-  companyNameText: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.textMain,
-  },
-  verifiedBadge: {
-    backgroundColor: COLORS.mintBg,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  verifiedBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primaryTeal,
-  },
-  activeProfileBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 6,
-  },
-  greenDotSmall: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.accentGreen,
-  },
-  activeProfileBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMain,
-  },
-  heroMetaRow: {
+  missingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap',
-  },
-  heroMetaItem: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-  },
-  heroMetaDot: {
-    color: COLORS.textMuted,
-  },
-  heroMetaLink: {
-    fontSize: 13,
-    color: COLORS.primaryTeal,
-    fontWeight: '600',
-  },
-  heroRightActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  previewBtn: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  previewBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMain,
-  },
-
-  // Metric Row
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 24,
-    flexWrap: 'wrap',
-  },
-  metricCard: {
-    flex: 1,
-    minWidth: 180,
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  metricTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textMuted,
-    letterSpacing: 0.5,
-  },
-  metricIconBgTeal: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: COLORS.mintBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  metricIconBgBlue: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: COLORS.blueBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  metricIconBgGreen: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#DCFCE7',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  metricIconBgAmber: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: COLORS.amberBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  metricIcon: {
-    fontSize: 14,
-  },
-  metricValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.textMain,
-    marginBottom: 4,
-  },
-  metricSub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  metricSubBlue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.blueText,
-  },
-  metricSubAmber: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.amberText,
-  },
-
-  // Main 2-Col Grid
-  mainGrid: {
-    flexDirection: 'row',
-    gap: 24,
-  },
-  mainGridCompact: {
-    flexDirection: 'column',
-  },
-  leftColumn: {
-    flex: 2,
-    gap: 20,
-  },
-  rightColumn: {
-    flex: 1,
-    gap: 20,
-  },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardHeaderTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardHeaderIcon: {
-    fontSize: 16,
-  },
-  cardHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.textMain,
-  },
-  sidebarCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.textMain,
-  },
-  pencilEditBtn: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  pencilEditBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primaryTeal,
-  },
-  aboutParagraph: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: '#334155',
-    marginBottom: 16,
-  },
-  missionVisionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  missionCard: {
-    flex: 1,
-    minWidth: 200,
-    backgroundColor: COLORS.mintBg,
-    padding: 14,
-    borderRadius: 10,
-  },
-  visionCard: {
-    flex: 1,
-    minWidth: 200,
-    backgroundColor: COLORS.blueBg,
-    padding: 14,
-    borderRadius: 10,
-  },
-  mvTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.textMain,
-    marginBottom: 6,
-    letterSpacing: 0.5,
-  },
-  mvText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#1E293B',
-    fontStyle: 'italic',
-  },
-  sectionSubTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.textMuted,
-    letterSpacing: 0.6,
-    marginBottom: 4,
-  },
-  sectionDescText: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    marginBottom: 12,
-  },
-  tagsFlexRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  culturePill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  culturePillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  perksGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  perkBox: {
-    backgroundColor: COLORS.mintBg,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  perkBoxText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primaryTeal,
-  },
-  emptyPromptText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    fontStyle: 'italic',
-  },
-  prefTwoCol: {
-    flexDirection: 'row',
-    gap: 20,
-    flexWrap: 'wrap',
-  },
-  prefCol: {
-    flex: 1,
-    minWidth: 220,
-  },
-  prefLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  grayTag: {
-    backgroundColor: COLORS.grayTagBg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  grayTagText: {
-    fontSize: 12,
-    color: COLORS.grayTagText,
-    fontWeight: '600',
-  },
-  modeTag: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  modeTagActive: {
-    backgroundColor: COLORS.mintBg,
-    borderColor: COLORS.primaryTeal,
-  },
-  modeTagText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  modeTagActiveText: {
-    color: COLORS.primaryTeal,
-    fontWeight: '700',
-  },
-  mintTag: {
-    backgroundColor: COLORS.mintBadge,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  mintTagText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.mintBadgeText,
-  },
-  durationBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  durationBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#92400E',
-  },
-  processScroll: {
-    marginTop: 8,
-  },
-  processStepsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingVertical: 6,
-  },
-  processStepCard: {
-    width: 160,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    padding: 12,
-  },
-  stepHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  stepNumText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: COLORS.primaryTeal,
-  },
-  stepCheckIcon: {
-    fontSize: 12,
-    color: COLORS.accentGreen,
-    fontWeight: '900',
-  },
-  stepTitleText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textMain,
-    marginBottom: 4,
-  },
-  stepDescText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    lineHeight: 14,
-  },
-  emptyStepPrompt: {
-    padding: 16,
-  },
-
-  // Trust Card
-  trustCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  trustHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  trustShieldIcon: {
-    fontSize: 20,
-  },
-  trustTitle: {
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-    color: COLORS.primaryTeal,
-  },
-  trustSub: {
-    fontSize: 12,
-    color: COLORS.accentGreen,
-    fontWeight: '700',
-  },
-  trustDesc: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginBottom: 12,
-    lineHeight: 16,
-  },
-  trustItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  trustItemText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMain,
-  },
-  trustBadgeGreen: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.mintBadgeText,
-    backgroundColor: COLORS.mintBadge,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  trustBadgePending: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.amberText,
-    backgroundColor: COLORS.amberBg,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  trustFooterBadge: {
-    marginTop: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: radii.sm,
     padding: 10,
-    borderRadius: 8,
   },
-  trustFooterText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    lineHeight: 15,
-  },
-
-  // Details
-  detailRowGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  detailCol: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textMuted,
-    marginBottom: 2,
-  },
-  detailValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textMain,
-  },
-  detailLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.primaryTeal,
-  },
-
-  // Team
-  teamCountBadge: {
-    backgroundColor: COLORS.mintBg,
-    color: COLORS.primaryTeal,
-    fontSize: 11,
-    fontWeight: '800',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  addRecruiterBtn: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  addRecruiterBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primaryTeal,
-  },
-  teamMemberRow: {
+  linkChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  memberAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.primaryTeal,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  memberAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textMain,
-  },
-  memberRole: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  tagYou: {
-    backgroundColor: COLORS.mintBg,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  tagYouText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.primaryTeal,
-  },
-  tagActive: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  tagActiveText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-  },
-
-  // Locations
-  addLocationBtn: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  addLocationBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primaryTeal,
-  },
-  locationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  locationIcon: {
-    fontSize: 14,
-  },
-  locationTextCol: {
-    flex: 1,
-  },
-  locationTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textMain,
-  },
-  locationSub: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  locationBadge: {
-    backgroundColor: COLORS.mintBg,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  locationBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.primaryTeal,
-  },
-  deleteLocBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  deleteLocText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-
-  // Social
-  socialLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    gap: 6,
+    backgroundColor: colors.surface,
     paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    paddingHorizontal: 10,
+    borderRadius: radii.pill,
   },
-  socialIcon: {
-    fontSize: 14,
-  },
-  socialLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-    width: 90,
-  },
-  socialValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primaryTeal,
-    flex: 1,
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 580,
-    maxHeight: '90%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  modalHeader: {
+  footerBtn: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: '#F8FAFC',
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.textMain,
-  },
-  modalCloseText: {
-    fontSize: 18,
-    color: COLORS.textMuted,
-    fontWeight: '700',
-  },
-  modalBody: {
-    padding: 20,
-    maxHeight: 480,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textMain,
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: COLORS.textMain,
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: '#F8FAFC',
-  },
-  cancelModalBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: '#FFFFFF',
-  },
-  cancelModalBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textMuted,
-  },
-  saveModalBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: COLORS.primaryTeal,
-  },
-  saveModalBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    gap: 8,
   },
 });

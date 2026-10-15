@@ -1,3 +1,4 @@
+import { API_BASE } from '../../../ui/config';
 import { EMPTY_PROFILE } from '../Profile/Profile';
 
 export const formatCareerTitle = (raw) => {
@@ -160,7 +161,7 @@ export const fetchCompleteStudentProfile = async (user, setProfileData) => {
 
   // 1. Fetch saved career goals & selections from PostgreSQL database
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/v1/taxonomy/student/career-goals?email=${emailQuery}`);
+    const res = await fetch(`${API_BASE}/taxonomy/student/career-goals?email=${emailQuery}`);
     const resData = await res.json();
     if (res.ok && resData.status === 'success' && resData.data) {
       const d = resData.data;
@@ -188,7 +189,7 @@ export const fetchCompleteStudentProfile = async (user, setProfileData) => {
 
   // 2. Fetch stored GitHub connection status from Backend API
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/v1/github/status?email=${emailQuery}`);
+    const res = await fetch(`${API_BASE}/github/status?email=${emailQuery}`);
     const resData = await res.json();
     if (res.ok && resData.status === 'success' && resData.connection) {
       const conn = resData.connection;
@@ -226,7 +227,7 @@ export const fetchCompleteStudentProfile = async (user, setProfileData) => {
 
   // 3. Fetch stored resume data from Backend API
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/v1/student/resume-data?email=${emailQuery}`);
+    const res = await fetch(`${API_BASE}/student/resume-data?email=${emailQuery}`);
     const resData = await res.json();
     if (res.ok && resData.status === 'success' && resData.has_resume && resData.resume_data) {
       const rData = resData.resume_data;

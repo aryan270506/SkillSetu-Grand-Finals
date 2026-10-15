@@ -1,17 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import {
-  Alert,
-  Animated,
-  Linking,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Linking, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
   fetchEligibleScholarships,
   toggleSaveScholarship,
@@ -19,29 +7,28 @@ import {
   simulateScholarshipEligibility,
 } from '../services/scholarshipService';
 import { fetchStudentApplications } from '../services/applicationService';
-
 import {
-  CLAY_COLORS,
-  CLAY_FONTS,
-  CLAY_RADII,
-  CLAY_SHADOWS,
-  ClayCard,
-  ensureScholarshipGlobalStyles,
-} from './components/ScholarshipDesignTokens';
-
-import ScholarshipHero from './components/ScholarshipHero';
-import ScholarshipMetrics from './components/ScholarshipMetrics';
-import ScholarshipDeadlineRadar from './components/ScholarshipDeadlineRadar';
-import ScholarshipFilterBar from './components/ScholarshipFilterBar';
-import ScholarshipCard from './components/ScholarshipCard';
-import ScholarshipDetailModal from './components/ScholarshipDetailModal';
-import ScholarshipSimulatorSection from './components/ScholarshipSimulatorSection';
-import {
-  ScholarshipLoadingSkeleton,
-  ScholarshipEmptyState,
-  ScholarshipErrorState,
-} from './components/ScholarshipEmptyAndError';
-import ScholarshipFooter from './components/ScholarshipFooter';
+  Button,
+  Card,
+  Chip,
+  ChipGroup,
+  EmptyState,
+  EventCard,
+  Icon,
+  IconButton,
+  Inset,
+  Page,
+  Pill,
+  Row,
+  SearchField,
+  SectionTitle,
+  SegmentedTabs,
+  Sheet,
+  Skeleton,
+  Stack,
+  Txt,
+} from '../../../ui/components';
+import { colors, radii, space } from '../../../ui/theme';
 
 export default function Scolarship({ user, profileData }) {
   const { width } = useWindowDimensions();
@@ -49,58 +36,7 @@ export default function Scolarship({ user, profileData }) {
   const isTablet = width >= 768 && width < 1024;
   const isDesktop = width >= 1024;
 
-  const studentEmail = user?.email || profileData?.personalInfo?.email || 'abhoge27@gmail.com';
-
-  // Staggered Page Entrance Animation Values
-  const heroFade = useRef(new Animated.Value(0)).current;
-  const heroTranslateY = useRef(new Animated.Value(20)).current;
-
-  const metricsFade = useRef(new Animated.Value(0)).current;
-  const metricsTranslateY = useRef(new Animated.Value(20)).current;
-
-  const radarFade = useRef(new Animated.Value(0)).current;
-  const radarTranslateY = useRef(new Animated.Value(20)).current;
-
-  const filterFade = useRef(new Animated.Value(0)).current;
-  const filterTranslateY = useRef(new Animated.Value(16)).current;
-
-  const cardsFade = useRef(new Animated.Value(0)).current;
-  const cardsTranslateY = useRef(new Animated.Value(24)).current;
-
-  const simFade = useRef(new Animated.Value(0)).current;
-  const simTranslateY = useRef(new Animated.Value(20)).current;
-
-  // Run Staggered Entrance Animation on Mount
-  useEffect(() => {
-    ensureScholarshipGlobalStyles();
-
-    Animated.stagger(75, [
-      Animated.parallel([
-        Animated.timing(heroFade, { toValue: 1, duration: 380, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.spring(heroTranslateY, { toValue: 0, friction: 7, tension: 70, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-      Animated.parallel([
-        Animated.timing(metricsFade, { toValue: 1, duration: 380, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.spring(metricsTranslateY, { toValue: 0, friction: 7, tension: 70, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-      Animated.parallel([
-        Animated.timing(radarFade, { toValue: 1, duration: 380, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.spring(radarTranslateY, { toValue: 0, friction: 7, tension: 70, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-      Animated.parallel([
-        Animated.timing(filterFade, { toValue: 1, duration: 380, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.spring(filterTranslateY, { toValue: 0, friction: 7, tension: 70, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-      Animated.parallel([
-        Animated.timing(cardsFade, { toValue: 1, duration: 420, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.spring(cardsTranslateY, { toValue: 0, friction: 7, tension: 70, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-      Animated.parallel([
-        Animated.timing(simFade, { toValue: 1, duration: 420, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.spring(simTranslateY, { toValue: 0, friction: 7, tension: 70, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-    ]).start();
-  }, []);
+  const studentEmail = user?.email || profileData?.personalInfo?.email || '';
 
   // Primary API Data State (No hardcoded arrays)
   const [scholarships, setScholarships] = useState([]);
@@ -340,10 +276,8 @@ export default function Scolarship({ user, profileData }) {
       if (res && !res.error) {
         setSimulationResult(res);
       } else {
-        // Deterministic calculated score
-        const score = simPayload.cgpa >= 8.5 ? 94 : simPayload.cgpa >= 7.5 ? 82 : 68;
-        const eligibleCount = simPayload.annual_family_income <= 600000 && simPayload.cgpa >= 7.5 ? 8 : 4;
-        setSimulationResult({ overall_eligibility_score: score, eligible_count: eligibleCount });
+        setSimulationResult(null);
+        alert(res?.error || 'Simulation is unavailable right now.');
       }
     } catch (e) {
       console.warn('Simulation run warning:', e);
@@ -359,302 +293,234 @@ export default function Scolarship({ user, profileData }) {
     setSortBy('Best Match');
   };
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* 1. HERO & SEARCH */}
-      <Animated.View
-        style={{
-          opacity: heroFade,
-          transform: [{ translateY: heroTranslateY }],
-        }}
-      >
-        <ScholarshipHero
-          liveCount={scholarships.length}
-          eligibleCount={counts.eligible}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onSearchSubmit={() => {}}
-          selectedProvider={selectedProvider}
-          onSelectProvider={setSelectedProvider}
-          availableProviders={availableProviders}
-          isRefreshing={refreshing}
-          onRefresh={() => loadData(true)}
-        />
-      </Animated.View>
+  const [sim, setSim] = useState({ cgpa: 8.5, income: 450000, category: 'General', domicile: 'All India', gender: 'any' });
+  const eligTone = (s) => (s === 'ELIGIBLE' ? 'success' : s === 'POSSIBLY_ELIGIBLE' ? 'info' : s === 'NOT_ELIGIBLE' ? 'danger' : 'neutral');
+  const eligLabel = (s) => (s === 'ELIGIBLE' ? 'Eligible' : s === 'POSSIBLY_ELIGIBLE' ? 'Possibly eligible' : s === 'NOT_ELIGIBLE' ? 'Not eligible' : 'Check eligibility');
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : null);
+  const checkpointsOf = (sch) => sch.checkpoints || sch.evaluation_checkpoints || [];
 
-      {/* 2. SUMMARY METRICS */}
-      <Animated.View
-        style={{
-          opacity: metricsFade,
-          transform: [{ translateY: metricsTranslateY }],
-        }}
-      >
-        <ScholarshipMetrics
-          totalLive={counts.all}
-          eligibleCount={counts.eligible}
-          closingSoonCount={counts.closingSoon}
-          savedCount={counts.saved}
-          appliedCount={counts.applied}
-        />
-      </Animated.View>
+  const tabs = [
+    { id: 'All', label: 'All', badge: counts.all },
+    { id: 'Eligible', label: 'Eligible', badge: counts.eligible },
+    { id: 'ClosingSoon', label: 'Closing soon', badge: counts.closingSoon },
+    { id: 'Saved', label: 'Saved', icon: 'Bookmark' },
+  ];
 
-      {/* 3. DEADLINE RADAR (Live urgent schemes) */}
-      {!loading && !error && deadlineRadar.length > 0 ? (
-        <Animated.View
-          style={{
-            opacity: radarFade,
-            transform: [{ translateY: radarTranslateY }],
-          }}
-        >
-          <ScholarshipDeadlineRadar
-            radarItems={deadlineRadar}
-            onViewDetails={handleViewDetails}
-            onApply={handleApply}
-            onToggleSave={handleToggleSave}
-            savingId={savingId}
-          />
-        </Animated.View>
+  const renderCard = (sch) => {
+    const cps = checkpointsOf(sch);
+    const passed = cps.filter((c) => c.passed === true).length;
+    const urgent = sch.days_remaining != null && sch.days_remaining <= 30;
+    return (
+      <Card key={sch.id || sch.name} style={styles.card} badge={{ icon: 'GraduationCap', tone: eligTone(sch.eligibility_status) === 'neutral' ? 'warning' : eligTone(sch.eligibility_status) }}>
+        <Stack gap={4}>
+          <Txt variant="overline" tone="subtle" numberOfLines={1}>{sch.provider}</Txt>
+          <Txt variant="h3" tone="ink" numberOfLines={2}>{sch.name}</Txt>
+          <Txt variant="small" tone="muted" numberOfLines={2}>{sch.description}</Txt>
+        </Stack>
+        <Row wrap gap={6} style={{ marginTop: space.md }}>
+          {sch.award_description || sch.award_amount ? <Pill label={sch.award_description || `₹${Number(sch.award_amount).toLocaleString('en-IN')}`} tone="warning" icon="Wallet" size="sm" /> : null}
+          {sch.application_deadline ? <Pill label={`${fmtDate(sch.application_deadline)}${sch.days_remaining != null ? ` · ${sch.days_remaining}d left` : ''}`} tone={urgent ? 'danger' : 'neutral'} icon="Clock" size="sm" /> : null}
+        </Row>
+        {cps.length ? (
+          <Inset tone="neutral" padding={space.sm} style={{ marginTop: space.md }}>
+            <Row justify="space-between" style={{ marginBottom: 6 }}>
+              <Txt variant="caption" weight={700} tone="ink">Eligibility checks</Txt>
+              <Txt variant="caption" tone="muted">{passed}/{cps.length} passed</Txt>
+            </Row>
+            {cps.slice(0, 3).map((c) => (
+              <Row key={c.criterion} gap={8} style={{ marginTop: 4 }} align="flex-start">
+                <Icon name={c.passed === true ? 'CircleCheck' : c.passed === false ? 'X' : 'CircleAlert'} size={14} color={c.passed === true ? colors.mintInk : c.passed === false ? '#B4232A' : colors.butterInk} />
+                <Txt variant="caption" tone="default" style={{ flex: 1 }} numberOfLines={1}>{c.criterion}: {c.student_value} ({c.required})</Txt>
+              </Row>
+            ))}
+          </Inset>
+        ) : null}
+        <Row justify="space-between" style={{ marginTop: space.lg }} wrap gap={8}>
+          <Pill label={`${eligLabel(sch.eligibility_status)}${sch.match_percentage != null ? ` · ${Math.round(sch.match_percentage)}%` : ''}`} tone={eligTone(sch.eligibility_status)} />
+          <Row gap={8}>
+            <IconButton icon="Bookmark" variant={sch.is_saved ? 'dark' : 'soft'} onPress={() => handleToggleSave(sch)} disabled={savingId === sch.id} accessibilityLabel="Save" />
+            <IconButton icon="Ellipsis" onPress={() => handleViewDetails(sch)} accessibilityLabel="Details" />
+            <Button label="Apply" size="sm" iconRight="ArrowUpRight" onPress={() => handleApply(sch)} loading={applyingId === sch.id} />
+          </Row>
+        </Row>
+      </Card>
+    );
+  };
+
+  const aside = (
+    <>
+      <SectionTitle title="Deadlines" emoji="⏳" />
+      {deadlineRadar.slice(0, 5).map((sch) => (
+        <EventCard
+          key={`d-${sch.id}`}
+          tone={sch.days_remaining != null && sch.days_remaining <= 14 ? 'pink' : 'warning'}
+          icon="Clock"
+          type={sch.days_remaining != null ? `${sch.days_remaining} days left` : 'Deadline'}
+          date={fmtDate(sch.application_deadline)}
+          title={sch.name}
+          body={sch.award_description}
+          onPress={() => handleViewDetails(sch)}
+        />
+      ))}
+      {!deadlineRadar.length && !loading ? (
+        <View style={styles.emptyEvents}>
+          <EmptyState icon="Calendar" title="No urgent deadlines" message="Schemes closing within 45 days show up here." />
+        </View>
       ) : null}
 
-      {/* 4. FILTER & SORT BAR */}
-      <Animated.View
-        style={{
-          opacity: filterFade,
-          transform: [{ translateY: filterTranslateY }],
-        }}
-      >
-        <ScholarshipFilterBar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          counts={counts}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-        />
-      </Animated.View>
-
-      {/* 5. MAIN SCHOLARSHIPS CONTENT */}
-      <Animated.View
-        style={{
-          opacity: cardsFade,
-          transform: [{ translateY: cardsTranslateY }],
-        }}
-      >
-        {loading ? (
-          <ScholarshipLoadingSkeleton />
-        ) : error ? (
-          <ScholarshipErrorState
-            errorMessage={error}
-            onRetry={() => loadData(true)}
+      <Card tone="info">
+        <Row gap={8}>
+          <Icon name="Sparkles" size={18} color={colors.skyInk} />
+          <Txt variant="h3" tone="ink">Eligibility simulator</Txt>
+        </Row>
+        <Txt variant="small" color={colors.skyInk} style={{ marginTop: 4 }}>See how CGPA, income or category change what you qualify for.</Txt>
+        <Stack gap={10} style={{ marginTop: space.md }}>
+          <Txt variant="caption" weight={700} tone="ink">CGPA</Txt>
+          <ChipGroup options={[6.5, 7.5, 8.5, 9, 9.5].map((v) => ({ id: v, label: String(v) }))} value={sim.cgpa} multiple={false} tone="info" onChange={(v) => setSim((p) => ({ ...p, cgpa: v }))} />
+          <Txt variant="caption" weight={700} tone="ink">Family income</Txt>
+          <ChipGroup options={[{ id: 250000, label: '₹2.5L' }, { id: 450000, label: '₹4.5L' }, { id: 600000, label: '₹6L' }, { id: 800000, label: '₹8L' }]} value={sim.income} multiple={false} tone="info" onChange={(v) => setSim((p) => ({ ...p, income: v }))} />
+          <Txt variant="caption" weight={700} tone="ink">Category</Txt>
+          <ChipGroup options={['General', 'EWS', 'OBC-NCL', 'SC', 'ST']} value={sim.category} multiple={false} tone="info" onChange={(v) => setSim((p) => ({ ...p, category: v }))} />
+          <Txt variant="caption" weight={700} tone="ink">Gender</Txt>
+          <ChipGroup options={[{ id: 'female', label: 'Female' }, { id: 'male', label: 'Male' }, { id: 'any', label: 'Prefer not to say' }]} value={sim.gender} multiple={false} tone="info" onChange={(v) => setSim((p) => ({ ...p, gender: v }))} />
+          <Button
+            label="Run simulation"
+            icon="Play"
+            loading={isSimulating}
+            onPress={() => handleRunSimulation({ cgpa: sim.cgpa, annual_family_income: sim.income, social_category: sim.category.toUpperCase(), state_domicile: sim.domicile, gender: sim.gender })}
           />
-        ) : filteredScholarships.length === 0 ? (
-          <ScholarshipEmptyState
-            searchQuery={searchQuery}
-            selectedProvider={selectedProvider}
-            activeTab={activeTab}
-            onResetFilters={handleResetFilters}
-            onRefresh={() => loadData(true)}
-          />
-        ) : (
-          <View
-            style={[
-              styles.cardsGrid,
-              isDesktop && styles.cardsGridDesktop,
-              isTablet && styles.cardsGridTablet,
-              isMobile && styles.cardsGridMobile,
-            ]}
-          >
-            {filteredScholarships.map((sch) => (
-              <View
-                key={sch.id || sch.name}
-                style={[
-                  styles.cardWrapper,
-                  isDesktop && styles.cardWrapperDesktop,
-                  isTablet && styles.cardWrapperTablet,
-                  isMobile && styles.cardWrapperMobile,
-                ]}
-              >
-                <ScholarshipCard
-                  scholarship={sch}
-                  onViewDetails={handleViewDetails}
-                  onApply={handleApply}
-                  onToggleSave={handleToggleSave}
-                  isSaving={savingId === sch.id}
-                  isApplying={applyingId === sch.id}
-                />
-              </View>
-            ))}
-          </View>
-        )}
-      </Animated.View>
+          {simulationResult ? (
+            <Inset tone="info">
+              <Row justify="space-between">
+                <Txt variant="small" weight={700} tone="ink">Eligibility score</Txt>
+                <Txt variant="small" weight={700} tone="ink">{simulationResult.overall_eligibility_score ?? '—'}%</Txt>
+              </Row>
+              <Txt variant="caption" tone="muted" style={{ marginTop: 4 }}>{simulationResult.eligible_count ?? 0} schemes would match this profile.</Txt>
+            </Inset>
+          ) : null}
+        </Stack>
+      </Card>
+    </>
+  );
 
-      {/* 6. INTERACTIVE ELIGIBILITY SIMULATOR */}
-      <Animated.View
-        style={{
-          opacity: simFade,
-          transform: [{ translateY: simTranslateY }],
-        }}
-      >
-        <ScholarshipSimulatorSection
-          studentProfile={profileData}
-          onRunSimulation={handleRunSimulation}
-          isSimulating={isSimulating}
-          simulationResult={simulationResult}
-        />
-      </Animated.View>
-
-      {/* 7. FOOTER */}
-      <ScholarshipFooter />
-
-      {/* MODAL 1: SCHOLARSHIP DETAILS (100% live scraped data with pop animation) */}
-      <ScholarshipDetailModal
-        visible={showDetailModal}
-        scholarship={selectedDetail}
-        onClose={() => {
-          setShowDetailModal(false);
-          setSelectedDetail(null);
-        }}
-        onApply={handleApply}
-        onToggleSave={handleToggleSave}
-        isSaving={savingId === selectedDetail?.id}
+  const detail = selectedDetail;
+  return (
+    <Page aside={aside}>
+      <SectionTitle
+        title="Scholarships"
+        emoji="🎓"
+        subtitle={loading ? 'Checking schemes against your profile…' : `${counts.all} live schemes · ${counts.eligible} you may qualify for · ${counts.applied} applied`}
+        right={
+          <Row gap={8}>
+            <SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder="Scheme or provider" style={{ width: isMobile ? '100%' : 250 }} />
+            <IconButton icon="RefreshCw" size={46} onPress={() => loadData(true)} disabled={refreshing} accessibilityLabel="Refresh" />
+          </Row>
+        }
       />
 
-      {/* MODAL 2: APPLICATION CONFIRMATION */}
-      <Modal
-        visible={showAppliedModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAppliedModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.appliedModalBox, CLAY_SHADOWS.modal]}>
-            <Text style={styles.appliedEmoji}>🚀</Text>
-            <Text style={styles.appliedHeading}>Application Portal Launched!</Text>
-            <Text style={styles.appliedSub}>
-              We opened the official portal for{' '}
-              <Text style={{ fontWeight: '800', color: CLAY_COLORS.primary }}>
-                {appliedItem?.name}
-              </Text>{' '}
-              and tracked this application in your student record.
-            </Text>
+      <SegmentedTabs options={tabs} value={activeTab} onChange={setActiveTab} scrollable={isMobile} />
 
-            <Pressable
-              style={({ hovered, pressed }) => [
-                styles.btnAppliedClose,
-                {
-                  transform: [
-                    { translateY: hovered ? -2 : 0 },
-                    { scale: pressed ? 0.97 : hovered ? 1.02 : 1 },
-                  ],
-                },
-              ]}
-              onPress={() => setShowAppliedModal(false)}
-            >
-              <Text style={styles.btnAppliedCloseText}>Understood</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-    </ScrollView>
+      <Row wrap gap={8}>
+        {['Best Match', 'Deadline (Soonest)', 'Award (Highest)', 'Scheme Name (A-Z)'].map((s) => (
+          <Chip key={s} label={s} icon="Funnel" tone="accent" selected={sortBy === s} onPress={() => setSortBy(s)} />
+        ))}
+      </Row>
+      {availableProviders.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+          <Chip label="All providers" selected={selectedProvider === 'All'} onPress={() => setSelectedProvider('All')} />
+          {availableProviders.map((p) => (
+            <Chip key={p.name} label={`${p.name} · ${p.count}`} tone="warning" selected={selectedProvider === p.name} onPress={() => setSelectedProvider(selectedProvider === p.name ? 'All' : p.name)} />
+          ))}
+        </ScrollView>
+      ) : null}
+
+      {loading ? (
+        <View style={styles.grid}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} height={260} radius={radii.xl} style={styles.card} />)}</View>
+      ) : error ? (
+        <Card><EmptyState icon="CircleAlert" tone="danger" title="Couldn't load scholarships" message={error} action={<Button label="Retry" icon="RefreshCw" onPress={() => loadData(true)} />} /></Card>
+      ) : filteredScholarships.length ? (
+        <View style={styles.grid}>{filteredScholarships.map(renderCard)}</View>
+      ) : (
+        <Card><EmptyState icon="GraduationCap" title="No schemes match" message="Try another tab, provider or search term." action={<Button label="Reset filters" onPress={handleResetFilters} />} /></Card>
+      )}
+
+      <Sheet
+        visible={showDetailModal && !!detail}
+        onClose={() => setShowDetailModal(false)}
+        title={detail?.name}
+        subtitle={detail?.provider}
+        icon="GraduationCap"
+        tone="warning"
+        width={720}
+        footer={
+          detail ? (
+            <>
+              <Button label={detail.is_saved ? 'Saved' : 'Save'} icon="Bookmark" variant="secondary" onPress={() => handleToggleSave(detail)} />
+              <Button label="Apply on portal" iconRight="ArrowUpRight" onPress={() => { setShowDetailModal(false); handleApply(detail); }} />
+            </>
+          ) : null
+        }
+      >
+        {detail ? (
+          <>
+            <Row wrap gap={6}>
+              <Pill label={eligLabel(detail.eligibility_status)} tone={eligTone(detail.eligibility_status)} />
+              {detail.award_description ? <Pill label={detail.award_description} tone="warning" icon="Wallet" /> : null}
+              {detail.application_deadline ? <Pill label={`Deadline ${fmtDate(detail.application_deadline)}`} icon="Calendar" /> : null}
+              {detail.academic_year ? <Pill label={detail.academic_year} /> : null}
+            </Row>
+            <Txt variant="body" tone="default">{detail.description}</Txt>
+            {checkpointsOf(detail).length ? (
+              <Card padding={space.lg}>
+                <Txt variant="h3" tone="ink">Eligibility checks</Txt>
+                <Stack gap={10} style={{ marginTop: space.sm }}>
+                  {checkpointsOf(detail).map((c) => (
+                    <Row key={c.criterion} gap={10} align="flex-start">
+                      <Icon name={c.passed === true ? 'CircleCheck' : c.passed === false ? 'X' : 'CircleAlert'} size={18} color={c.passed === true ? colors.mintInk : c.passed === false ? '#B4232A' : colors.butterInk} />
+                      <Stack gap={1} style={{ flex: 1 }}>
+                        <Txt variant="small" weight={700} tone="ink">{c.criterion}</Txt>
+                        <Txt variant="caption" tone="muted">Required {c.required} · You: {c.student_value}</Txt>
+                        {c.reason ? <Txt variant="caption" tone="subtle">{c.reason}</Txt> : null}
+                      </Stack>
+                    </Row>
+                  ))}
+                </Stack>
+              </Card>
+            ) : null}
+          </>
+        ) : null}
+      </Sheet>
+
+      <Sheet
+        visible={showAppliedModal && !!appliedItem}
+        onClose={() => setShowAppliedModal(false)}
+        title="Application started"
+        subtitle={appliedItem?.name}
+        icon="Send"
+        tone="success"
+        width={520}
+        footer={<Button label="Done" onPress={() => setShowAppliedModal(false)} />}
+      >
+        <Txt variant="body" tone="muted">We opened the official portal in a new tab. Complete the application there — it's tracked under Applications.</Txt>
+      </Sheet>
+    </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: CLAY_COLORS.canvas,
-  },
-  contentContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    maxWidth: 1360,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  cardsGrid: {
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -8,
-    marginBottom: 20,
+    gap: space.md,
   },
-  cardsGridDesktop: {
-    marginHorizontal: -10,
+  card: {
+    flexGrow: 1,
+    flexBasis: 360,
   },
-  cardsGridTablet: {
-    marginHorizontal: -8,
-  },
-  cardsGridMobile: {
-    flexDirection: 'column',
-    marginHorizontal: 0,
-  },
-  cardWrapper: {
-    paddingHorizontal: 8,
-    marginBottom: 16,
-  },
-  cardWrapperDesktop: {
-    width: '50%',
-    paddingHorizontal: 10,
-  },
-  cardWrapperTablet: {
-    width: '50%',
-    paddingHorizontal: 8,
-  },
-  cardWrapperMobile: {
-    width: '100%',
-    paddingHorizontal: 0,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(30, 27, 75, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  appliedModalBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CLAY_RADII.xl,
-    padding: 28,
-    alignItems: 'center',
-    maxWidth: 460,
-    width: '100%',
+  emptyEvents: {
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    gap: 12,
-  },
-  appliedEmoji: {
-    fontSize: 36,
-  },
-  appliedHeading: {
-    fontFamily: CLAY_FONTS.family,
-    fontSize: 20,
-    fontWeight: '900',
-    color: CLAY_COLORS.foreground,
-    textAlign: 'center',
-  },
-  appliedSub: {
-    fontFamily: CLAY_FONTS.family,
-    fontSize: 13.5,
-    color: CLAY_COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  btnAppliedClose: {
-    backgroundColor: CLAY_COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    borderRadius: CLAY_RADII.md,
-    alignItems: 'center',
-    width: '100%',
-    transition: 'transform 0.18s ease',
-  },
-  btnAppliedCloseText: {
-    fontFamily: CLAY_FONTS.family,
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    borderStyle: 'dashed',
+    borderColor: colors.borderStrong,
+    borderRadius: radii.xl,
   },
 });
