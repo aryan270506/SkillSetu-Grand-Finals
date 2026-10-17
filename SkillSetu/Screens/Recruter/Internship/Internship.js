@@ -24,6 +24,8 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 export default function Internship({ user, onOpenPostModal }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
@@ -148,7 +150,9 @@ export default function Internship({ user, onOpenPostModal }) {
         await loadDetail(posting.id);
       }
     } catch (err) {
-      alert(`Failed to update status: ${err.message}`);
+      alert(tl('Failed to update status: {{message}}', {
+        message: err.message
+      }));
     }
   };
 
@@ -158,7 +162,9 @@ export default function Internship({ user, onOpenPostModal }) {
       await recruiterService.deleteInternship(token, postingId);
       await loadInternships(true);
     } catch (err) {
-      alert(`Failed to delete/archive: ${err.message}`);
+      alert(tl('Failed to delete/archive: {{message}}', {
+        message: err.message
+      }));
     }
   };
 
@@ -255,9 +261,15 @@ export default function Internship({ user, onOpenPostModal }) {
               <Pill label={p.status || 'Active'} tone={statusTone(p.status)} size="sm" />
             </Row>
             <Row wrap gap={6} style={{ marginTop: space.sm }}>
-              <Pill label={`${p.applied_count ?? 0} applied`} tone="info" size="sm" />
-              <Pill label={`${p.shortlisted_count ?? 0} shortlisted`} tone="accent" size="sm" />
-              <Pill label={`${p.selected_count ?? 0} selected`} tone="success" size="sm" />
+              <Pill label={tl('{{v0}} applied', {
+                v0: p.applied_count ?? 0
+              })} tone="info" size="sm" />
+              <Pill label={tl('{{v0}} shortlisted', {
+                v0: p.shortlisted_count ?? 0
+              })} tone="accent" size="sm" />
+              <Pill label={tl('{{v0}} selected', {
+                v0: p.selected_count ?? 0
+              })} tone="success" size="sm" />
             </Row>
           </>
         );
@@ -280,8 +292,12 @@ export default function Internship({ user, onOpenPostModal }) {
             {job.department ? <Pill label={job.department} icon="Building" size="sm" /> : null}
             {job.work_mode || job.location ? <Pill label={job.work_mode || job.location} icon="MapPin" size="sm" /> : null}
             {job.stipend ? <Pill label={job.stipend} icon="Wallet" tone="warning" size="sm" /> : null}
-            {job.openings ? <Pill label={`${job.openings} openings`} icon="Users" size="sm" /> : null}
-            <Pill label={`Min match ${job.application_threshold ?? 80}%`} icon="Target" tone="accent" size="sm" />
+            {job.openings ? <Pill label={tl('{{openings}} openings', {
+              openings: job.openings
+            })} icon="Users" size="sm" /> : null}
+            <Pill label={tl('Min match {{v0}}%', {
+              v0: job.application_threshold ?? 80
+            })} icon="Target" tone="accent" size="sm" />
           </Row>
         </Stack>
         <Row gap={6}>
@@ -350,11 +366,18 @@ export default function Internship({ user, onOpenPostModal }) {
   ) : null;
 
   return (
-    <Page>
+    (<Page>
       <SectionTitle
         title="Internships"
         emoji="💼"
-        subtitle={`${counts.active} active · ${counts.totalApps} applications · ${counts.totalSelected} selected`}
+        subtitle={tl(
+          '{{active}} active · {{totalApps}} applications · {{totalSelected}} selected',
+          {
+            active: counts.active,
+            totalApps: counts.totalApps,
+            totalSelected: counts.totalSelected
+          }
+        )}
         right={
           <Row gap={8}>
             <SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder="Title, team or skill" style={{ width: isDesktop ? 240 : '100%' }} />
@@ -363,7 +386,6 @@ export default function Internship({ user, onOpenPostModal }) {
         }
       />
       <SegmentedTabs options={tabs} value={statusFilter} onChange={setStatusFilter} scrollable={!isDesktop} />
-
       {loading ? (
         <Row gap={space.md} align="flex-start">
           <Stack gap={space.sm} style={{ flex: 1 }}>{[0, 1, 2].map((i) => <Skeleton key={i} height={110} radius={radii.xl} />)}</Stack>
@@ -381,7 +403,6 @@ export default function Internship({ user, onOpenPostModal }) {
           <View style={isDesktop ? { flex: 1, minWidth: 0 } : null}>{detail}</View>
         </View>
       )}
-
       <InternshipFormModal
         visible={formModalVisible}
         mode={formModalMode}
@@ -400,7 +421,7 @@ export default function Internship({ user, onOpenPostModal }) {
           if (selectedInternshipId) loadDetail(selectedInternshipId);
         }}
       />
-    </Page>
+    </Page>)
   );
 }
 

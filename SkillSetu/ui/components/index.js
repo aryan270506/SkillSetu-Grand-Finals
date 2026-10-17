@@ -4,3 +4,4 @@ export * from './primitives';
 export * from './display';
 export * from './inputs';
 export { default as AppFrame, BrandMark, Dock, Page, ToolRail, useLayout } from './AppFrame';
+export { default as LanguageSwitcher } from './LanguageSwitcher';

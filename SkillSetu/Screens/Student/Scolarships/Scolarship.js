@@ -30,6 +30,9 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+import { formatCurrency, formatDate } from '../../../i18n/format';
+
 export default function Scolarship({ user, profileData }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -296,7 +299,7 @@ export default function Scolarship({ user, profileData }) {
   const [sim, setSim] = useState({ cgpa: 8.5, income: 450000, category: 'General', domicile: 'All India', gender: 'any' });
   const eligTone = (s) => (s === 'ELIGIBLE' ? 'success' : s === 'POSSIBLY_ELIGIBLE' ? 'info' : s === 'NOT_ELIGIBLE' ? 'danger' : 'neutral');
   const eligLabel = (s) => (s === 'ELIGIBLE' ? 'Eligible' : s === 'POSSIBLY_ELIGIBLE' ? 'Possibly eligible' : s === 'NOT_ELIGIBLE' ? 'Not eligible' : 'Check eligibility');
-  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : null);
+  const fmtDate = (d) => (d ? formatDate(d, { day: 'numeric', month: 'short' }) : null);
   const checkpointsOf = (sch) => sch.checkpoints || sch.evaluation_checkpoints || [];
 
   const tabs = [
@@ -311,15 +314,17 @@ export default function Scolarship({ user, profileData }) {
     const passed = cps.filter((c) => c.passed === true).length;
     const urgent = sch.days_remaining != null && sch.days_remaining <= 30;
     return (
-      <Card key={sch.id || sch.name} style={styles.card} badge={{ icon: 'GraduationCap', tone: eligTone(sch.eligibility_status) === 'neutral' ? 'warning' : eligTone(sch.eligibility_status) }}>
+      (<Card key={sch.id || sch.name} style={styles.card} badge={{ icon: 'GraduationCap', tone: eligTone(sch.eligibility_status) === 'neutral' ? 'warning' : eligTone(sch.eligibility_status) }}>
         <Stack gap={4}>
           <Txt variant="overline" tone="subtle" numberOfLines={1}>{sch.provider}</Txt>
           <Txt variant="h3" tone="ink" numberOfLines={2}>{sch.name}</Txt>
           <Txt variant="small" tone="muted" numberOfLines={2}>{sch.description}</Txt>
         </Stack>
         <Row wrap gap={6} style={{ marginTop: space.md }}>
-          {sch.award_description || sch.award_amount ? <Pill label={sch.award_description || `₹${Number(sch.award_amount).toLocaleString('en-IN')}`} tone="warning" icon="Wallet" size="sm" /> : null}
-          {sch.application_deadline ? <Pill label={`${fmtDate(sch.application_deadline)}${sch.days_remaining != null ? ` · ${sch.days_remaining}d left` : ''}`} tone={urgent ? 'danger' : 'neutral'} icon="Clock" size="sm" /> : null}
+          {sch.award_description || sch.award_amount ? <Pill label={sch.award_description || formatCurrency(sch.award_amount)} tone="warning" icon="Wallet" size="sm" /> : null}
+          {sch.application_deadline ? <Pill label={`${fmtDate(sch.application_deadline)}${sch.days_remaining != null ? tl('· {{days_remaining}}d left', {
+            days_remaining: sch.days_remaining
+          }) : ''}`} tone={urgent ? 'danger' : 'neutral'} icon="Clock" size="sm" /> : null}
         </Row>
         {cps.length ? (
           <Inset tone="neutral" padding={space.sm} style={{ marginTop: space.md }}>
@@ -343,7 +348,7 @@ export default function Scolarship({ user, profileData }) {
             <Button label="Apply" size="sm" iconRight="ArrowUpRight" onPress={() => handleApply(sch)} loading={applyingId === sch.id} />
           </Row>
         </Row>
-      </Card>
+      </Card>)
     );
   };
 
@@ -355,7 +360,9 @@ export default function Scolarship({ user, profileData }) {
           key={`d-${sch.id}`}
           tone={sch.days_remaining != null && sch.days_remaining <= 14 ? 'pink' : 'warning'}
           icon="Clock"
-          type={sch.days_remaining != null ? `${sch.days_remaining} days left` : 'Deadline'}
+          type={sch.days_remaining != null ? tl('{{days_remaining}} days left', {
+            days_remaining: sch.days_remaining
+          }) : 'Deadline'}
           date={fmtDate(sch.application_deadline)}
           title={sch.name}
           body={sch.award_description}
@@ -405,11 +412,18 @@ export default function Scolarship({ user, profileData }) {
 
   const detail = selectedDetail;
   return (
-    <Page aside={aside}>
+    (<Page aside={aside}>
       <SectionTitle
         title="Scholarships"
         emoji="🎓"
-        subtitle={loading ? 'Checking schemes against your profile…' : `${counts.all} live schemes · ${counts.eligible} you may qualify for · ${counts.applied} applied`}
+        subtitle={loading ? 'Checking schemes against your profile…' : tl(
+          '{{all}} live schemes · {{eligible}} you may qualify for · {{applied}} applied',
+          {
+            all: counts.all,
+            eligible: counts.eligible,
+            applied: counts.applied
+          }
+        )}
         right={
           <Row gap={8}>
             <SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder="Scheme or provider" style={{ width: isMobile ? '100%' : 250 }} />
@@ -417,9 +431,7 @@ export default function Scolarship({ user, profileData }) {
           </Row>
         }
       />
-
       <SegmentedTabs options={tabs} value={activeTab} onChange={setActiveTab} scrollable={isMobile} />
-
       <Row wrap gap={8}>
         {['Best Match', 'Deadline (Soonest)', 'Award (Highest)', 'Scheme Name (A-Z)'].map((s) => (
           <Chip key={s} label={s} icon="Funnel" tone="accent" selected={sortBy === s} onPress={() => setSortBy(s)} />
@@ -433,7 +445,6 @@ export default function Scolarship({ user, profileData }) {
           ))}
         </ScrollView>
       ) : null}
-
       {loading ? (
         <View style={styles.grid}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} height={260} radius={radii.xl} style={styles.card} />)}</View>
       ) : error ? (
@@ -443,7 +454,6 @@ export default function Scolarship({ user, profileData }) {
       ) : (
         <Card><EmptyState icon="GraduationCap" title="No schemes match" message="Try another tab, provider or search term." action={<Button label="Reset filters" onPress={handleResetFilters} />} /></Card>
       )}
-
       <Sheet
         visible={showDetailModal && !!detail}
         onClose={() => setShowDetailModal(false)}
@@ -466,7 +476,9 @@ export default function Scolarship({ user, profileData }) {
             <Row wrap gap={6}>
               <Pill label={eligLabel(detail.eligibility_status)} tone={eligTone(detail.eligibility_status)} />
               {detail.award_description ? <Pill label={detail.award_description} tone="warning" icon="Wallet" /> : null}
-              {detail.application_deadline ? <Pill label={`Deadline ${fmtDate(detail.application_deadline)}`} icon="Calendar" /> : null}
+              {detail.application_deadline ? <Pill label={tl('Deadline {{v0}}', {
+                v0: fmtDate(detail.application_deadline)
+              })} icon="Calendar" /> : null}
               {detail.academic_year ? <Pill label={detail.academic_year} /> : null}
             </Row>
             <Txt variant="body" tone="default">{detail.description}</Txt>
@@ -490,7 +502,6 @@ export default function Scolarship({ user, profileData }) {
           </>
         ) : null}
       </Sheet>
-
       <Sheet
         visible={showAppliedModal && !!appliedItem}
         onClose={() => setShowAppliedModal(false)}
@@ -503,7 +514,7 @@ export default function Scolarship({ user, profileData }) {
       >
         <Txt variant="body" tone="muted">We opened the official portal in a new tab. Complete the application there — it's tracked under Applications.</Txt>
       </Sheet>
-    </Page>
+    </Page>)
   );
 }
 

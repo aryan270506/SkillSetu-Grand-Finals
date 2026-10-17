@@ -34,6 +34,8 @@ import { colors, radii, space, toneOf, webOnly } from '../../../ui/theme';
 import { API_BASE } from '../../../ui/config';
 import { pickFile } from '../../../ui/pickFile';
 
+import { tl } from '../../../i18n/tl';
+
 export function renderVal(val, defaultVal = '') {
   if (val === null || val === undefined) return defaultVal;
   if (typeof val === 'object') {
@@ -799,7 +801,9 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
 
         alert('Resume parsed and analyzed successfully via SkillSetu AI!');
       } else {
-        alert(`Failed to analyze resume: ${resData.detail || 'Server error'}`);
+        alert(tl('Failed to analyze resume: {{v0}}', {
+          v0: resData.detail || 'Server error'
+        }));
       }
     } catch (err) {
       console.error('Resume upload error:', err);
@@ -961,7 +965,9 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             }
           }
         }));
-        alert(`Refreshed ${resData.repos_count} repositories from GitHub!`);
+        alert(tl('Refreshed {{repos_count}} repositories from GitHub!', {
+          repos_count: resData.repos_count
+        }));
       } else {
         alert(resData.detail || 'Failed to refresh repositories.');
       }
@@ -997,7 +1003,12 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             }
           }
         }));
-        alert(`Successfully analyzed ${resData.repos_analyzed_count} selected repositories! Generated technical skill evidence.`);
+        alert(tl(
+          'Successfully analyzed {{repos_analyzed_count}} selected repositories! Generated technical skill evidence.',
+          {
+            repos_analyzed_count: resData.repos_analyzed_count
+          }
+        ));
       } else {
         alert(resData.detail || 'Could not analyze repositories. Please try again.');
       }
@@ -1458,7 +1469,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     const ra = currentProfile.resumeAnalysis;
     const ext = ra.extractedData || {};
     return (
-      <Grid twoCol={twoCol}>
+      (<Grid twoCol={twoCol}>
         <Col twoCol={twoCol} flex={0.9}>
           {ra.resumeFile ? (
             <Card tone="info">
@@ -1530,7 +1541,9 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
                 <Stack gap={8}>
                   <Row justify="space-between">
                     <Txt variant="overline" tone="subtle">Projects</Txt>
-                    <Pill label={`${(ext.projects || []).length} found`} size="sm" />
+                    <Pill label={tl('{{length}} found', {
+                      length: (ext.projects || []).length
+                    })} size="sm" />
                   </Row>
                   {(ext.projects || []).length ? (
                     ext.projects.map((proj, i) => (
@@ -1546,7 +1559,9 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
                 <Stack gap={8}>
                   <Row justify="space-between">
                     <Txt variant="overline" tone="subtle">Experience</Txt>
-                    <Pill label={`${(ext.experience || []).length} found`} size="sm" />
+                    <Pill label={tl('{{length}} found', {
+                      length: (ext.experience || []).length
+                    })} size="sm" />
                   </Row>
                   {(ext.experience || []).length ? (
                     ext.experience.map((exp, i) => (
@@ -1590,7 +1605,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             )}
           </Card>
         </Col>
-      </Grid>
+      </Grid>)
     );
   };
 
@@ -1800,7 +1815,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
       },
     ];
     return (
-      <Grid twoCol={twoCol}>
+      (<Grid twoCol={twoCol}>
         <Col twoCol={twoCol} flex={1.4}>
           <Card>
             <Row justify="space-between">
@@ -1817,7 +1832,9 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
                     <Icon name={c.icon} size={17} color={colors.ink} />
                     <Txt variant="title" tone="ink">{c.title}</Txt>
                   </Row>
-                  <IconButton icon="Pencil" size={32} onPress={() => setActiveStep(c.step)} accessibilityLabel={`Edit ${c.title}`} />
+                  <IconButton icon="Pencil" size={32} onPress={() => setActiveStep(c.step)} accessibilityLabel={tl('Edit {{title}}', {
+                    title: c.title
+                  })} />
                 </Row>
                 {c.rows.map(([k, v]) => (
                   <KeyValue key={k} label={k} value={v || 'Not provided'} />
@@ -1847,7 +1864,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             </Stack>
           </Card>
         </Col>
-      </Grid>
+      </Grid>)
     );
   };
 
@@ -2009,7 +2026,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
           tone="warning"
           icon="GraduationCap"
           type="Education"
-          date={first.graduationYear ? `Class of ${renderVal(first.graduationYear)}` : ''}
+          date={first.graduationYear ? tl('Class of {{graduation_year}}', { graduation_year: renderVal(first.graduationYear) }) : ''}
           title={degree || 'Education not added'}
           body={[university, currentProfile.education.cgpaDetected && currentProfile.education.cgpaDetected !== 'Detected' ? `CGPA ${renderVal(currentProfile.education.cgpaDetected)}` : user?.cgpa_or_percentage ? `CGPA ${user.cgpa_or_percentage}` : null].filter(Boolean).join(' · ') || 'Upload a marksheet to verify your education.'}
         />
@@ -2018,7 +2035,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
           icon="Link"
           type="Links"
           body={links.length ? null : 'Add LinkedIn, a portfolio or connect GitHub.'}
-          title={links.length ? `${links.length} profile${links.length > 1 ? 's' : ''} linked` : 'No links yet'}
+          title={links.length ? (links.length === 1 ? tl('1 profile linked') : tl('{{count}} profiles linked', { count: links.length })) : 'No links yet'}
           footer={
             links.length ? (
               <Row gap={6} wrap justify="center">
@@ -2052,7 +2069,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
     );
 
     return (
-      <Page aside={aside}>
+      (<Page aside={aside}>
         <Card padding={isTablet ? space.xxl : space.lg}>
           <Row gap={space.lg} align="flex-start" wrap>
             <View>
@@ -2068,7 +2085,9 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
                 <Txt variant="display" tone="ink">{name}</Txt>
                 {currentProfile.verified ? <Pill label="Verified" tone="success" icon="ShieldCheck" size="sm" /> : <Pill label="Not verified yet" tone="warning" size="sm" />}
               </Row>
-              <Txt variant="title" tone="muted">{p.headline || user?.headline || (careers[0] ? `Aspiring ${careers[0]}` : 'Add a headline')}</Txt>
+              <Txt variant="title" tone="muted">{p.headline || user?.headline || (careers[0] ? tl('Aspiring {{v0}}', {
+                v0: careers[0]
+              }) : 'Add a headline')}</Txt>
               <Row gap={8} wrap>
                 {p.location || user?.location ? <Pill label={p.location || user?.location} icon="MapPin" size="sm" /> : null}
                 {university ? <Pill label={university} icon="Building" size="sm" /> : null}
@@ -2087,7 +2106,6 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             </Inset>
           ) : null}
         </Card>
-
         <StatTrio
           items={[
             { value: resumeScore != null ? resumeScore : '—', label: 'Resume score', tone: 'info' },
@@ -2095,7 +2113,6 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             { value: studentApplications.length, label: 'Applications', dashed: true },
           ]}
         />
-
         <Card badge={{ icon: 'Sparkles', tone: 'accent' }}>
           <Row justify="space-between" align="flex-start" wrap gap={space.md}>
             <Stack gap={4} style={{ flex: 1, minWidth: 220 }}>
@@ -2133,7 +2150,6 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             )}
           </Row>
         </Card>
-
         <View style={[styles.grid, isWide ? styles.gridRow : null]}>
           <View style={isWide ? { flex: 1, minWidth: 0 } : null}>
             <Card badge={{ icon: 'Zap', tone: 'success' }}>
@@ -2156,7 +2172,7 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             <Card badge={{ icon: 'GitBranch', tone: 'neutral' }}>
               <Txt variant="h2" tone="ink">Projects on GitHub</Txt>
               <Txt variant="small" tone="muted" style={{ marginBottom: space.md }}>
-                {gl.githubConnected ? `${repos.length} repositor${repos.length === 1 ? 'y' : 'ies'} used as evidence` : 'Not connected'}
+                {gl.githubConnected ? (repos.length === 1 ? tl('1 repository used as evidence') : tl('{{count}} repositories used as evidence', { count: repos.length })) : 'Not connected'}
               </Txt>
               {gl.githubConnected && repos.length ? (
                 <Stack gap={8}>
@@ -2182,14 +2198,13 @@ export default function Profile({ user, updateUser, profileData, setProfileData,
             </Card>
           </View>
         </View>
-
         {atsSheet}
         <ShareSheet
           visible={showShareModal}
           onClose={() => setShowShareModal(false)}
           url={Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/dossier/${user?.id || ''}` : ''}
         />
-      </Page>
+      </Page>)
     );
   }
 

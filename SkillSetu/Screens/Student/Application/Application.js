@@ -28,6 +28,9 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+import { formatDate } from '../../../i18n/format';
+
 export default function Application({ user, profileData, onNavigate }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
@@ -85,7 +88,7 @@ export default function Application({ user, profileData, onNavigate }) {
       type: 'internship',
       title: item.internship?.title || item.title || item.role || 'Internship application',
       organization: item.internship?.company || item.company || 'Employer',
-      appliedDate: item.applied_at ? new Date(item.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : item.dateApplied || 'Recently',
+      appliedDate: item.applied_at ? formatDate(item.applied_at) : item.dateApplied || 'Recently',
       portalUrl: item.internship?.application_url || item.internship?.source_url || item.apply_url,
     }));
 
@@ -94,7 +97,7 @@ export default function Application({ user, profileData, onNavigate }) {
       type: 'scholarship',
       title: item.scholarship?.name || item.name || item.role || 'Scholarship',
       organization: item.scholarship?.provider || item.provider || item.company || 'Provider',
-      appliedDate: item.applied_at ? new Date(item.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : item.dateApplied || 'Recently',
+      appliedDate: item.applied_at ? formatDate(item.applied_at) : item.dateApplied || 'Recently',
       portalUrl: item.scholarship?.application_url || item.scholarship?.source_url || item.apply_url,
     }));
 
@@ -223,23 +226,20 @@ export default function Application({ user, profileData, onNavigate }) {
   const timeline = sel?.timeline || [];
 
   return (
-    <Page aside={aside}>
+    (<Page aside={aside}>
       <SectionTitle
         title="Applications"
         emoji="📝"
         subtitle="Every internship and scholarship you've applied to, in one place."
         right={<IconButton icon="RefreshCw" size={46} onPress={() => loadApplications(true)} disabled={refreshing} accessibilityLabel="Refresh" />}
       />
-
       <View style={styles.statsRow}>
         <StatTile value={stats.total || 0} label="Total" tone="info" style={styles.stat} />
         <StatTile value={stats.under_review || 0} label="Under review" tone="warning" style={styles.stat} />
         <StatTile value={stats.shortlisted || 0} label="Shortlisted" tone="accent" style={styles.stat} />
         <StatTile value={stats.accepted || 0} label="Accepted" tone="success" style={styles.stat} />
       </View>
-
       <SegmentedTabs options={tabs} value={activeTab} onChange={setActiveTab} scrollable={!isDesktop} />
-
       {loading ? (
         <Stack gap={space.md}>{[0, 1, 2].map((i) => <Skeleton key={i} height={150} radius={radii.xl} />)}</Stack>
       ) : error ? (
@@ -297,12 +297,14 @@ export default function Application({ user, profileData, onNavigate }) {
           <EmptyState icon="Inbox" title="No applications here" message="Explore internships and scholarships to start applying." action={<Button label="Find internships" onPress={() => onNavigate && onNavigate('Opportunities')} />} />
         </Card>
       )}
-
       <Sheet
         visible={showDrawer && !!sel}
         onClose={() => setShowDrawer(false)}
         title={sel?.title}
-        subtitle={sel ? `${sel.organization} · Applied ${sel.appliedDate}` : ''}
+        subtitle={sel ? tl('{{organization}} · Applied {{appliedDate}}', {
+          organization: sel.organization,
+          appliedDate: sel.appliedDate
+        }) : ''}
         icon={sel?.type === 'scholarship' ? 'GraduationCap' : 'Briefcase'}
         tone={sel?.type === 'scholarship' ? 'warning' : 'info'}
         width={680}
@@ -312,7 +314,9 @@ export default function Application({ user, profileData, onNavigate }) {
           <>
             <Row wrap gap={6}>
               <Pill label={labelFor(selStatus)} tone={toneFor(selStatus)} />
-              {sel.matchRate != null ? <Pill label={`${sel.matchRate}% match`} tone="success" icon="Target" /> : null}
+              {sel.matchRate != null ? <Pill label={tl('{{matchRate}}% match', {
+                matchRate: sel.matchRate
+              })} tone="success" icon="Target" /> : null}
               {sel.atsScore != null ? <Pill label={`ATS ${sel.atsScore}`} tone="info" icon="FileText" /> : null}
               {sel.resumeUsed ? <Pill label={sel.resumeUsed} icon="FileText" /> : null}
             </Row>
@@ -374,7 +378,9 @@ export default function Application({ user, profileData, onNavigate }) {
                         <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
                           {r.scheduled_date || r.start_date || 'Date TBD'}
                           {r.display_time ? ` · ${r.display_time}` : r.start_time ? ` · ${r.start_time}–${r.end_time || ''}` : ''}
-                          {r.timezone ? ` (${r.timezone})` : ''}{r.duration_min ? ` · ${r.duration_min} min` : ''}
+                          {r.timezone ? ` (${r.timezone})` : ''}{r.duration_min ? tl('· {{duration_min}} min', {
+                          duration_min: r.duration_min
+                        }) : ''}
                         </Txt>
                       </Inset>
                     ))}
@@ -400,7 +406,7 @@ export default function Application({ user, profileData, onNavigate }) {
           </>
         ) : null}
       </Sheet>
-    </Page>
+    </Page>)
   );
 }
 

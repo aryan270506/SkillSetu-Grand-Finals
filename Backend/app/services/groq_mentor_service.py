@@ -5,6 +5,7 @@ import urllib.error
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 
+from app.services.language import language_instruction
 from app.config import settings
 from app.services.student_context_service import StudentContextService
 from app.services.mentor_tools import MENTOR_TOOL_DEFINITIONS, MentorToolRegistry
@@ -29,7 +30,8 @@ class GroqMentorService:
         student_id: int,
         conversation_history: List[Dict[str, Any]],
         db: Session,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        language: str = "en"
     ) -> Dict[str, Any]:
         """
         Executes the personal career mentor conversation pipeline:
@@ -47,7 +49,7 @@ class GroqMentorService:
         api_key = settings.GROQ_API_KEY
 
         # 2. Build System Prompt
-        system_prompt = cls._build_system_prompt(profile_summary, student_context)
+        system_prompt = cls._build_system_prompt(profile_summary, student_context) + language_instruction(language)
 
         # 3. Build Conversation Messages Payload
         messages = [{"role": "system", "content": system_prompt}]

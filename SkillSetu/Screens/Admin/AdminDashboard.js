@@ -22,6 +22,9 @@ import {
 import { colors, space } from '../../ui/theme';
 import { API_BASE } from '../../ui/config';
 
+import { tl } from '../../i18n/tl';
+import { formatDateTime } from '../../i18n/format';
+
 export default function AdminDashboard({ user, onLogout }) {
   const [stats, setStats] = useState(null);
   const [pendingRecruiters, setPendingRecruiters] = useState([]);
@@ -81,7 +84,9 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (res.ok && data.status === 'success') {
-        flash('success', `${recruiterName} has been approved.`);
+        flash('success', tl('{{recruiterName}} has been approved.', {
+          recruiterName: recruiterName
+        }));
         fetchDashboardData();
       } else {
         flash('danger', data.detail || 'Could not approve recruiter.');
@@ -108,7 +113,9 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (res.ok && data.status === 'success') {
-        flash('warning', `${recruiterName}'s registration was rejected.`);
+        flash('warning', tl('{{recruiterName}}\'s registration was rejected.', {
+          recruiterName: recruiterName
+        }));
         setActiveRejectId(null);
         fetchDashboardData();
       } else {
@@ -124,7 +131,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const adminName = user?.name || 'Administrator';
 
   return (
-    <AppFrame
+    (<AppFrame
       nav={[{ id: 'verification', label: 'Recruiter verification', shortLabel: 'Verify', icon: 'ShieldCheck' }]}
       activeId="verification"
       onNavigate={() => {}}
@@ -184,7 +191,7 @@ export default function AdminDashboard({ user, onLogout }) {
                   <KeyValue icon="Globe" label="Website" value={item.company_website || '—'} />
                   <KeyValue icon="Briefcase" label="Industry" value={item.industry || '—'} />
                   <KeyValue icon="Users" label="Size" value={item.company_size || '—'} />
-                  <KeyValue icon="Calendar" label="Submitted" value={item.created_at ? new Date(item.created_at).toLocaleString() : '—'} />
+                  <KeyValue icon="Calendar" label="Submitted" value={item.created_at ? formatDateTime(item.created_at) : '—'} />
                 </Stack>
 
                 {activeRejectId === item.id ? (
@@ -202,7 +209,9 @@ export default function AdminDashboard({ user, onLogout }) {
                   </Inset>
                 ) : (
                   <Row justify="flex-end" gap={8} style={{ marginTop: space.md }}>
-                    <IconButton icon="X" onPress={() => setActiveRejectId(item.id)} accessibilityLabel={`Reject ${item.name}`} />
+                    <IconButton icon="X" onPress={() => setActiveRejectId(item.id)} accessibilityLabel={tl('Reject {{name}}', {
+                      name: item.name
+                    })} />
                     <Button label="Approve" icon="Check" onPress={() => handleApprove(item.id, item.name)} loading={actionLoading === item.id} />
                   </Row>
                 )}
@@ -211,7 +220,7 @@ export default function AdminDashboard({ user, onLogout }) {
           </View>
         )}
       </Page>
-    </AppFrame>
+    </AppFrame>)
   );
 }
 

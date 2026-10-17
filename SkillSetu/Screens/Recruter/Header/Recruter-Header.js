@@ -11,6 +11,8 @@ import InternshipFormModal from '../Internship/InternshipFormModal';
 import { AppFrame, Button, Card, EmptyState, IconButton, Page, Pill, ProgressBar, Row, Stack, Txt } from '../../../ui/components';
 import { space } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 const NAV = [
   { id: 'Dashboard', label: 'Dashboard', icon: 'House' },
   { id: 'Internships', label: 'Internships', icon: 'Briefcase' },
@@ -69,12 +71,14 @@ export default function RecruterHeader({ user, onLogout }) {
     if (isLocked(activeTab)) {
       const pct = completion.percentage || 0;
       return (
-        <Page>
+        (<Page>
           <Card style={{ maxWidth: 640, alignSelf: 'center', width: '100%' }} badge={{ icon: 'Lock', tone: 'warning' }}>
             <EmptyState
               icon="Lock"
               tone="warning"
-              title={`${NAV.find((n) => n.id === activeTab)?.label || activeTab} is locked`}
+              title={tl('{{v0}} is locked', {
+                v0: NAV.find((n) => n.id === activeTab)?.label || activeTab
+              })}
               message="Complete your company profile to unlock publishing internships, reviewing candidates, assessments and analytics."
             />
             <Stack gap={8}>
@@ -91,7 +95,7 @@ export default function RecruterHeader({ user, onLogout }) {
               <Button label="Complete company profile" iconRight="ArrowRight" onPress={() => setActiveTab('My Profile')} style={{ marginTop: space.md, alignSelf: 'center' }} />
             </Stack>
           </Card>
-        </Page>
+        </Page>)
       );
     }
     switch (activeTab) {

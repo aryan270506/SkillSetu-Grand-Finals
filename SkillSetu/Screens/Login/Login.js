@@ -14,6 +14,7 @@ import {
   Card,
   ChipGroup,
   FeatureCard,
+  LanguageSwitcher,
   Field,
   Icon,
   Inset,
@@ -26,6 +27,8 @@ import {
 } from '../../ui/components';
 import { colors, radii, shadows, space, webOnly } from '../../ui/theme';
 import { API_BASE, API_ORIGIN } from '../../ui/config';
+
+import { tl } from '../../i18n/tl';
 
 const initialAuthState = {
   role: 'student',
@@ -202,7 +205,9 @@ export default function Login({ onLoginSuccess }) {
           ...current,
           status: 'success',
           error: '',
-          message: `OTP sent to ${email.trim()}.`,
+          message: tl('OTP sent to {{v0}}.', {
+            v0: email.trim()
+          }),
         }));
       } else {
         setAuthState((current) => ({
@@ -254,7 +259,7 @@ export default function Login({ onLoginSuccess }) {
           ...current,
           status: 'success',
           error: '',
-          message: `OTP verified successfully! You can now click Create Account.`,
+          message: tl('OTP verified successfully! You can now click Create Account.'),
         }));
       } else {
         setAuthState((current) => ({
@@ -408,7 +413,9 @@ export default function Login({ onLoginSuccess }) {
             ...current,
             status: 'success',
             error: '',
-            message: `Admin login successful! Welcome ${data.admin.name}.`,
+            message: tl('Admin login successful! Welcome {{name}}.', {
+              name: data.admin.name
+            }),
           }));
           if (onLoginSuccess) {
             setTimeout(() => {
@@ -506,7 +513,9 @@ export default function Login({ onLoginSuccess }) {
           ...current,
           status: 'success',
           error: '',
-          message: `Welcome back, ${data.user.name}!`,
+          message: tl('Welcome back, {{name}}!', {
+            name: data.user.name
+          }),
         }));
         if (onLoginSuccess) {
           setTimeout(() => {
@@ -608,7 +617,9 @@ export default function Login({ onLoginSuccess }) {
           ...current,
           status: 'success',
           error: '',
-          message: `Account registered in database for ${name.trim()}!`,
+          message: tl('Account registered in database for {{v0}}!', {
+            v0: name.trim()
+          }),
         }));
         if (onLoginSuccess) {
           setTimeout(() => {
@@ -848,8 +859,9 @@ export default function Login({ onLoginSuccess }) {
       <View style={styles.frame}>
         <View style={[styles.bar, isPhone ? { paddingHorizontal: space.md } : null]}>
           <BrandMark />
-          <Row gap={8}>
+          <Row gap={12}>
             {!isPhone ? <Txt variant="small" tone="inverseMuted">Career intelligence for students & recruiters</Txt> : null}
+            <LanguageSwitcher compact={isPhone} />
           </Row>
         </View>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheet}>

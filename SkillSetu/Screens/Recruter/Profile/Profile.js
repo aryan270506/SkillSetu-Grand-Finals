@@ -25,6 +25,8 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1000;
@@ -312,7 +314,9 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
           return {
             id: `${idx + 1 < 10 ? '0' : ''}${idx + 1}`,
             order: idx + 1,
-            title: parts[0]?.trim() || `Stage ${idx + 1}`,
+            title: parts[0]?.trim() || tl('Stage {{v0}}', {
+              v0: idx + 1
+            }),
             desc: parts[1]?.trim() || '',
             type: 'interview',
             is_active: true,
@@ -401,7 +405,9 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
       </Row>
       <Row gap={6}>
         {extra}
-        {section ? <IconButton icon="Pencil" size={34} onPress={() => handleOpenEdit(section)} accessibilityLabel={`Edit ${title}`} /> : null}
+        {section ? <IconButton icon="Pencil" size={34} onPress={() => handleOpenEdit(section)} accessibilityLabel={tl('Edit {{title}}', {
+          title: title
+        })} /> : null}
       </Row>
     </Row>
   );
@@ -479,7 +485,9 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
         tone="accent"
         icon="Link"
         type="Links"
-        title={links.length ? `${links.length} linked` : 'No links yet'}
+        title={links.length ? tl('{{length}} linked', {
+          length: links.length
+        }) : 'No links yet'}
         footer={
           links.length ? (
             <Row wrap gap={6} justify="center" style={{ width: '100%' }}>
@@ -516,7 +524,7 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
   };
 
   return (
-    <Page aside={aside}>
+    (<Page aside={aside}>
       {saveSuccessMsg ? (
         <Inset tone="success" padding={space.sm}>
           <Row gap={8}>
@@ -525,7 +533,6 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
           </Row>
         </Inset>
       ) : null}
-
       <Card padding={isCompact ? space.lg : space.xxl}>
         <Row gap={space.lg} align="flex-start" wrap>
           <Avatar name={companyInfo.name} size={isCompact ? 72 : 96} tone="accent" />
@@ -535,7 +542,9 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
             <Row wrap gap={6}>
               {companyInfo.location ? <Pill label={companyInfo.location} icon="MapPin" size="sm" /> : null}
               {companyInfo.employees ? <Pill label={companyInfo.employees} icon="Users" size="sm" /> : null}
-              {companyInfo.founded ? <Pill label={`Since ${companyInfo.founded}`} icon="Calendar" size="sm" /> : null}
+              {companyInfo.founded ? <Pill label={tl('Since {{founded}}', {
+                founded: companyInfo.founded
+              })} icon="Calendar" size="sm" /> : null}
               {companyInfo.website ? <Pill label={companyInfo.website} icon="Globe" size="sm" /> : null}
               {companyInfo.email ? <Pill label={companyInfo.email} icon="Mail" size="sm" /> : null}
             </Row>
@@ -543,7 +552,6 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
           <Button label="Edit details" icon="Pencil" onPress={() => handleOpenEdit('company')} />
         </Row>
       </Card>
-
       <Card>
         {sectionHeader('About', 'about', 'Info')}
         <Txt variant="body" tone={aboutData.description ? 'default' : 'subtle'}>{aboutData.description || 'Tell students what your company does (at least 20 characters).'}</Txt>
@@ -564,7 +572,6 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
           </View>
         ) : null}
       </Card>
-
       <View style={[styles.twoCol, isCompact ? null : { flexDirection: 'row' }]}>
         <Card style={{ flex: 1 }}>
           {sectionHeader('Culture & perks', 'culture', 'Sparkles')}
@@ -585,7 +592,6 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
           </Row>
         </Card>
       </View>
-
       <Card>
         {sectionHeader('Hiring process', 'process', 'Route')}
         {hiringProcessSteps.length ? (
@@ -606,7 +612,6 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
           <Txt variant="small" tone="subtle">Add the stages candidates go through.</Txt>
         )}
       </Card>
-
       <View style={[styles.twoCol, isCompact ? null : { flexDirection: 'row' }]}>
         <Card style={{ flex: 1 }}>
           {sectionHeader('Locations', null, 'MapPin', <IconButton icon="Plus" size={34} onPress={() => handleOpenEdit('location_add')} accessibilityLabel="Add location" />)}
@@ -649,7 +654,6 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
           )}
         </Card>
       </View>
-
       <Sheet
         visible={!!editModalSection}
         onClose={() => setEditModalSection(null)}
@@ -748,7 +752,7 @@ export default function RecruterProfile({ user, onProfileUpdated, onNavigateTab 
           </>
         ) : null}
       </Sheet>
-    </Page>
+    </Page>)
   );
 }
 

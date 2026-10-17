@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app import models
+from app.services.language import language_instruction
 from app.services.code_sandbox_service import execute_code_in_sandbox
 from app.services.groq_service import key_manager
 from app.services.skill_evidence_service import aggregate_skill_scores
@@ -523,7 +524,8 @@ def get_progressive_hint(
     student_code: Optional[str] = None,
     compile_error: Optional[str] = None,
     runtime_error: Optional[str] = None,
-    failed_tests: Optional[List[Dict[str, Any]]] = None
+    failed_tests: Optional[List[Dict[str, Any]]] = None,
+    language: str = "en"
 ) -> Dict[str, Any]:
     """
     Generates or retrieves a dynamic, educational hint tailored to the problem,
@@ -549,7 +551,8 @@ def get_progressive_hint(
             compile_error=compile_error,
             runtime_error=runtime_error,
             failed_tests=failed_tests,
-            hint_level=hint_level
+            hint_level=hint_level,
+            language=language
         )
         if ai_hint:
             return {
@@ -579,7 +582,8 @@ def _generate_ai_hint_with_groq(
     compile_error: Optional[str],
     runtime_error: Optional[str],
     failed_tests: Optional[List[Dict[str, Any]]],
-    hint_level: int
+    hint_level: int,
+    language: str = "en"
 ) -> Optional[str]:
     """
     Calls Groq to generate a 1-2 sentence constructive hint that points out logic/syntax issues
@@ -616,7 +620,7 @@ CRITICAL RULES:
 1. Do NOT write the complete solution or full query.
 2. Provide 1 to 2 clear, helpful sentences guiding the student towards fixing their mistake.
 3. Return valid JSON only: {{"hint": "your hint text"}}
-"""
+""" + language_instruction(language)
     payload = {
         "model": target_model,
         "messages": [

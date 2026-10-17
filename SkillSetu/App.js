@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import {
@@ -13,6 +13,9 @@ import StudentHeader from './Screens/Student/Header/Student-Header';
 import RecruterHeader from './Screens/Recruter/Header/Recruter-Header';
 import AdminDashboard from './Screens/Admin/AdminDashboard';
 import { colors } from './ui/theme';
+import { bootLanguage, installLanguageHeader, useLanguage } from './i18n';
+
+installLanguageHeader();
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('Login');
@@ -25,7 +28,15 @@ export default function App() {
     PlusJakartaSans_800ExtraBold,
   });
 
-  if (!fontsLoaded && !fontError) {
+  // Subscribing here re-renders the whole tree on a language switch, so strings built with tl()
+  // in screen bodies update without remounting (screen state is kept).
+  useLanguage();
+  const [languageReady, setLanguageReady] = useState(false);
+  useEffect(() => {
+    bootLanguage().finally(() => setLanguageReady(true));
+  }, []);
+
+  if ((!fontsLoaded && !fontError) || !languageReady) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.frame }}>
         <ActivityIndicator color="#fff" />

@@ -4,6 +4,8 @@ import { Button, Card, EmptyState, Icon, IconButton, Inset, Pill, Row, Segmented
 import { colors, radii, space, webOnly } from '../../../../ui/theme';
 import { API_BASE } from '../../../../ui/config';
 
+import { tl } from '../../../../i18n/tl';
+
 // Adaptive coding challenge for the student's current skill gap: run, submit, progressive hints.
 export default function PracticeLab({ topGapSubject, studentEmail, activeCareerName, selectedGapSkillName, onRefreshSkillData }) {
   // Adaptive Challenge State
@@ -203,7 +205,10 @@ export default function PracticeLab({ topGapSubject, studentEmail, activeCareerN
   const tabs = [
     { id: 'problem', label: 'Problem', icon: 'FileText' },
     { id: 'examples', label: 'Examples', icon: 'List' },
-    { id: 'tests', label: executionResult ? `Tests ${executionResult.passed_tests ?? 0}/${executionResult.total_tests ?? results.length}` : 'Tests', icon: 'CircleCheck' },
+    { id: 'tests', label: executionResult ? tl('Tests {{v0}}/{{v1}}', {
+      v0: executionResult.passed_tests ?? 0,
+      v1: executionResult.total_tests ?? results.length
+    }) : 'Tests', icon: 'CircleCheck' },
   ];
 
   if (isLoadingChallenge && !challenge) {
@@ -226,7 +231,7 @@ export default function PracticeLab({ topGapSubject, studentEmail, activeCareerN
   }
 
   return (
-    <Card badge={{ icon: 'Code', tone: 'accent' }}>
+    (<Card badge={{ icon: 'Code', tone: 'accent' }}>
       <Stack gap={space.md}>
         <Row justify="space-between" align="flex-start" wrap gap={space.sm}>
           <Stack gap={4} style={{ flex: 1, minWidth: 240 }}>
@@ -290,7 +295,9 @@ export default function PracticeLab({ topGapSubject, studentEmail, activeCareerN
                 <Row key={i} gap={10} style={[styles.testRow, { backgroundColor: r.passed ? colors.mint : colors.dangerSoft }]}>
                   <Icon name={r.passed ? 'CircleCheck' : 'X'} size={16} color={r.passed ? colors.mintInk : '#B4232A'} />
                   <Stack gap={0} style={{ flex: 1 }}>
-                    <Txt variant="small" weight={600} tone="ink">{r.description || `Test ${i + 1}`}</Txt>
+                    <Txt variant="small" weight={600} tone="ink">{r.description || tl('Test {{v0}}', {
+                      v0: i + 1
+                    })}</Txt>
                     {!r.passed && r.expected !== undefined ? (
                       <Txt variant="caption" tone="muted" style={styles.mono}>expected {JSON.stringify(r.expected)} · got {JSON.stringify(r.actual)}</Txt>
                     ) : null}
@@ -351,7 +358,7 @@ export default function PracticeLab({ topGapSubject, studentEmail, activeCareerN
           <Button label={hintLevel ? 'Next hint' : 'Hint'} icon="Sparkles" variant="ghost" onPress={handleRequestHint} loading={isLoadingHint} disabled={hintData && hintData.has_more === false} />
         </Row>
       </Stack>
-    </Card>
+    </Card>)
   );
 }
 

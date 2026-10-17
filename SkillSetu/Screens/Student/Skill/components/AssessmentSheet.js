@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Button, Inset, Pill, ProgressBar, Ring, Row, Sheet, Skeleton, Stack, Txt } from '../../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../../ui/theme';
 
+import { tl } from '../../../../i18n/tl';
+
 /**
  * Universal Question Option Parser
  */
@@ -194,17 +196,25 @@ export default function AssessmentSheet({ visible, onClose, assessmentData, sele
   ) : null;
 
   return (
-    <Sheet
-      visible={visible}
-      onClose={onClose}
-      title={assessmentData?.title || `${assessmentData?.skill_name || 'Skill'} assessment`}
-      subtitle={assessmentData ? `${questions.length} questions${assessmentData.duration_minutes ? ` · ${assessmentData.duration_minutes} min` : ''}` : 'Loading questions…'}
-      icon="Target"
-      tone="accent"
-      footer={footer}
-    >
+    (<Sheet
+        visible={visible}
+        onClose={onClose}
+        title={assessmentData?.title || tl('{{v0}} assessment', {
+          v0: assessmentData?.skill_name || 'Skill'
+        })}
+        subtitle={assessmentData ? tl('{{length}} questions{{v1}}', {
+          length: questions.length,
+
+          v1: assessmentData.duration_minutes ? tl('· {{duration_minutes}} min', {
+            duration_minutes: assessmentData.duration_minutes
+          }) : ''
+        }) : 'Loading questions…'}
+        icon="Target"
+        tone="accent"
+        footer={footer}
+      >
       {body}
-    </Sheet>
+    </Sheet>)
   );
 }
 

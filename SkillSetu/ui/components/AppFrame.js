@@ -5,6 +5,8 @@ import { breakpoints, colors, radii, shadows, space, toneOf, webOnly } from '../
 import Icon from './Icon';
 import Txt from './Txt';
 import { Avatar } from './primitives';
+import { tx } from '../../i18n';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const BAR_HEIGHT = 76;
 const NOTCH_W = 150;
@@ -65,7 +67,7 @@ function UserMenu({ user, items = [], compact }) {
       <Pressable
         onPress={() => setOpen((o) => !o)}
         accessibilityRole="button"
-        accessibilityLabel="Account menu"
+        accessibilityLabel={tx('Account menu')}
         style={({ hovered }) => [styles.userBtn, webOnly({ cursor: 'pointer' }), hovered ? { backgroundColor: colors.frameSoft } : null]}
       >
         <Avatar name={user?.name} uri={user?.avatarUri} size={42} />
@@ -115,7 +117,7 @@ function NavItem({ item, active, onPress, onLayout }) {
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={item.label}
+      accessibilityLabel={tx(item.label)}
       style={({ hovered }) => [
         styles.navItem,
         webOnly({ cursor: 'pointer', transitionDuration: '180ms' }),
@@ -147,7 +149,7 @@ export function Dock({ items = [] }) {
             <Pressable
               key={it.label}
               onPress={it.onPress}
-              accessibilityLabel={it.label}
+              accessibilityLabel={tx(it.label)}
               style={({ hovered, pressed }) => [
                 styles.dockBtn,
                 { backgroundColor: it.dark ? '#3A3A3F' : t.bg },
@@ -177,7 +179,7 @@ export function ToolRail({ items = [], value, onChange, style }) {
           <Pressable
             key={it.id}
             onPress={() => onChange && onChange(it.id)}
-            accessibilityLabel={it.label}
+            accessibilityLabel={tx(it.label)}
             style={({ hovered }) => [styles.railBtn, webOnly({ cursor: 'pointer' }), active ? { backgroundColor: colors.ink } : hovered ? { backgroundColor: colors.surfaceMuted } : null]}
           >
             <Icon name={it.icon} size={18} color={active ? '#fff' : colors.text} />
@@ -202,7 +204,7 @@ function MobileTabBar({ nav, activeId, onNavigate }) {
               key={item.id}
               onPress={() => onNavigate(item.id)}
               accessibilityRole="tab"
-              accessibilityLabel={item.label}
+              accessibilityLabel={tx(item.label)}
               accessibilityState={{ selected: active }}
               style={[styles.mobileTab, active ? { backgroundColor: colors.surface, flexGrow: 1.6 } : null]}
             >
@@ -264,6 +266,7 @@ export default function AppFrame({ nav = [], activeId, onNavigate, user, menuIte
             </View>
           ) : null}
           <View style={styles.barRight}>
+            <LanguageSwitcher compact={isCompact} />
             {actions}
             <UserMenu user={user} items={menuItems} compact={isCompact} />
           </View>
@@ -279,7 +282,7 @@ export default function AppFrame({ nav = [], activeId, onNavigate, user, menuIte
         {!isCompact ? <Notch x={notchX} /> : null}
         {isCompact ? <MobileTabBar nav={nav} activeId={activeId} onNavigate={onNavigate} /> : null}
         {isCompact && dock[0] ? (
-          <Pressable onPress={dock[0].onPress} accessibilityLabel={dock[0].label} style={[styles.fab, shadows.float]}>
+          <Pressable onPress={dock[0].onPress} accessibilityLabel={tx(dock[0].label)} style={[styles.fab, shadows.float]}>
             <Icon name={dock[0].icon} size={22} color={toneOf(dock[0].tone || 'accent').ink} />
           </Pressable>
         ) : null}

@@ -35,6 +35,8 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 export default function Rounds({ user, onNavigate, navigationParams }) {
   const { width } = useWindowDimensions();
   const isWide = width >= 1320 || (width >= 900 && width < 1120);
@@ -408,10 +410,18 @@ ${
       <SectionTitle title="Schedule" emoji="🗓️" />
       <ChipGroup
         options={[
-          { id: 'All', label: `All ${timelineCounts.all}` },
-          { id: 'Upcoming', label: `Upcoming ${timelineCounts.upcoming}` },
-          { id: 'Today', label: `Today ${timelineCounts.today}` },
-          { id: 'Complete', label: `Done ${timelineCounts.complete}` },
+          { id: 'All', label: tl('All {{all}}', {
+            all: timelineCounts.all
+          }) },
+          { id: 'Upcoming', label: tl('Upcoming {{upcoming}}', {
+            upcoming: timelineCounts.upcoming
+          }) },
+          { id: 'Today', label: tl('Today {{today}}', {
+            today: timelineCounts.today
+          }) },
+          { id: 'Complete', label: tl('Done {{complete}}', {
+            complete: timelineCounts.complete
+          }) },
         ]}
         value={selectedTimelineFilter}
         multiple={false}
@@ -426,7 +436,9 @@ ${
           type={s.round_name}
           date={s.scheduled_date}
           title={`${s.role_title} · ${s.company_name}`}
-          body={`${s.display_time || s.round_type || ''}${s.duration_min ? ` · ${s.duration_min} min` : ''}`}
+          body={`${s.display_time || s.round_type || ''}${s.duration_min ? tl('· {{duration_min}} min', {
+            duration_min: s.duration_min
+          }) : ''}`}
           footer={
             s.status === 'AVAILABLE' || s.status === 'IN_PROGRESS' ? (
               <Pressable onPress={() => handleStartOfficialAssessment(s.application_id)} style={[styles.footerBtn, webOnly({ cursor: 'pointer' })]}>
@@ -449,11 +461,13 @@ ${
   );
 
   return (
-    <Page aside={aside} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadDashboard(true)} />}>
+    (<Page aside={aside} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadDashboard(true)} />}>
       <SectionTitle
         title="Assessments"
         emoji="🎯"
-        subtitle={careerTrack && careerTrack.length <= 40 && !careerTrack.trim().endsWith('.') ? `Interview prep for ${careerTrack}` : 'Your assessment rounds and interview practice'}
+        subtitle={careerTrack && careerTrack.length <= 40 && !careerTrack.trim().endsWith('.') ? tl('Interview prep for {{careerTrack}}', {
+          careerTrack: careerTrack
+        }) : 'Your assessment rounds and interview practice'}
         right={
           <Row gap={8}>
             <Button label="Export dossier" icon="Download" variant="secondary" onPress={handleDownloadDossier} />
@@ -461,7 +475,6 @@ ${
           </Row>
         }
       />
-
       {error ? (
         <Card tone="danger">
           <Row justify="space-between" wrap gap={8}>
@@ -470,14 +483,12 @@ ${
           </Row>
         </Card>
       ) : null}
-
       <View style={styles.statsRow}>
         <StatTile value={isLoading ? '…' : kpi.active_rounds} label="Active rounds" tone="accent" style={styles.stat} />
         <StatTile value={isLoading ? '…' : kpi.scheduled} label="Scheduled" tone="info" style={styles.stat} />
         <StatTile value={isLoading ? '…' : `${kpi.prep_progress ?? 0}%`} label="Prep progress" tone="success" style={styles.stat} />
         <StatTile value={isLoading ? '…' : kpi.average_score != null ? `${kpi.average_score}%` : '—'} label="Avg score" dashed style={styles.stat} />
       </View>
-
       <FeatureCard tilt={isWide}>
         <Row align="flex-start" gap={space.md}>
           <Stack gap={6} style={{ flex: 1 }}>
@@ -494,7 +505,6 @@ ${
           <Button label="Question bank" icon="MessageCircle" variant="light" onPress={() => setIsAIInterviewPracticeOpen(true)} />
         </Row>
       </FeatureCard>
-
       <SectionTitle title="Your pipelines" size="h2" subtitle="Internships where recruiters set up assessment rounds." />
       {isLoading ? (
         <Skeleton height={160} radius={radii.xl} />
@@ -535,7 +545,6 @@ ${
           <EmptyState icon="Target" title="No assessment pipelines yet" message="When a recruiter shortlists you for a role with rounds, it shows up here." action={<Button label="Find internships" size="sm" onPress={() => onNavigate && onNavigate('Opportunities')} />} />
         </Card>
       )}
-
       <View style={[styles.grid, isWide ? styles.gridRow : null]}>
         <View style={isWide ? { flex: 1, minWidth: 0 } : null}>
           <Card badge={{ icon: 'Zap', tone: 'success' }}>
@@ -555,7 +564,9 @@ ${
                     <ProgressBar value={s.percentage} tone={scoreTone(s.percentage)} height={6} />
                   </Stack>
                 ))}
-                {skillMatrix.length > 8 ? <Button label={showAllSkills ? 'Show less' : `Show all ${skillMatrix.length}`} size="sm" variant="ghost" onPress={() => setShowAllSkills((v) => !v)} /> : null}
+                {skillMatrix.length > 8 ? <Button label={showAllSkills ? 'Show less' : tl('Show all {{length}}', {
+                  length: skillMatrix.length
+                })} size="sm" variant="ghost" onPress={() => setShowAllSkills((v) => !v)} /> : null}
               </Stack>
             ) : (
               <Txt variant="small" tone="subtle">No skill evidence yet.</Txt>
@@ -591,11 +602,13 @@ ${
             ) : (
               <Txt variant="small" tone="muted" style={{ marginTop: 6 }}>{trajectory.message}</Txt>
             )}
-            {trajectory.strongest_competency ? <Pill label={`Strongest: ${trajectory.strongest_competency} ${trajectory.strongest_competency_score ?? ''}%`} tone="success" icon="Award" size="sm" style={{ marginTop: 10 }} /> : null}
+            {trajectory.strongest_competency ? <Pill label={tl('Strongest: {{strongest_competency}} {{v1}}%', {
+              strongest_competency: trajectory.strongest_competency,
+              v1: trajectory.strongest_competency_score ?? ''
+            })} tone="success" icon="Award" size="sm" style={{ marginTop: 10 }} /> : null}
           </Card>
         </View>
       </View>
-
       {rawQuestionBank.length ? (
         <Card>
           <Row justify="space-between" wrap gap={8}>
@@ -604,7 +617,9 @@ ${
           </Row>
           <Row wrap gap={6} style={{ marginVertical: space.md }}>
             {questionCategories.cats.map((c) => (
-              <Chip key={c} label={c === 'All' ? `All ${rawQuestionBank.length}` : `${c} ${questionCategories.catMap[c]}`} tone="info" selected={questionBankFilter === c} onPress={() => setQuestionBankFilter(c)} />
+              <Chip key={c} label={c === 'All' ? tl('All {{length}}', {
+                length: rawQuestionBank.length
+              }) : `${c} ${questionCategories.catMap[c]}`} tone="info" selected={questionBankFilter === c} onPress={() => setQuestionBankFilter(c)} />
             ))}
           </Row>
           <Stack gap={8}>
@@ -635,7 +650,6 @@ ${
           </Stack>
         </Card>
       ) : null}
-
       {/* Pipeline details */}
       <Sheet
         visible={activeModal === 'details' && !!modalData}
@@ -649,8 +663,12 @@ ${
           <>
             <Row wrap gap={6}>
               {modalData.application_status ? <Pill label={pretty(modalData.application_status)} /> : null}
-              {modalData.applied_at ? <Pill label={`Applied ${modalData.applied_at}`} icon="Calendar" /> : null}
-              {modalData.progress_percent != null ? <Pill label={`${modalData.progress_percent}% complete`} tone="accent" /> : null}
+              {modalData.applied_at ? <Pill label={tl('Applied {{applied_at}}', {
+                applied_at: modalData.applied_at
+              })} icon="Calendar" /> : null}
+              {modalData.progress_percent != null ? <Pill label={tl('{{progress_percent}}% complete', {
+                progress_percent: modalData.progress_percent
+              })} tone="accent" /> : null}
             </Row>
             {(modalData.required_skills || []).length ? (
               <Row wrap gap={6}>{modalData.required_skills.map((s) => <Pill key={s} label={s} tone="info" size="sm" />)}</Row>
@@ -668,7 +686,11 @@ ${
                         <Pill label={pretty(r.status)} tone={roundTone(r.status)} size="sm" />
                       </Row>
                       <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
-                        {[r.schedule_type, r.display_time, r.duration_min && `${r.duration_min} min`, r.score != null && `Score ${r.score}%`].filter(Boolean).join(' · ')}
+                        {[r.schedule_type, r.display_time, r.duration_min && tl('{{duration_min}} min', {
+                          duration_min: r.duration_min
+                        }), r.score != null && tl('Score {{score}}%', {
+                          score: r.score
+                        })].filter(Boolean).join(' · ')}
                       </Txt>
                     </Card>
                   ),
@@ -678,7 +700,6 @@ ${
           </>
         ) : null}
       </Sheet>
-
       {/* Practice answer with AI feedback */}
       <Sheet
         visible={activeModal === 'practice' && !!modalData}
@@ -744,7 +765,6 @@ ${
           </Card>
         ) : null}
       </Sheet>
-
       <InterviewBankSheet
         visible={isAIInterviewPracticeOpen}
         onClose={() => setIsAIInterviewPracticeOpen(false)}
@@ -757,7 +777,7 @@ ${
         }}
         onStartFullMock={() => handleStartAIPracticeSession({ targetRound: 'technical' })}
       />
-    </Page>
+    </Page>)
   );
 }
 

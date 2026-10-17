@@ -4,6 +4,14 @@ import { colors, font, radii, shadows, space, toneOf, webOnly } from '../theme';
 import Icon from './Icon';
 import Txt from './Txt';
 import { IconButton } from './primitives';
+import { tx, useLanguage } from '../../i18n';
+import { familyForScript } from '../../i18n/fonts';
+
+// Input text uses the active script's font so typed Indic text renders correctly.
+function useInputFont() {
+  const { script } = useLanguage();
+  return script === 'latin' ? null : { fontFamily: familyForScript('PlusJakartaSans_500Medium', script) };
+}
 
 const noOutline = webOnly({ outlineStyle: 'none' });
 
@@ -11,6 +19,7 @@ const noOutline = webOnly({ outlineStyle: 'none' });
 // SearchField — rounded grey search pill.
 // ---------------------------------------------------------------------------
 export function SearchField({ value, onChangeText, placeholder = 'Search', onSubmit, style }) {
+  const inputFont = useInputFont();
   return (
     <View style={[styles.search, style]}>
       <Icon name="Search" size={18} color={colors.textMuted} />
@@ -18,9 +27,9 @@ export function SearchField({ value, onChangeText, placeholder = 'Search', onSub
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}
-        placeholder={placeholder}
+        placeholder={tx(placeholder)}
         placeholderTextColor={colors.textSubtle}
-        style={[styles.searchInput, noOutline]}
+        style={[styles.searchInput, inputFont, noOutline]}
       />
       {value ? <IconButton icon="X" size={26} variant="ghost" onPress={() => onChangeText && onChangeText('')} /> : null}
     </View>
@@ -33,6 +42,7 @@ export function SearchField({ value, onChangeText, placeholder = 'Search', onSub
 export function Field({ label, icon, error, hint, secure, multiline, right, style, inputStyle, ...rest }) {
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(!!secure);
+  const inputFont = useInputFont();
   return (
     <View style={[{ gap: 6 }, style]}>
       {label ? <Txt variant="small" weight={600} tone="ink">{label}</Txt> : null}
@@ -47,12 +57,13 @@ export function Field({ label, icon, error, hint, secure, multiline, right, styl
         {icon ? <Icon name={icon} size={18} color={focused ? colors.ink : colors.textMuted} /> : null}
         <TextInput
           {...rest}
+          placeholder={tx(rest.placeholder)}
           multiline={multiline}
           secureTextEntry={hidden}
           placeholderTextColor={colors.textSubtle}
           onFocus={(e) => { setFocused(true); rest.onFocus && rest.onFocus(e); }}
           onBlur={(e) => { setFocused(false); rest.onBlur && rest.onBlur(e); }}
-          style={[styles.fieldInput, multiline ? { minHeight: 72, textAlignVertical: 'top' } : null, noOutline, inputStyle]}
+          style={[styles.fieldInput, inputFont, multiline ? { minHeight: 72, textAlignVertical: 'top' } : null, noOutline, inputStyle]}
         />
         {secure ? (
           <IconButton icon={hidden ? 'Eye' : 'EyeOff'} size={30} variant="ghost" onPress={() => setHidden((h) => !h)} accessibilityLabel="Toggle password visibility" />
@@ -162,7 +173,7 @@ export function Sheet({ visible, onClose, title, subtitle, icon, tone = 'accent'
   return (
     <Modal visible={!!visible} transparent animationType={phone ? 'slide' : 'fade'} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.sheetBackdrop, phone ? { justifyContent: 'flex-end', padding: 0 } : null]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close dialog" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={tx('Close dialog')} />
         <View
           style={[
             styles.sheet,

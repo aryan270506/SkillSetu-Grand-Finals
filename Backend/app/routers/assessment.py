@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import httpx
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -2687,6 +2687,7 @@ class PracticeAnswerEvaluationRequest(BaseModel):
 @router.post("/student/assessment/evaluate-practice-answer")
 def evaluate_practice_answer(
     req: PracticeAnswerEvaluationRequest,
+    request: Request,
     email: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
@@ -2698,6 +2699,7 @@ def evaluate_practice_answer(
     Persists attempt in PostgreSQL database to prevent repeat questions.
     """
     from app.services.groq_service import evaluate_interview_practice_answer_with_groq
+    from app.services.language import get_request_language
 
     student = None
     if email and email.strip():
@@ -2735,7 +2737,8 @@ def evaluate_practice_answer(
         difficulty=req.difficulty,
         skill=req.skill,
         project_context=project_context,
-        expected_concepts=req.expected_concepts
+        expected_concepts=req.expected_concepts,
+        language=get_request_language(request)
     )
 
     if not evaluation:

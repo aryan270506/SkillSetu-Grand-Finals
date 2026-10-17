@@ -3,6 +3,8 @@ import { fetchRoleQuestionBank } from '../../services/applicationService';
 import { Button, Card, Chip, ChipGroup, EmptyState, Pill, Row, SearchField, SegmentedTabs, Sheet, Skeleton, Stack, Txt } from '../../../../ui/components';
 import { space } from '../../../../ui/theme';
 
+import { tl } from '../../../../i18n/tl';
+
 function sanitizeRoleTitle(rawRole) {
   if (!rawRole || typeof rawRole !== 'string') return 'Backend Developer';
   const clean = rawRole.trim();
@@ -168,11 +170,14 @@ export default function InterviewBankSheet({
 
   const diffs = ['All', 'Easy', 'Medium', 'Hard'];
   return (
-    <Sheet
+    (<Sheet
       visible={visible}
       onClose={onClose}
       title="Interview question bank"
-      subtitle={`${questionData?.total_questions || 0} questions for ${selectedRole}`}
+      subtitle={tl('{{v0}} questions for {{selectedRole}}', {
+        v0: questionData?.total_questions || 0,
+        selectedRole: selectedRole
+      })}
       icon="MessageCircle"
       tone="accent"
       width={860}
@@ -206,7 +211,7 @@ export default function InterviewBankSheet({
                 {q.category ? <Pill label={q.category} tone="info" size="sm" /> : null}
                 {q.difficulty ? <Pill label={q.difficulty} tone="warning" size="sm" /> : null}
                 {q.skill ? <Pill label={q.skill} size="sm" /> : null}
-                {q.is_submitted ? <Pill label={`Answered${q.last_score != null ? ` · ${q.last_score}%` : ''}`} tone="success" icon="Check" size="sm" /> : null}
+                {q.is_submitted ? <Pill label={q.last_score != null ? tl('Answered · {{score}}%', { score: q.last_score }) : tl('Answered')} tone="success" icon="Check" size="sm" /> : null}
               </Row>
               <Txt variant="bodyStrong" tone="ink" style={{ marginTop: 8 }}>{q.question}</Txt>
               {q.is_submitted && q.last_verdict ? <Txt variant="caption" tone="muted" style={{ marginTop: 4 }}>Last verdict: {q.last_verdict}</Txt> : null}
@@ -216,12 +221,14 @@ export default function InterviewBankSheet({
             </Card>
           ))}
           {filteredQuestions.length > visibleCount ? (
-            <Button label={`Show more (${filteredQuestions.length - visibleCount} left)`} variant="secondary" onPress={() => setVisibleCount((c) => c + 20)} style={{ alignSelf: 'center' }} />
+            <Button label={tl('Show more ({{v0}} left)', {
+              v0: filteredQuestions.length - visibleCount
+            })} variant="secondary" onPress={() => setVisibleCount((c) => c + 20)} style={{ alignSelf: 'center' }} />
           ) : null}
         </Stack>
       ) : (
         <EmptyState icon="MessageCircle" title="No questions match" message="Try another category, difficulty or search term." />
       )}
-    </Sheet>
+    </Sheet>)
   );
 }

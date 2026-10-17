@@ -37,6 +37,8 @@ import { colors, radii, space, webOnly } from '../../../ui/theme';
 import { API_BASE } from '../../../ui/config';
 import { pickFile } from '../../../ui/pickFile';
 
+import { tl } from '../../../i18n/tl';
+
 export default function Dashboard({
   user,
   profileCompletion,
@@ -678,7 +680,10 @@ export default function Dashboard({
               </Txt>
               <Txt variant="body" color={colors.lilacInk} numberOfLines={2}>
                 {currentModule
-                  ? `${currentModule.provider || 'Curated course'} · closes your ${learningPathData?.gap_skill || 'top'} gap`
+                  ? tl('{{v0}} · closes your {{v1}} gap', {
+                  v0: currentModule.provider || 'Curated course',
+                  v1: learningPathData?.gap_skill || 'top'
+                })
                   : 'Personal modules are generated from your skill gaps.'}
               </Txt>
             </Stack>
@@ -693,7 +698,9 @@ export default function Dashboard({
                 {currentModule ? `${currentModule.duration || 'Self-paced'} · ${currentModule.difficulty || 'All levels'}` : 'Self-paced'}
               </Txt>
             </View>
-            {modules.length ? <Pill label={`${modules.length} modules`} tone="neutral" style={{ backgroundColor: 'rgba(255,255,255,0.7)' }} /> : null}
+            {modules.length ? <Pill label={tl('{{length}} modules', {
+              length: modules.length
+            })} tone="neutral" style={{ backgroundColor: 'rgba(255,255,255,0.7)' }} /> : null}
           </Row>
         </FeatureCard>
       ),
@@ -728,7 +735,9 @@ export default function Dashboard({
           </Stack>
           <Row justify="space-between" style={{ marginTop: space.lg }}>
             <Pill
-              label={!hasCareer ? 'Needs a career goal' : topGaps.length ? `${computedGapData?.top_gaps?.length || topGaps.length} priority skills` : 'Up to date'}
+              label={!hasCareer ? 'Needs a career goal' : topGaps.length ? tl('{{v0}} priority skills', {
+                v0: computedGapData?.top_gaps?.length || topGaps.length
+              }) : 'Up to date'}
               tone={!hasCareer ? 'neutral' : topGaps.length ? 'warning' : 'success'}
               icon="Target"
             />
@@ -752,7 +761,13 @@ export default function Dashboard({
                 ? 'Finding internships that match your evidence…'
                 : internshipsError
                 ? 'Opportunities are unavailable right now.'
-                : `${liveMatchesCount} of ${totalOpportunitiesCount} opportunities meet your match threshold.`}
+                : tl(
+                '{{liveMatchesCount}} of {{totalOpportunitiesCount}} opportunities meet your match threshold.',
+                {
+                  liveMatchesCount: liveMatchesCount,
+                  totalOpportunitiesCount: totalOpportunitiesCount
+                }
+              )}
             </Txt>
           </Stack>
           <Stack gap={space.xs} style={{ marginTop: space.md }}>
@@ -863,13 +878,18 @@ export default function Dashboard({
           <Stack gap={4} style={{ flex: 1 }}>
             <Txt variant="overline" color={colors.skyInk}>Resume check</Txt>
             <Txt variant="h3" tone="ink">
-              {resumeIntelligence.analyzing ? 'Analysing…' : resumeResult ? `ATS score ${resumeResult.ats_score || 0}/100` : 'How does your resume score?'}
+              {resumeIntelligence.analyzing ? 'Analysing…' : resumeResult ? tl('ATS score {{v0}}/100', {
+                v0: resumeResult.ats_score || 0
+              }) : 'How does your resume score?'}
             </Txt>
             <Txt variant="small" color={colors.skyInk} numberOfLines={2}>
               {resumeIntelligence.error
                 ? resumeIntelligence.error
                 : resumeResult
-                ? `Best fit: ${resumeResult.role_fit?.best_fit_role || '—'} (${resumeResult.role_fit?.fit_score || 0}%)`
+                ? tl('Best fit: {{v0}} ({{v1}}%)', {
+                v0: resumeResult.role_fit?.best_fit_role || '—',
+                v1: resumeResult.role_fit?.fit_score || 0
+              })
                 : 'Upload a PDF, DOCX or image for an instant ATS and role-fit report.'}
             </Txt>
           </Stack>
@@ -924,11 +944,15 @@ export default function Dashboard({
   );
 
   return (
-    <Page aside={eventsPanel}>
+    (<Page aside={eventsPanel}>
       <SectionTitle
-        title={`Hi ${firstName}, here's your plan`}
+        title={tl('Hi {{firstName}}, here\'s your plan', {
+          firstName: firstName
+        })}
         emoji="⏰"
-        subtitle={hasCareer ? `Tracking ${activeTargetCareers.join(' · ')}` : 'Set a target career to personalise everything below.'}
+        subtitle={hasCareer ? tl('Tracking {{v0}}', {
+          v0: activeTargetCareers.join(' · ')
+        }) : 'Set a target career to personalise everything below.'}
         right={
           <Button
             label={hasCareer ? 'Edit goals' : 'Set career goal'}
@@ -938,14 +962,12 @@ export default function Dashboard({
           />
         }
       />
-
       <View style={[styles.grid, isWide ? styles.gridWide : null]}>
         <View style={isWide ? { flex: 1.15 } : null}>
           <Timeline items={roadmap} gap={space.lg} />
         </View>
         <View style={isWide ? { flex: 1 } : null}>{insights}</View>
       </View>
-
       {/* Modals (kept from previous dashboard) */}
       <SkillIndexModal
         isOpen={isSkillIndexModalOpen}
@@ -977,7 +999,6 @@ export default function Dashboard({
         isTablet={isTablet}
         setSelectedSkillModal={setSelectedSkillModal}
       />
-
       <Sheet
         visible={resumeSheetOpen}
         onClose={() => setResumeSheetOpen(false)}
@@ -1020,7 +1041,9 @@ export default function Dashboard({
               <Txt variant="overline" tone="subtle">Best-fit role</Txt>
               <Row justify="space-between" style={{ marginTop: 4 }}>
                 <Txt variant="h3" tone="ink">{resumeResult.role_fit?.best_fit_role || 'General Software Engineering'}</Txt>
-                <Pill label={`${resumeResult.role_fit?.fit_score || 0}% fit`} tone="success" />
+                <Pill label={tl('{{v0}}% fit', {
+                  v0: resumeResult.role_fit?.fit_score || 0
+                })} tone="success" />
               </Row>
               <Txt variant="small" tone="muted" style={{ marginTop: 6 }}>{resumeResult.role_fit?.why_fit || ''}</Txt>
               {(resumeResult.extracted_skills || []).length ? (
@@ -1054,7 +1077,7 @@ export default function Dashboard({
           </>
         ) : null}
       </Sheet>
-    </Page>
+    </Page>)
   );
 }
 

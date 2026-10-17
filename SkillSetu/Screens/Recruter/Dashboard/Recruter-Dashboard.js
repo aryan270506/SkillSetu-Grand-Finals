@@ -24,6 +24,8 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 export default function RecruterDashboard({
     user,
     profileData,
@@ -230,11 +232,15 @@ export default function RecruterDashboard({
     );
 
     return (
-        <Page aside={aside}>
+        (<Page aside={aside}>
             <SectionTitle
-                title={`Welcome back, ${userName}`}
+                title={tl('Welcome back, {{userName}}', {
+                    userName: userName
+                })}
                 emoji="👋"
-                subtitle={`${companyName} hiring workspace`}
+                subtitle={tl('{{companyName}} hiring workspace', {
+                    companyName: companyName
+                })}
                 right={
                     isComplete ? (
                         <Button label="Post internship" icon="Plus" onPress={onOpenPostModal} />
@@ -243,7 +249,6 @@ export default function RecruterDashboard({
                     )
                 }
             />
-
             {!isComplete ? (
                 <FeatureCard tone="warning">
                     <Row justify="space-between" align="flex-start" gap={space.md} wrap>
@@ -259,18 +264,18 @@ export default function RecruterDashboard({
                     <Button label="Complete company profile" iconRight="ArrowRight" onPress={() => go('My Profile')} style={{ marginTop: space.md }} />
                 </FeatureCard>
             ) : null}
-
             <View style={styles.statsRow}>
                 <StatTile value={loadingData ? '…' : dashboardMetrics.active_roles} label="Active roles" tone="info" style={styles.stat} onPress={() => go('Internships')} />
                 <StatTile value={loadingData ? '…' : dashboardMetrics.total_applications} label="Applicants" tone="accent" style={styles.stat} onPress={() => go('Applications')} />
                 <StatTile value={loadingData ? '…' : dashboardMetrics.shortlisted_students} label="Shortlisted" tone="warning" style={styles.stat} onPress={() => go('Applications')} />
                 <StatTile value={loadingData ? '…' : dashboardMetrics.selected_students} label="Selected" tone="success" style={styles.stat} />
             </View>
-
             <Card>
                 <Row justify="space-between">
                     <Txt variant="h2" tone="ink">Selection funnel</Txt>
-                    <Pill label={`${fTotal ? Math.round((fSel / fTotal) * 100) : 0}% conversion`} tone="success" size="sm" />
+                    <Pill label={tl('{{v0}}% conversion', {
+                        v0: fTotal ? Math.round((fSel / fTotal) * 100) : 0
+                    })} tone="success" size="sm" />
                 </Row>
                 <Stack gap={12} style={{ marginTop: space.md }}>
                     {funnel.map((f) => (
@@ -282,7 +287,6 @@ export default function RecruterDashboard({
                     ))}
                 </Stack>
             </Card>
-
             <View style={[styles.grid, isDesktop ? styles.gridRow : null]}>
                 <View style={isDesktop ? { flex: 1.1, minWidth: 0 } : null}>
                     <SectionTitle title="Active internships" size="h2" right={<Button label="Manage" size="sm" variant="secondary" onPress={() => go('Internships')} />} />
@@ -298,10 +302,18 @@ export default function RecruterDashboard({
                                         <Txt variant="h3" tone="ink" numberOfLines={1}>{p.title}</Txt>
                                         <Txt variant="small" tone="muted" numberOfLines={1}>{[p.department, p.work_mode || p.location, p.stipend].filter(Boolean).join(' · ')}</Txt>
                                         <Row wrap gap={6} style={{ marginTop: space.sm }}>
-                                            <Pill label={`${p.applied_count ?? p.applicants_count ?? 0} applied`} tone="info" size="sm" />
-                                            <Pill label={`${p.shortlisted_count ?? 0} shortlisted`} tone="accent" size="sm" />
-                                            <Pill label={`${p.selected_count ?? 0} selected`} tone="success" size="sm" />
-                                            {p.application_threshold ? <Pill label={`Min match ${p.application_threshold}%`} icon="Target" size="sm" /> : null}
+                                            <Pill label={tl('{{v0}} applied', {
+                                                v0: p.applied_count ?? p.applicants_count ?? 0
+                                            })} tone="info" size="sm" />
+                                            <Pill label={tl('{{v0}} shortlisted', {
+                                                v0: p.shortlisted_count ?? 0
+                                            })} tone="accent" size="sm" />
+                                            <Pill label={tl('{{v0}} selected', {
+                                                v0: p.selected_count ?? 0
+                                            })} tone="success" size="sm" />
+                                            {p.application_threshold ? <Pill label={tl('Min match {{application_threshold}}%', {
+                                                application_threshold: p.application_threshold
+                                            })} icon="Target" size="sm" /> : null}
                                         </Row>
                                     </Card>
                                 ),
@@ -366,7 +378,7 @@ export default function RecruterDashboard({
                     ) : null}
                 </View>
             </View>
-        </Page>
+        </Page>)
     );
 }
 

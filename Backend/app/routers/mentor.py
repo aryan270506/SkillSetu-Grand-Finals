@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, status, Depends, Header, Query
+from fastapi import APIRouter, HTTPException, status, Depends, Header, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -11,6 +11,7 @@ from app.database import get_db
 from app import models
 from app.services.student_context_service import StudentContextService
 from app.services.groq_mentor_service import GroqMentorService
+from app.services.language import get_request_language
 
 logger = logging.getLogger("mentor_router")
 logger.setLevel(logging.INFO)
@@ -93,6 +94,7 @@ class MentorChatResponse(BaseModel):
 @router.post("/chat")
 def chat_with_personal_mentor(
     payload: MentorChatRequest,
+    request: Request,
     current_student: models.StudentUser = Depends(get_authenticated_student),
     db: Session = Depends(get_db)
 ):
@@ -186,7 +188,8 @@ def chat_with_personal_mentor(
         user_message=user_msg_text,
         student_id=student_id,
         conversation_history=formatted_history,
-        db=db
+        db=db,
+        language=get_request_language(request)
     )
 
     ai_text = ai_result.get("text", "I analyzed your request. How else can I assist your career progression?")

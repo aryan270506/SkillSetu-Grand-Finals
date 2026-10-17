@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Card, EmptyState, Inset, Pill, ProgressBar, Ring, Row, SegmentedTabs, Sheet, Stack, Txt } from '../../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../../ui/theme';
 
+import { tl } from '../../../../i18n/tl';
+
 const scoreTone = (n) => (n >= 75 ? 'success' : n >= 50 ? 'info' : 'warning');
 
 // GitHub skill index: overall score plus the three components that build it.
@@ -29,7 +31,9 @@ export function SkillIndexModal({
   };
   const domains = Object.entries(skillIndexDetails.domainBreakdown || {});
   return (
-    <Sheet visible={!!isOpen} onClose={onClose} title="GitHub skill index" subtitle={`${githubState.reposAnalyzed || 0} repositories analysed`} icon="GitBranch" tone="accent">
+    (<Sheet visible={!!isOpen} onClose={onClose} title="GitHub skill index" subtitle={tl('{{v0}} repositories analysed', {
+      v0: githubState.reposAnalyzed || 0
+    })} icon="GitBranch" tone="accent">
       <Card padding={space.lg} tone="accent">
         <Row gap={space.lg}>
           <Ring value={overallGithubScore || 0} size={104} stroke={10} tone="dark" track="rgba(255,255,255,0.6)">
@@ -70,7 +74,7 @@ export function SkillIndexModal({
           )}
         </Card>
       ))}
-    </Sheet>
+    </Sheet>)
   );
 }
 
@@ -79,9 +83,11 @@ export function SkillGapAnalysisModal({ isOpen, onClose, activeTargetCareers = [
   const gaps = computedGapData.skill_gaps || [];
   const map = computedGapData.career_skills_map || {};
   return (
-    <Sheet visible={!!isOpen} onClose={onClose} title="Skill gap analysis" subtitle={activeTargetCareers.join(' · ') || 'Your target careers'} icon="Target" tone="warning" width={720}>
+    (<Sheet visible={!!isOpen} onClose={onClose} title="Skill gap analysis" subtitle={activeTargetCareers.join(' · ') || 'Your target careers'} icon="Target" tone="warning" width={720}>
       <SegmentedTabs
-        options={[{ id: 'combined', label: `All gaps ${gaps.length}` }, { id: 'breakdown', label: 'By career' }]}
+        options={[{ id: 'combined', label: tl('All gaps {{length}}', {
+          length: gaps.length
+        }) }, { id: 'breakdown', label: 'By career' }]}
         value={gapAnalysisTab}
         onChange={setGapAnalysisTab}
         size="sm"
@@ -119,7 +125,7 @@ export function SkillGapAnalysisModal({ isOpen, onClose, activeTargetCareers = [
       ) : (
         <EmptyState icon="CircleCheck" tone="success" title="No gaps found" />
       )}
-    </Sheet>
+    </Sheet>)
   );
 }
 
@@ -129,7 +135,9 @@ export function SingleSkillModal({ selectedSkillModal, onClose, getEvidenceLevel
   const score = s.score ?? s.percentage ?? 0;
   const signals = Array.isArray(s.signals) ? s.signals : [];
   return (
-    <Sheet visible={!!selectedSkillModal} onClose={onClose} title={s.name} subtitle={s.repository_count ? `Found in ${s.repository_count} repositories` : 'Skill evidence'} icon="Zap" tone="success" width={560}>
+    (<Sheet visible={!!selectedSkillModal} onClose={onClose} title={s.name} subtitle={s.repository_count ? tl('Found in {{repository_count}} repositories', {
+      repository_count: s.repository_count
+    }) : 'Skill evidence'} icon="Zap" tone="success" width={560}>
       <Row gap={space.lg}>
         <Ring value={score} size={96} stroke={9} tone={scoreTone(score)}>
           <Txt variant="h2" tone="ink">{score}</Txt>
@@ -149,14 +157,16 @@ export function SingleSkillModal({ selectedSkillModal, onClose, getEvidenceLevel
           ))}
         </Stack>
       ) : null}
-    </Sheet>
+    </Sheet>)
   );
 }
 
 // Every evidenced skill, tap one for detail.
 export function AllSkillsModal({ isOpen, onClose, formattedSkills = [], setSelectedSkillModal }) {
   return (
-    <Sheet visible={!!isOpen} onClose={onClose} title="All verified skills" subtitle={`${formattedSkills.length} skills`} icon="Zap" tone="success" width={720}>
+    (<Sheet visible={!!isOpen} onClose={onClose} title="All verified skills" subtitle={tl('{{length}} skills', {
+      length: formattedSkills.length
+    })} icon="Zap" tone="success" width={720}>
       <View style={styles.grid}>
         {formattedSkills.map((s) => (
           <Pressable
@@ -172,7 +182,7 @@ export function AllSkillsModal({ isOpen, onClose, formattedSkills = [], setSelec
           </Pressable>
         ))}
       </View>
-    </Sheet>
+    </Sheet>)
   );
 }
 

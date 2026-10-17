@@ -41,6 +41,8 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 // Safe string extractors
 const getCareerName = (c) => {
   if (!c) return '';
@@ -189,11 +191,15 @@ export default function Learning({ profileData, user, setProfileData, navigation
       return;
     }
     setEnrollingCourseId(courseId);
-    setPathActionMessage(`Enrolling in "${courseItem?.title || 'course'}"...`);
+    setPathActionMessage(tl('Enrolling in "{{v0}}"...', {
+      v0: courseItem?.title || 'course'
+    }));
     try {
       const res = await enrollInCourse(courseId, studentEmail);
       if (res && res.status === 'success') {
-        setPathActionMessage(`Successfully enrolled in "${courseItem?.title || 'course'}".`);
+        setPathActionMessage(tl('Successfully enrolled in "{{v0}}".', {
+          v0: courseItem?.title || 'course'
+        }));
         await loadData(activeCareerName);
       } else {
         setPathActionMessage(res?.message || 'Enrolled in course track.');
@@ -273,7 +279,9 @@ export default function Learning({ profileData, user, setProfileData, navigation
           test_results: res.test_results || [],
           message: res.message || '',
         });
-        setPathActionMessage(`${res.xp_earned ? `+${res.xp_earned} XP · ` : ''}Submitted: ${selectedAssignmentForSandbox.title}`);
+        setPathActionMessage(res.xp_earned
+          ? tl('+{{xp}} XP · Submitted: {{title}}', { xp: res.xp_earned, title: selectedAssignmentForSandbox.title })
+          : tl('Submitted: {{title}}', { title: selectedAssignmentForSandbox.title }));
         await loadData(activeCareerName);
         setTimeout(() => setPathActionMessage(''), 5000);
       } else {
@@ -354,7 +362,12 @@ export default function Learning({ profileData, user, setProfileData, navigation
           skill_name: res.skill_name || activeAssessmentRunner.skill_name,
           test_title: res.test_title || activeAssessmentRunner.title,
         });
-        setPathActionMessage(`Diagnostic Completed! Score: ${res.score}%. Benchmark and credentials updated.`);
+        setPathActionMessage(tl(
+          'Diagnostic Completed! Score: {{score}}%. Benchmark and credentials updated.',
+          {
+            score: res.score
+          }
+        ));
         await loadData(activeCareerName);
         setTimeout(() => setPathActionMessage(''), 5000);
       } else {
@@ -393,7 +406,9 @@ export default function Learning({ profileData, user, setProfileData, navigation
         issuer: courseItem.provider_name || 'Accredited Provider',
       });
       if (res && (res.status === 'success' || res.data)) {
-        setPathActionMessage(`Certificate Verified for "${courseItem.title}". Evidence recorded!`);
+        setPathActionMessage(tl('Certificate Verified for "{{title}}". Evidence recorded!', {
+          title: courseItem.title
+        }));
         await loadData(activeCareerName);
         setTimeout(() => setPathActionMessage(''), 5000);
       } else {
@@ -437,7 +452,9 @@ export default function Learning({ profileData, user, setProfileData, navigation
 
   const handleStartProjectTrackCta = async (project) => {
     const pId = project.id || `proj_${activeCareerName.toLowerCase().replace(/\s+/g, '_')}`;
-    setPathActionMessage(`Starting Capstone Project Track: "${project.title}"...`);
+    setPathActionMessage(tl('Starting Capstone Project Track: "{{title}}"...', {
+      title: project.title
+    }));
     try {
       const res = await startProjectTrack(pId, studentEmail);
       if (res && res.status === 'success') {
@@ -464,8 +481,14 @@ export default function Learning({ profileData, user, setProfileData, navigation
       const res = await submitProjectTrack(pId, studentEmail, selectedRepo);
       if (res && res.status === 'success') {
         const verifiedList = res.skills_verified ? res.skills_verified.join(', ') : 'All project skills';
-        setProjectActionSuccessMsg(`+200 XP Proof Awarded! Verified deliverables for "${selectedProjectForSpecs.title}". Skills verified: ${verifiedList}.`);
-        setPathActionMessage(`+200 XP Earned! Capstone project successfully verified.`);
+        setProjectActionSuccessMsg(tl(
+          '+200 XP Proof Awarded! Verified deliverables for "{{title}}". Skills verified: {{verifiedList}}.',
+          {
+            title: selectedProjectForSpecs.title,
+            verifiedList: verifiedList
+          }
+        ));
+        setPathActionMessage(tl('+200 XP Earned! Capstone project successfully verified.'));
         await loadData(activeCareerName);
         setTimeout(() => {
           setSelectedProjectForSpecs(null);
@@ -636,7 +659,9 @@ export default function Learning({ profileData, user, setProfileData, navigation
   const courseState = (c) => {
     const pct = Math.round(c.progress_percent || 0);
     if (pct >= 100 || c.status === 'completed') return { label: 'Completed 👏', tone: 'success', badge: 'Check' };
-    if (pct > 0 || c.status === 'in_progress') return { label: `In progress · ${pct}%`, tone: 'info', badge: 'Play' };
+    if (pct > 0 || c.status === 'in_progress') return { label: tl('In progress · {{pct}}%', {
+      pct: pct
+    }), tone: 'info', badge: 'Play' };
     return { label: 'Upcoming', tone: 'neutral', icon: 'Clock', badge: 'Lock' };
   };
 
@@ -725,7 +750,9 @@ export default function Learning({ profileData, user, setProfileData, navigation
             <Stack gap={6} style={{ flex: 1 }}>
               <Txt variant="h2" tone="ink" numberOfLines={2}>{activeFeaturedCourse.title}</Txt>
               <Txt variant="small" color={colors.lilacInk} numberOfLines={2}>
-                {activeFeaturedCourse.reason || `Closes your ${activeFeaturedCourse.covered_skills?.join(', ')} gap`}
+                {activeFeaturedCourse.reason || tl('Closes your {{v0}} gap', {
+                  v0: activeFeaturedCourse.covered_skills?.join(', ')
+                })}
               </Txt>
             </Stack>
             <Pressable onPress={() => handleOpenUrl(activeFeaturedCourse.canonical_url)} style={[styles.playDisc, webOnly({ cursor: 'pointer' })]} accessibilityLabel="Open course">
@@ -735,7 +762,9 @@ export default function Learning({ profileData, user, setProfileData, navigation
           <Row justify="space-between" style={{ marginTop: space.lg }} wrap gap={8}>
             <View style={styles.watchChip}>
               <Icon name="Clock" size={15} color={colors.ink} />
-              <Txt variant="small" weight={600} tone="ink">{pct > 0 ? `Progress ${pct}%` : 'Not started'} · {activeFeaturedCourse.provider_name}</Txt>
+              <Txt variant="small" weight={600} tone="ink">{pct > 0 ? tl('Progress {{pct}}%', {
+                pct: pct
+              }) : 'Not started'} · {activeFeaturedCourse.provider_name}</Txt>
             </View>
             <Row gap={4}>
               {(activeFeaturedCourse.covered_skills || []).slice(0, 3).map((s) => (
@@ -897,7 +926,9 @@ export default function Learning({ profileData, user, setProfileData, navigation
               <Txt variant="small" tone="muted" style={{ marginTop: 4 }}>{t.meta}</Txt>
               {t.is_locked && (t.prerequisites || []).length ? <Txt variant="caption" tone="subtle" style={{ marginTop: 4 }}>Requires: {t.prerequisites.map((x) => (typeof x === 'string' ? x : x.title || x.skill_name || x.name || '')).filter(Boolean).join(', ')}</Txt> : null}
               <Row justify="space-between" wrap gap={8} style={{ marginTop: space.md }}>
-                <Pill label={t.is_completed ? `Score ${t.score ?? '—'}%` : t.is_locked ? 'Locked' : t.status_badge || 'Available'} tone={t.is_completed ? 'success' : t.is_locked ? 'neutral' : 'info'} icon={t.is_locked ? 'Lock' : undefined} size="sm" />
+                <Pill label={t.is_completed ? tl('Score {{v0}}%', {
+                  v0: t.score ?? '—'
+                }) : t.is_locked ? 'Locked' : t.status_badge || 'Available'} tone={t.is_completed ? 'success' : t.is_locked ? 'neutral' : 'info'} icon={t.is_locked ? 'Lock' : undefined} size="sm" />
                 {t.is_locked ? null : <Button label={t.is_completed ? 'Retake' : t.action || 'Begin'} size="sm" onPress={() => handleStartAssessment(t)} />}
               </Row>
             </Card>
@@ -969,14 +1000,15 @@ export default function Learning({ profileData, user, setProfileData, navigation
   const runnerOptions = extractQuestionOptions(runnerQ);
 
   return (
-    <Page aside={eventsPanel}>
+    (<Page aside={eventsPanel}>
       <SectionTitle
         title="My Learning Plan"
         emoji="⏰"
-        subtitle={`For ${displayCareerName}`}
+        subtitle={tl('For {{displayCareerName}}', {
+          displayCareerName: displayCareerName
+        })}
         right={<SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder="Search courses or skills" style={{ width: isMobile ? '100%' : 280 }} />}
       />
-
       {targetCareers.length > 1 ? (
         <SegmentedTabs
           options={targetCareers.map((c) => ({ id: getCareerName(c), label: getCareerName(c), icon: 'Target' }))}
@@ -985,7 +1017,6 @@ export default function Learning({ profileData, user, setProfileData, navigation
           scrollable={isMobile}
         />
       ) : null}
-
       {pathActionMessage ? (
         <Inset tone="success" padding={space.sm}>
           <Row gap={8}>
@@ -994,11 +1025,8 @@ export default function Learning({ profileData, user, setProfileData, navigation
           </Row>
         </Inset>
       ) : null}
-
       <SegmentedTabs options={tabs} value={activeSubTab === 'MyCourses' || activeSubTab === 'PathSteps' ? 'Overview' : activeSubTab} onChange={setActiveSubTab} scrollable={isMobile} />
-
       {activeSubTab === 'Assignments' ? practiceTab : activeSubTab === 'MockTests' ? testsTab : activeSubTab === 'Projects' ? projectsTab : activeSubTab === 'Credentials' ? credentialsTab : planTab}
-
       {/* Course progress */}
       <Sheet
         visible={!!selectedItemForProgress}
@@ -1034,7 +1062,6 @@ export default function Learning({ profileData, user, setProfileData, navigation
         </Row>
         {selectedItemForProgress?.canonical_url ? <Button label="Open course" icon="ExternalLink" variant="ghost" onPress={() => handleOpenUrl(selectedItemForProgress.canonical_url)} style={{ alignSelf: 'center' }} /> : null}
       </Sheet>
-
       {/* Practice workflow */}
       <Sheet
         visible={!!selectedAssignmentForSandbox}
@@ -1068,7 +1095,9 @@ export default function Learning({ profileData, user, setProfileData, navigation
         {sandboxTestResults ? (
           <Inset tone={sandboxTestResults.is_passed ? 'success' : 'warning'}>
             <Txt variant="bodyStrong" tone="ink">
-              {sandboxTestResults.score != null ? `Score ${sandboxTestResults.score}%` : 'Submitted'}{sandboxTestResults.xp_earned ? ` · +${sandboxTestResults.xp_earned} XP` : ''}
+              {sandboxTestResults.score != null ? tl('Score {{score}}%', {
+                score: sandboxTestResults.score
+              }) : 'Submitted'}{sandboxTestResults.xp_earned ? ` · +${sandboxTestResults.xp_earned} XP` : ''}
             </Txt>
             {sandboxTestResults.message ? <Txt variant="small" tone="muted">{sandboxTestResults.message}</Txt> : null}
             {(sandboxTestResults.test_results || []).map((t, i) => (
@@ -1080,7 +1109,6 @@ export default function Learning({ profileData, user, setProfileData, navigation
           </Inset>
         ) : null}
       </Sheet>
-
       {/* Timed assessment */}
       <Sheet
         visible={!!activeAssessmentRunner}
@@ -1089,7 +1117,10 @@ export default function Learning({ profileData, user, setProfileData, navigation
           setAssessmentEvaluationResult(null);
         }}
         title={activeAssessmentRunner?.title}
-        subtitle={assessmentEvaluationResult ? 'Result' : `${assessmentQuestions.length} questions · pass ${activeAssessmentRunner?.pass_score || 70}%`}
+        subtitle={assessmentEvaluationResult ? 'Result' : tl('{{length}} questions · pass {{v1}}%', {
+          length: assessmentQuestions.length,
+          v1: activeAssessmentRunner?.pass_score || 70
+        })}
         icon="Target"
         tone="info"
         footer={
@@ -1143,13 +1174,14 @@ export default function Learning({ profileData, user, setProfileData, navigation
           </Stack>
         ) : null}
       </Sheet>
-
       {/* Capstone project */}
       <Sheet
         visible={!!selectedProjectForSpecs}
         onClose={() => setSelectedProjectForSpecs(null)}
         title={selectedProjectForSpecs?.title}
-        subtitle={selectedProjectForSpecs?.xp ? `+${selectedProjectForSpecs.xp} XP on verification` : 'Capstone project'}
+        subtitle={selectedProjectForSpecs?.xp ? tl('+{{xp}} XP on verification', {
+          xp: selectedProjectForSpecs.xp
+        }) : 'Capstone project'}
         icon="Rocket"
         tone="warning"
         width={720}
@@ -1209,7 +1241,7 @@ export default function Learning({ profileData, user, setProfileData, navigation
           />
         )}
       </Sheet>
-    </Page>
+    </Page>)
   );
 }
 

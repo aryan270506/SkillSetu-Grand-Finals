@@ -24,6 +24,8 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 export default function Interviews({ user }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1080;
@@ -362,7 +364,9 @@ export default function Interviews({ user }) {
         </Row>
         <Txt variant="small" tone="inverseMuted" style={{ marginTop: 4 }}>{c.role} · {c.round} · {liveTelemetry.ai_status}</Txt>
         <Row gap={8} wrap style={{ marginTop: space.md }}>
-          <Pill label={`Integrity: ${c.integrity_status || 'Monitored'}`} tone="success" icon="ShieldCheck" size="sm" />
+          <Pill label={tl('Integrity: {{v0}}', {
+            v0: c.integrity_status || 'Monitored'
+          })} tone="success" icon="ShieldCheck" size="sm" />
           <Pill label={liveTelemetry.status || 'IN_PROGRESS'} tone="info" size="sm" />
         </Row>
         <View style={styles.transcript}>
@@ -388,8 +392,12 @@ export default function Interviews({ user }) {
             <Row wrap gap={6}>
               <Pill label={c.status} tone={statusTone(c.status)} size="sm" />
               {c.round ? <Pill label={c.round} tone="accent" icon="Target" size="sm" /> : null}
-              {c.matchPct ? <Pill label={`${c.matchPct} match`} tone="success" size="sm" /> : null}
-              {c.composite_score != null ? <Pill label={`Score ${c.composite_score}`} tone="info" size="sm" /> : null}
+              {c.matchPct ? <Pill label={tl('{{matchPct}} match', {
+                matchPct: c.matchPct
+              })} tone="success" size="sm" /> : null}
+              {c.composite_score != null ? <Pill label={tl('Score {{composite_score}}', {
+                composite_score: c.composite_score
+              })} tone="info" size="sm" /> : null}
             </Row>
           </Stack>
           {c.can_view_live ? <Button label="Watch live" icon="Eye" onPress={() => handleStartLiveObserver(c)} loading={observerLoading} /> : null}
@@ -447,7 +455,9 @@ export default function Interviews({ user }) {
         ) : null}
         <Row gap={8} wrap style={{ marginTop: space.md }}>
           {c.next_round_name ? (
-            <Button label={`Advance to ${c.next_round_name}`} icon="ArrowRight" onPress={() => handleProgressAction('advance')} loading={isProgressing} />
+            <Button label={tl('Advance to {{next_round_name}}', {
+              next_round_name: c.next_round_name
+            })} icon="ArrowRight" onPress={() => handleProgressAction('advance')} loading={isProgressing} />
           ) : null}
           <Button label="Select" icon="Award" tone="success" onPress={() => handleProgressAction('select')} disabled={isProgressing} />
           <Button label="Reject" variant="danger" onPress={() => handleProgressAction('reject')} disabled={isProgressing} />
@@ -457,11 +467,16 @@ export default function Interviews({ user }) {
   ) : null;
 
   return (
-    <Page refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadDashboard(true)} />}>
+    (<Page refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadDashboard(true)} />}>
       <SectionTitle
         title="Assessments"
         emoji="🎯"
-        subtitle={selectedOverview ? `${selectedOverview.title} · min match ${selectedOverview.application_threshold ?? '—'}%` : `${internships.length} roles with assessment rounds`}
+        subtitle={selectedOverview ? tl('{{title}} · min match {{v1}}%', {
+          title: selectedOverview.title,
+          v1: selectedOverview.application_threshold ?? '—'
+        }) : tl('{{length}} roles with assessment rounds', {
+          length: internships.length
+        })}
         right={
           <Row gap={8}>
             <SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder="Candidate name" style={{ width: isDesktop ? 220 : '100%' }} />
@@ -469,7 +484,6 @@ export default function Interviews({ user }) {
           </Row>
         }
       />
-
       {error ? (
         <Card tone="danger">
           <Row justify="space-between" wrap gap={8}>
@@ -478,7 +492,6 @@ export default function Interviews({ user }) {
           </Row>
         </Card>
       ) : null}
-
       <View style={styles.statsRow}>
         <StatTile value={kpis.upcoming ?? 0} label="Upcoming" tone="info" style={styles.stat} />
         <StatTile value={kpis.today ?? 0} label="Today" tone="accent" style={styles.stat} />
@@ -486,7 +499,6 @@ export default function Interviews({ user }) {
         <StatTile value={kpis.awaiting_feedback ?? 0} label="Need feedback" tone="warning" style={styles.stat} onPress={() => setStatusFilter('Needs Feedback')} />
         <StatTile value={kpis.selected ?? 0} label="Selected" dashed style={styles.stat} />
       </View>
-
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
         <Chip label="All roles" icon="Briefcase" selected={selectedInternshipId === 'All'} onPress={() => setSelectedInternshipId('All')} />
         {internships.map((p) => (
@@ -501,7 +513,6 @@ export default function Interviews({ user }) {
           <Chip key={`r${rd}`} label={rd === 'All' ? 'Any round' : rd} tone="warning" selected={roundFilter === rd} onPress={() => setRoundFilter(rd)} />
         ))}
       </ScrollView>
-
       {pipelineRounds.length ? (
         <Card padding={space.lg}>
           <Txt variant="h3" tone="ink">Pipeline</Txt>
@@ -519,12 +530,11 @@ export default function Interviews({ user }) {
           </Row>
         </Card>
       ) : null}
-
       <View style={[styles.split, isDesktop ? styles.splitRow : null]}>
         <View style={isDesktop ? { width: 400 } : null}>{list}</View>
         <View style={isDesktop ? { flex: 1, minWidth: 0 } : null}>{workspace}</View>
       </View>
-    </Page>
+    </Page>)
   );
 }
 

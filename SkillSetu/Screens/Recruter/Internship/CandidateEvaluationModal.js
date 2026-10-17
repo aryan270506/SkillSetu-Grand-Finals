@@ -22,6 +22,8 @@ import {
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 import { API_ORIGIN } from '../../../ui/config';
 
+import { tl } from '../../../i18n/tl';
+
 export default function CandidateEvaluationModal({
   visible,
   onClose,
@@ -70,7 +72,9 @@ export default function CandidateEvaluationModal({
       await loadEvaluation();
       if (onStatusUpdated) onStatusUpdated();
     } catch (err) {
-      alert(`Failed to update application status: ${err.message}`);
+      alert(tl('Failed to update application status: {{message}}', {
+        message: err.message
+      }));
     } finally {
       setUpdatingStatus(false);
     }
@@ -88,7 +92,9 @@ export default function CandidateEvaluationModal({
       if (onStatusUpdated) onStatusUpdated();
       alert(res.message || 'Candidate progression updated.');
     } catch (err) {
-      alert(`Progression action failed: ${err.message}`);
+      alert(tl('Progression action failed: {{message}}', {
+        message: err.message
+      }));
     } finally {
       setUpdatingStatus(false);
     }
@@ -152,7 +158,10 @@ export default function CandidateEvaluationModal({
         {[
           ['Current round', dash(progression.current_round_name)],
           ['Round rank', progression.rank ? `#${progression.rank} / ${dash(progression.total_candidates_in_round)}` : '—'],
-          ['Score', progression.assessment_score != null ? `${progression.assessment_score}% (pass ${dash(progression.passing_threshold, '%')})` : '—'],
+          ['Score', progression.assessment_score != null ? tl('{{assessment_score}}% (pass {{v1}})', {
+            assessment_score: progression.assessment_score,
+            v1: dash(progression.passing_threshold, '%')
+          }) : '—'],
           ['Integrity', dash(progression.integrity_status)],
         ].map(([k, v]) => (
           <Inset key={k} tone="accent" padding={space.sm} style={styles.metricCell}>
@@ -166,7 +175,9 @@ export default function CandidateEvaluationModal({
           {progression.is_final_round ? (
             <Button label="Select candidate" icon="Award" onPress={() => handleProgressCandidate('SELECT_CANDIDATE')} loading={updatingStatus} />
           ) : (
-            <Button label={`Send to ${progression.next_round_name || 'next round'}`} icon="ArrowRight" onPress={() => handleProgressCandidate('SEND_TO_NEXT_ROUND')} loading={updatingStatus} />
+            <Button label={tl('Send to {{v0}}', {
+              v0: progression.next_round_name || 'next round'
+            })} icon="ArrowRight" onPress={() => handleProgressCandidate('SEND_TO_NEXT_ROUND')} loading={updatingStatus} />
           )}
           <Button label="Not selected" variant="danger" onPress={() => handleProgressCandidate('NOT_SELECTED')} disabled={updatingStatus} />
         </Row>
@@ -212,7 +223,9 @@ export default function CandidateEvaluationModal({
                 {candidate.university ? <Pill label={candidate.university} icon="Building" size="sm" /> : null}
                 {candidate.degree || candidate.branch ? <Pill label={[candidate.degree, candidate.branch].filter(Boolean).join(' · ')} icon="GraduationCap" size="sm" /> : null}
                 <Pill label={`CGPA ${dash(candidate.cgpa)}`} size="sm" />
-                {candidate.graduation_year ? <Pill label={`Class of ${candidate.graduation_year}`} size="sm" /> : null}
+                {candidate.graduation_year ? <Pill label={tl('Class of {{graduation_year}}', {
+                  graduation_year: candidate.graduation_year
+                })} size="sm" /> : null}
                 {candidate.location ? <Pill label={candidate.location} icon="MapPin" size="sm" /> : null}
               </Row>
             </Stack>
@@ -328,7 +341,9 @@ export default function CandidateEvaluationModal({
                   <Inset key={i} tone="warning" padding={space.sm}>
                     <Row justify="space-between">
                       <Txt variant="small" weight={700} tone="ink">{g.skill}</Txt>
-                      <Pill label={`-${g.gap_points} pts`} tone="peach" size="sm" />
+                      <Pill label={tl('-{{gap_points}} pts', {
+                        gap_points: g.gap_points
+                      })} tone="peach" size="sm" />
                     </Row>
                     <Txt variant="caption" tone="muted">Required {g.required_level}% · current {g.student_level}%</Txt>
                     {g.evidence_reason ? <Txt variant="caption" tone="default">{g.evidence_reason}</Txt> : null}

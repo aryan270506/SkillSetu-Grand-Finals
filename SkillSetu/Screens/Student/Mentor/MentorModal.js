@@ -9,6 +9,8 @@ import {
 import { Avatar, Button, Chip, Icon, IconButton, Inset, Pill, ProgressBar, Row, Stack, Txt } from '../../../ui/components';
 import { colors, font, radii, shadows, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 const CONTEXT_ACTIONS = {
   Skills: { label: 'Explain my skill gaps', prompt: 'Explain my biggest skill gaps and how to close them.' },
   Opportunities: { label: 'Why these matches?', prompt: 'Why do I match these internships and how can I improve my match score?' },
@@ -100,7 +102,12 @@ export default function MentorModal({ visible, onClose, user, profileData, activ
       await resetMentorConversation(user?.email);
       setMentorConversationId(null);
       setMentorMessages([
-        { id: Date.now(), sender: 'ai', text: `Hi ${studentName}! Fresh session started ✨\n\nHow can I help with your roadmap, internships or skill gaps today?`, timestamp: 'Now' },
+        { id: Date.now(), sender: 'ai', text: tl(
+          'Hi {{studentName}}! Fresh session started ✨\n\nHow can I help with your roadmap, internships or skill gaps today?',
+          {
+            studentName: studentName
+          }
+        ), timestamp: 'Now' },
       ]);
       const prompts = await fetchSuggestedPrompts(user?.email);
       if (prompts && prompts.length > 0) setSuggestedPrompts(Array.from(new Set(prompts)));

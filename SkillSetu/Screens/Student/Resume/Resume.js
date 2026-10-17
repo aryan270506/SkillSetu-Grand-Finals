@@ -27,6 +27,8 @@ import {
 import { colors, radii, shadows, space, toneOf } from '../../../ui/theme';
 import { API_BASE } from '../../../ui/config';
 
+import { tl } from '../../../i18n/tl';
+
 export default function Resume({ user, profileData }) {
   const { width } = useWindowDimensions();
   const isWide = width >= 1024;
@@ -597,7 +599,9 @@ export default function Resume({ user, profileData }) {
         }
       }
     } else {
-      alert(`Generating print-ready ${type} document...\nDownload initiated.`);
+      alert(tl('Generating print-ready {{type}} document...\nDownload initiated.', {
+        type: type
+      }));
     }
   };
 
@@ -740,11 +744,13 @@ export default function Resume({ user, profileData }) {
   );
 
   return (
-    <Page>
+    (<Page>
       <SectionTitle
         title="Resume builder"
         emoji="📄"
-        subtitle={activeTargetRole ? `Tailored for ${activeTargetRole}` : 'Generated from your verified profile'}
+        subtitle={activeTargetRole ? tl('Tailored for {{activeTargetRole}}', {
+          activeTargetRole: activeTargetRole
+        }) : 'Generated from your verified profile'}
         right={
           <Row gap={8} wrap>
             <Button label="Regenerate" icon="RefreshCw" variant="secondary" onPress={handleRegenerate} loading={isGenerating} />
@@ -760,7 +766,6 @@ export default function Resume({ user, profileData }) {
           </Row>
         }
       />
-
       {targetCareers.length > 1 ? (
         <SegmentedTabs
           options={targetCareers.map((c) => ({ id: c, label: c, icon: 'Target' }))}
@@ -769,7 +774,6 @@ export default function Resume({ user, profileData }) {
           scrollable={!isWide}
         />
       ) : null}
-
       {error ? (
         <Card tone="danger">
           <Row justify="space-between" wrap gap={space.sm}>
@@ -781,7 +785,6 @@ export default function Resume({ user, profileData }) {
           </Row>
         </Card>
       ) : null}
-
       <View style={[styles.grid, isWide ? styles.gridWide : null]}>
         <View style={isWide ? { flex: 1, minWidth: 0 } : null}>{insights}</View>
         <View style={isWide ? { flex: 1.45, minWidth: 0 } : null}>
@@ -808,7 +811,7 @@ export default function Resume({ user, profileData }) {
           )}
         </View>
       </View>
-    </Page>
+    </Page>)
   );
 }
 

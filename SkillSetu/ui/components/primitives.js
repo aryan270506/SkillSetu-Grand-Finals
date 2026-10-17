@@ -4,6 +4,7 @@ import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { colors, radii, shadows, space, toneOf, webOnly } from '../theme';
 import Icon from './Icon';
 import Txt from './Txt';
+import { tx } from '../../i18n';
 
 const webPointer = webOnly({ cursor: 'pointer', transitionDuration: '160ms', transitionProperty: 'transform, background-color, box-shadow, opacity' });
 
@@ -113,7 +114,7 @@ export function IconButton({ icon, onPress, variant = 'soft', tone, size = 36, i
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel || icon}
+      accessibilityLabel={tx(accessibilityLabel) || icon}
       style={({ hovered, pressed }) => [
         styles.iconBtn,
         webPointer,

@@ -47,6 +47,9 @@ import {
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 import { pickFile } from '../../../ui/pickFile';
 
+import { tl } from '../../../i18n/tl';
+import { formatDate } from '../../../i18n/format';
+
 export default function Internship({ user, profileData, onNavigate }) {
   const { width } = useWindowDimensions();
   const isTablet = width >= 640;
@@ -343,7 +346,9 @@ export default function Internship({ user, profileData, onNavigate }) {
           )
         }));
       }
-      setPlanSuccessNotice(`Enrolled in "${course.title}". Opening course module...`);
+      setPlanSuccessNotice(tl('Enrolled in "{{title}}". Opening course module...', {
+        title: course.title
+      }));
       setTimeout(() => setPlanSuccessNotice(null), 5000);
     } catch (err) {
       console.warn('Enrollment error:', err);
@@ -363,7 +368,9 @@ export default function Internship({ user, profileData, onNavigate }) {
           setSelectedPlanJob(updatedJob);
         }
       }
-      setPlanSuccessNotice(`Completed verified course "${course.title}". Skill evidence recorded!`);
+      setPlanSuccessNotice(tl('Completed verified course "{{title}}". Skill evidence recorded!', {
+        title: course.title
+      }));
       setTimeout(() => setPlanSuccessNotice(null), 5000);
       loadData(true);
     } catch (err) {
@@ -407,7 +414,12 @@ export default function Internship({ user, profileData, onNavigate }) {
             setSelectedPlanJob(updatedJob);
           }
         }
-        setPlanSuccessNotice(`Certificate verified for "${activeUploadCourse.title}". Verifiable skill evidence attested!`);
+        setPlanSuccessNotice(tl(
+          'Certificate verified for "{{title}}". Verifiable skill evidence attested!',
+          {
+            title: activeUploadCourse.title
+          }
+        ));
         setTimeout(() => setPlanSuccessNotice(null), 6000);
         loadData(true);
       } else {
@@ -708,12 +720,16 @@ export default function Internship({ user, profileData, onNavigate }) {
         <Row wrap gap={6} style={{ marginTop: space.md }}>
           <Pill label={verified ? 'Verified recruiter' : 'External listing'} tone={verified ? 'success' : 'neutral'} icon={verified ? 'ShieldCheck' : 'Globe'} size="sm" />
           {job.stipend ? <Pill label={job.stipend} tone="warning" icon="Wallet" size="sm" /> : null}
-          {job.application_deadline ? <Pill label={`Due ${new Date(job.application_deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`} icon="Calendar" size="sm" /> : null}
+          {job.application_deadline ? <Pill label={tl('Due {{v0}}', {
+            v0: formatDate(job.application_deadline, { month: 'short', day: 'numeric' })
+          })} icon="Calendar" size="sm" /> : null}
           {skills.slice(0, 4).map((s) => <Pill key={s} label={s} tone="info" size="sm" />)}
           {skills.length > 4 ? <Pill label={`+${skills.length - 4}`} size="sm" /> : null}
         </Row>
         <Row justify="space-between" style={{ marginTop: space.lg }} wrap gap={8}>
-          <Pill label={ready ? 'Ready to apply' : `Need ${thresholdOf(job)}% to apply`} tone={ready ? 'success' : 'neutral'} icon={ready ? 'CircleCheck' : 'Clock'} />
+          <Pill label={ready ? 'Ready to apply' : tl('Need {{v0}}% to apply', {
+            v0: thresholdOf(job)
+          })} tone={ready ? 'success' : 'neutral'} icon={ready ? 'CircleCheck' : 'Clock'} />
           <Row gap={8}>
             <IconButton icon="Bookmark" variant={job.is_saved ? 'dark' : 'soft'} onPress={() => handleToggleSave(job)} disabled={savingId === job.id} accessibilityLabel={job.is_saved ? 'Unsave' : 'Save'} />
             <IconButton icon="Ellipsis" onPress={() => handleViewDetails(job)} accessibilityLabel="Details" />
@@ -772,11 +788,14 @@ export default function Internship({ user, profileData, onNavigate }) {
   const rest = featured ? filteredJobs.slice(1) : filteredJobs;
 
   return (
-    <Page aside={pipeline}>
+    (<Page aside={pipeline}>
       <SectionTitle
         title="Internships"
         emoji="💼"
-        subtitle={loading ? 'Finding roles that match your evidence…' : `${metrics.totalCount} opportunities · ${metrics.readyCount} ready for you`}
+        subtitle={loading ? 'Finding roles that match your evidence…' : tl('{{totalCount}} opportunities · {{readyCount}} ready for you', {
+          totalCount: metrics.totalCount,
+          readyCount: metrics.readyCount
+        })}
         right={
           <Row gap={8}>
             <SearchField value={searchQuery} onChangeText={setSearchQuery} onSubmit={handleSearchSubmit} placeholder="Role, company or skill" style={{ width: isTablet ? 260 : '100%' }} />
@@ -784,9 +803,7 @@ export default function Internship({ user, profileData, onNavigate }) {
           </Row>
         }
       />
-
       <SegmentedTabs options={readinessTabs} value={readinessTab} onChange={setReadinessTab} scrollable={!isTablet} />
-
       <Row wrap gap={8}>
         <Chip label="Remote" icon="House" tone="info" selected={typeFilter === 'Remote'} onPress={() => setTypeFilter(typeFilter === 'Remote' ? '' : 'Remote')} />
         <Chip label="Verified only" icon="ShieldCheck" selected={verifiedFilter === 'VERIFIED'} onPress={() => setVerifiedFilter(verifiedFilter === 'VERIFIED' ? '' : 'VERIFIED')} />
@@ -804,7 +821,6 @@ export default function Internship({ user, profileData, onNavigate }) {
           ))}
         </ScrollView>
       ) : null}
-
       {loading ? (
         <View style={styles.jobGrid}>
           {[0, 1, 2, 3].map((i) => <Skeleton key={i} height={210} radius={radii.xl} style={styles.jobCard} />)}
@@ -824,7 +840,6 @@ export default function Internship({ user, profileData, onNavigate }) {
           <EmptyState icon="Briefcase" title="No roles match these filters" message="Try clearing filters or searching for a different skill." action={<Button label="Clear filters" onPress={handleClearFilters} />} />
         </Card>
       )}
-
       {/* Details */}
       <Sheet
         visible={showDetailsModal && !!selectedDetailJob}
@@ -850,9 +865,13 @@ export default function Internship({ user, profileData, onNavigate }) {
         {selectedDetailJob ? (
           <>
             <Row wrap gap={6}>
-              <Pill label={`${Math.round(selectedDetailJob.match_score || 0)}% match`} tone={isReady(selectedDetailJob) ? 'success' : 'warning'} icon="Target" />
+              <Pill label={tl('{{v0}}% match', {
+                v0: Math.round(selectedDetailJob.match_score || 0)
+              })} tone={isReady(selectedDetailJob) ? 'success' : 'warning'} icon="Target" />
               {selectedDetailJob.stipend ? <Pill label={selectedDetailJob.stipend} tone="warning" icon="Wallet" /> : null}
-              <Pill label={isJobVerified(selectedDetailJob) ? 'Verified recruiter' : `Source: ${selectedDetailJob.source || 'external'}`} icon={isJobVerified(selectedDetailJob) ? 'ShieldCheck' : 'Globe'} />
+              <Pill label={isJobVerified(selectedDetailJob) ? 'Verified recruiter' : tl('Source: {{v0}}', {
+                v0: selectedDetailJob.source || 'external'
+              })} icon={isJobVerified(selectedDetailJob) ? 'ShieldCheck' : 'Globe'} />
             </Row>
             {(selectedDetailJob.missing_skills || []).length ? (
               <Inset tone="warning">
@@ -866,7 +885,6 @@ export default function Internship({ user, profileData, onNavigate }) {
           </>
         ) : null}
       </Sheet>
-
       {/* Targeted development plan */}
       <Sheet
         visible={showPlanModal && !!selectedPlanJob}
@@ -900,9 +918,15 @@ export default function Internship({ user, profileData, onNavigate }) {
                       <Pill label={sk.is_verified ? 'Verified' : `${Math.round(sk.current_score ?? sk.score ?? 0)}%`} tone={sk.is_verified ? 'success' : 'warning'} size="sm" />
                     </Row>
                     <Row wrap gap={6} style={{ marginTop: 6 }}>
-                      <Pill label={`Course ${sk.course?.completed ? '✓' : `${Math.round(sk.progress_percent || sk.course_progress || 0)}%`}`} size="sm" />
-                      <Pill label={`Test ${sk.test?.passed ? `✓ ${sk.test?.score}%` : '—'}`} size="sm" />
-                      <Pill label={`Project ${sk.assignment?.verified ? '✓' : '—'}`} size="sm" />
+                      <Pill label={tl('Course {{v0}}', {
+                        v0: sk.course?.completed ? '✓' : `${Math.round(sk.progress_percent || sk.course_progress || 0)}%`
+                      })} size="sm" />
+                      <Pill label={tl('Test {{v0}}', {
+                        v0: sk.test?.passed ? `✓ ${sk.test?.score}%` : '—'
+                      })} size="sm" />
+                      <Pill label={tl('Project {{v0}}', {
+                        v0: sk.assignment?.verified ? '✓' : '—'
+                      })} size="sm" />
                       <Pill label={`GitHub ${sk.github?.evidence ? '✓' : '—'}`} size="sm" />
                     </Row>
                   </Inset>
@@ -916,9 +940,11 @@ export default function Internship({ user, profileData, onNavigate }) {
                   const cid = c.id || c.course_id || c.title;
                   const done = /COMPLETE/i.test(c.status || '');
                   return (
-                    <Card key={cid} padding={space.md}>
+                    (<Card key={cid} padding={space.md}>
                       <Txt variant="small" weight={700} tone="ink">{c.title}</Txt>
-                      <Txt variant="caption" tone="muted">{[c.provider, c.duration != null && c.duration !== '' ? (isNaN(Number(c.duration)) ? c.duration : `${c.duration} hrs`) : null].filter(Boolean).join(' · ')}</Txt>
+                      <Txt variant="caption" tone="muted">{[c.provider, c.duration != null && c.duration !== '' ? (isNaN(Number(c.duration)) ? c.duration : tl('{{duration}} hrs', {
+                        duration: c.duration
+                      })) : null].filter(Boolean).join(' · ')}</Txt>
                       <Row gap={6} wrap style={{ marginTop: 8 }}>
                         {done ? <Pill label="Completed" tone="success" icon="Check" size="sm" /> : (
                           <>
@@ -928,7 +954,7 @@ export default function Internship({ user, profileData, onNavigate }) {
                         )}
                         <Button label="Upload certificate" size="sm" variant="ghost" icon="Upload" onPress={() => { setCertFile(null); setCertIssuer(c.provider || ''); handleStartUploadCertificate(c); }} />
                       </Row>
-                    </Card>
+                    </Card>)
                   );
                 })}
               </Stack>
@@ -940,8 +966,12 @@ export default function Internship({ user, profileData, onNavigate }) {
                   <Card key={t.id || i} padding={space.md}>
                     <Row justify="space-between" gap={8}>
                       <Stack gap={1} style={{ flex: 1 }}>
-                        <Txt variant="small" weight={700} tone="ink">{t.title || `${t.skill} assessment`}</Txt>
-                        <Txt variant="caption" tone="muted">{[t.question_count && `${t.question_count} questions`, t.duration].filter(Boolean).join(' · ')}</Txt>
+                        <Txt variant="small" weight={700} tone="ink">{t.title || tl('{{skill}} assessment', {
+                          skill: t.skill
+                        })}</Txt>
+                        <Txt variant="caption" tone="muted">{[t.question_count && tl('{{question_count}} questions', {
+                          question_count: t.question_count
+                        }), t.duration].filter(Boolean).join(' · ')}</Txt>
                       </Stack>
                       <Button label="Start" size="sm" icon="Target" onPress={() => handleStartAssessment(t)} />
                     </Row>
@@ -968,7 +998,6 @@ export default function Internship({ user, profileData, onNavigate }) {
           </>
         ) : null}
       </Sheet>
-
       {/* Applied confirmation */}
       <Sheet
         visible={showAppliedModal && !!appliedJob}
@@ -991,13 +1020,14 @@ export default function Internship({ user, profileData, onNavigate }) {
             : 'We opened the employer’s application page in a new tab. Finish there — we track it in Applications.'}
         </Txt>
       </Sheet>
-
       {/* Assessment runner */}
       <Sheet
         visible={showAssessmentModal}
         onClose={closeAssessmentModal}
         title={activeAssessment?.title || 'Assessment'}
-        subtitle={runnerQuestions.length ? `${runnerQuestions.length} questions` : ''}
+        subtitle={runnerQuestions.length ? tl('{{length}} questions', {
+          length: runnerQuestions.length
+        }) : ''}
         icon="Target"
         tone="info"
         footer={
@@ -1049,7 +1079,6 @@ export default function Internship({ user, profileData, onNavigate }) {
           </Stack>
         ) : null}
       </Sheet>
-
       {/* Project runner */}
       <Sheet
         visible={showProjectModal}
@@ -1090,7 +1119,6 @@ export default function Internship({ user, profileData, onNavigate }) {
           </>
         )}
       </Sheet>
-
       {/* Certificate upload */}
       <Sheet
         visible={showUploadModal && !!activeUploadCourse}
@@ -1131,7 +1159,7 @@ export default function Internship({ user, profileData, onNavigate }) {
           </>
         )}
       </Sheet>
-    </Page>
+    </Page>)
   );
 }
 

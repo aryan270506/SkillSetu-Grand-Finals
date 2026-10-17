@@ -3,6 +3,8 @@ import { recruiterService } from '../services/recruiterService';
 import { Button, Card, Chip, ChipGroup, Field, IconButton, Inset, ProgressBar, Row, Sheet, Skeleton, Stack, Txt } from '../../../ui/components';
 import { colors, space } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 const SUGGESTED_SKILLS = [
   'React',
   'React Native',
@@ -245,7 +247,7 @@ export default function InternshipFormModal({
       }, 1000);
     } catch (err) {
       setSubmitting(false);
-      setErrorMsg(err.message || `Failed to ${isEdit ? 'update' : 'publish'} internship.`);
+      setErrorMsg(err.message || (isEdit ? tl('Failed to update internship.') : tl('Failed to publish internship.')));
     }
   };
 

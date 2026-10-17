@@ -4,6 +4,7 @@ import logging
 import urllib.request
 import urllib.error
 from typing import Dict, Any, List, Optional
+from app.services.language import language_instruction
 from app.config import settings
 from app.services.groq_key_manager import key_manager
 
@@ -535,7 +536,8 @@ def evaluate_interview_practice_answer_with_groq(
     skill: Optional[str] = None,
     project_context: Optional[Dict[str, Any]] = None,
     expected_concepts: Optional[str] = None,
-    model: Optional[str] = None
+    model: Optional[str] = None,
+    language: str = "en"
 ) -> Optional[Dict[str, Any]]:
     """
     Evaluates a student's interview practice answer using Groq LLM API server-side.
@@ -596,7 +598,7 @@ def evaluate_interview_practice_answer_with_groq(
         "5. Verdicts must be one of: 'Insufficient Answer' (0-39), 'Needs Improvement' (40-64), 'Proficient' (65-79), 'Strong Technical Response' (80-89), 'Exceptional' (90-100).\n"
         "6. If project context is provided, verify whether the explanation aligns with realistic system constraints without hallucinating repository facts.\n"
         "7. Output MUST strictly be a valid JSON object matching the required schema."
-    )
+    ) + language_instruction(language)
 
     proj_info_str = ""
     if project_context:

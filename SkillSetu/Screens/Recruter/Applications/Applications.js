@@ -29,6 +29,8 @@ import {
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 import { API_BASE, API_ORIGIN } from '../../../ui/config';
 
+import { tl } from '../../../i18n/tl';
+
 export default function Applications({ user }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1080;
@@ -257,7 +259,9 @@ export default function Applications({ user }) {
         loadCandidateDetail(selectedApplicantId);
       }
     } catch (err) {
-      alert(`Action failed: ${err.message}`);
+      alert(tl('Action failed: {{message}}', {
+        message: err.message
+      }));
     } finally {
       setActionLoading(false);
     }
@@ -272,7 +276,9 @@ export default function Applications({ user }) {
       await Promise.all([loadSummary(), loadApplications()]);
       loadCandidateDetail(selectedApplicantId);
     } catch (err) {
-      alert(`Action failed: ${err.message}`);
+      alert(tl('Action failed: {{message}}', {
+        message: err.message
+      }));
     } finally {
       setActionLoading(false);
     }
@@ -320,7 +326,9 @@ export default function Applications({ user }) {
         loadCandidateDetail(selectedApplicantId);
       }
     } catch (err) {
-      alert(`Progression failed: ${err.message}`);
+      alert(tl('Progression failed: {{message}}', {
+        message: err.message
+      }));
     } finally {
       setActionLoading(false);
     }
@@ -355,9 +363,17 @@ export default function Applications({ user }) {
       setSelectedIds([]);
 
       if (res.progressed_count === 0 && res.errors && res.errors.length > 0) {
-        alert(`Bulk action could not be completed: ${res.errors[0].error}`);
+        alert(tl('Bulk action could not be completed: {{error}}', {
+          error: res.errors[0].error
+        }));
       } else if (res.errors && res.errors.length > 0) {
-        alert(`Successfully processed ${res.progressed_count} candidate(s). Note: ${res.errors[0].error}`);
+        alert(tl(
+          'Successfully processed {{progressed_count}} candidate(s). Note: {{error}}',
+          {
+            progressed_count: res.progressed_count,
+            error: res.errors[0].error
+          }
+        ));
       } else {
         alert(res.message || 'Bulk progression completed successfully.');
       }
@@ -367,7 +383,9 @@ export default function Applications({ user }) {
         loadCandidateDetail(selectedApplicantId);
       }
     } catch (err) {
-      alert(`Bulk progression failed: ${err.message}`);
+      alert(tl('Bulk progression failed: {{message}}', {
+        message: err.message
+      }));
     } finally {
       setActionLoading(false);
     }
@@ -470,7 +488,9 @@ export default function Applications({ user }) {
           <Chip key={st || 'all'} label={st ? pretty(st) : 'Any status'} tone="accent" selected={selectedStatus === st} onPress={() => { setSelectedStatus(st); setCurrentPage(1); }} />
         ))}
         {['', '90', '80', '70', '60'].map((v) => (
-          <Chip key={`m${v}`} label={v ? `${v}%+ match` : 'Any match'} tone="success" selected={selectedMinScore === v} onPress={() => { setSelectedMinScore(v); setCurrentPage(1); }} />
+          <Chip key={`m${v}`} label={v ? tl('{{v}}%+ match', {
+            v: v
+          }) : 'Any match'} tone="success" selected={selectedMinScore === v} onPress={() => { setSelectedMinScore(v); setCurrentPage(1); }} />
         ))}
         {[{ v: '', l: 'All time' }, { v: '7d', l: '7 days' }, { v: '30d', l: '30 days' }, { v: '90d', l: '90 days' }].map((d) => (
           <Chip key={`d${d.v}`} label={d.l} icon="Calendar" selected={selectedDateRange === d.v} onPress={() => { setSelectedDateRange(d.v); setCurrentPage(1); }} />
@@ -501,7 +521,9 @@ export default function Applications({ user }) {
     <Card padding={space.sm}>
       <Row justify="space-between" style={{ padding: space.sm }} wrap gap={8}>
         <Row gap={10}>
-          <Checkbox checked={applications.length > 0 && selectedIds.length === applications.length} onChange={toggleSelectAll} label={`${pagination.total} candidates`} />
+          <Checkbox checked={applications.length > 0 && selectedIds.length === applications.length} onChange={toggleSelectAll} label={tl('{{total}} candidates', {
+            total: pagination.total
+          })} />
         </Row>
         <Row gap={6}>
           <Button label="Top 5" size="sm" variant="ghost" onPress={() => handleSelectTopN(5)} />
@@ -565,7 +587,9 @@ export default function Applications({ user }) {
               <Row wrap gap={6}>
                 <Pill label={pretty(candStatus)} tone={statusTone(candStatus)} size="sm" />
                 <Pill label={`CGPA ${candCgpa}`} size="sm" />
-                <Pill label={isCandidateEligible ? 'Meets threshold' : `Below ${candThreshold}`} tone={isCandidateEligible ? 'success' : 'warning'} size="sm" />
+                <Pill label={isCandidateEligible ? 'Meets threshold' : tl('Below {{candThreshold}}', {
+                  candThreshold: candThreshold
+                })} tone={isCandidateEligible ? 'success' : 'warning'} size="sm" />
               </Row>
             </Stack>
             <Ring value={candMatchScore || 0} size={76} stroke={8} tone={isCandidateEligible ? 'success' : 'warning'}>
@@ -608,7 +632,9 @@ export default function Applications({ user }) {
             <Card padding={space.lg} tone="info">
               <Row justify="space-between">
                 <Txt variant="h3" tone="ink">AI screening</Txt>
-                <Pill label={`${aiScreening.overall_score ?? '—'} overall`} tone="info" size="sm" />
+                <Pill label={tl('{{v0}} overall', {
+                  v0: aiScreening.overall_score ?? '—'
+                })} tone="info" size="sm" />
               </Row>
               <View style={styles.scoreGrid}>
                 {[
@@ -702,11 +728,14 @@ export default function Applications({ user }) {
   ) : null;
 
   return (
-    <Page>
+    (<Page>
       <SectionTitle
         title="Candidates"
         emoji="🧑‍💻"
-        subtitle={`${summary.total || 0} applications across ${summary.active_internships_count || 0} active roles`}
+        subtitle={tl('{{v0}} applications across {{v1}} active roles', {
+          v0: summary.total || 0,
+          v1: summary.active_internships_count || 0
+        })}
         right={
           <Row gap={8}>
             <SearchField value={searchQuery} onChangeText={(v) => { setSearchQuery(v); setCurrentPage(1); }} placeholder="Name, college or skill" style={{ width: isDesktop ? 240 : '100%' }} />
@@ -714,7 +743,6 @@ export default function Applications({ user }) {
           </Row>
         }
       />
-
       <View style={styles.statsRow}>
         <StatTile value={summary.total ?? 0} label="Applied" tone="info" style={styles.stat} />
         <StatTile value={summary.under_review ?? f.under_review ?? 0} label="In review" tone="warning" style={styles.stat} />
@@ -722,24 +750,21 @@ export default function Applications({ user }) {
         <StatTile value={summary.interview ?? 0} label="Interviews" tone="pink" style={styles.stat} />
         <StatTile value={summary.selected ?? 0} label="Selected" tone="success" style={styles.stat} />
       </View>
-
       {filters}
       <Row gap={6} wrap>
         {SORTS.map((s) => <Chip key={s.id} label={s.label} icon="Funnel" tone="accent" selected={sortBy === s.id} onPress={() => setSortBy(s.id)} />)}
         <Button label="Clear filters" size="sm" variant="ghost" icon="X" onPress={handleClearFilters} />
       </Row>
       {bulkBar}
-
       <View style={[styles.split, isDesktop ? styles.splitRow : null]}>
         <View style={isDesktop ? { width: 420 } : null}>{list}</View>
         <View style={isDesktop ? { flex: 1, minWidth: 0 } : null}>{detail}</View>
       </View>
-
       <Sheet
         visible={showBulkProgressionConfirm}
         onClose={() => setShowBulkProgressionConfirm(false)}
         title={bulkProgressionAction === 'NOT_SELECTED' ? 'Mark as not selected?' : 'Send to next round?'}
-        subtitle={`${selectedCount} candidate${selectedCount === 1 ? '' : 's'} selected`}
+        subtitle={selectedCount === 1 ? tl('1 candidate selected') : tl('{{count}} candidates selected', { count: selectedCount })}
         icon="Users"
         tone="accent"
         width={520}
@@ -752,7 +777,6 @@ export default function Applications({ user }) {
       >
         <Txt variant="body" tone="muted">Candidates are notified by email. This uses the internship of the first selected candidate.</Txt>
       </Sheet>
-
       <CandidateEvaluationModal
         visible={evalModalVisible}
         onClose={() => setEvalModalVisible(false)}
@@ -765,7 +789,7 @@ export default function Applications({ user }) {
           if (selectedApplicantId) loadCandidateDetail(selectedApplicantId);
         }}
       />
-    </Page>
+    </Page>)
   );
 }
 

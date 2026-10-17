@@ -3,7 +3,7 @@ import json
 import hashlib
 from datetime import datetime
 from typing import Optional, List, Union, Any, Dict
-from fastapi import APIRouter, HTTPException, status, Depends, File, UploadFile, Form, Query, Body
+from fastapi import APIRouter, HTTPException, status, Depends, File, UploadFile, Form, Query, Body, Request
 
 from pydantic import BaseModel, EmailStr
 
@@ -3487,9 +3487,11 @@ def generate_next_adaptive_challenge(
 @router.post("/adaptive-challenge/hint")
 def get_adaptive_challenge_hint(
     payload: AdaptiveCodeHintRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     from app.services import adaptive_coding_service
+    from app.services.language import get_request_language
     res = adaptive_coding_service.get_progressive_hint(
         db=db,
         challenge_id=payload.challenge_id,
@@ -3497,7 +3499,8 @@ def get_adaptive_challenge_hint(
         student_code=payload.code,
         compile_error=payload.compile_error,
         runtime_error=payload.runtime_error,
-        failed_tests=payload.failed_tests
+        failed_tests=payload.failed_tests,
+        language=get_request_language(request)
     )
     return {"status": "success", "data": res}
 

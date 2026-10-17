@@ -25,6 +25,8 @@ import {
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 import { API_BASE } from '../../../ui/config';
 
+import { tl } from '../../../i18n/tl';
+
 export default function Skill({
   profileData,
   user,
@@ -302,7 +304,9 @@ export default function Skill({
       if (qRes.ok && qJson.data && qJson.data.questions && qJson.data.questions.length > 0) {
         setAssessmentData(qJson.data);
       } else {
-        alert(qJson.detail || `No assessment questions available for ${targetSkill} at this time.`);
+        alert(qJson.detail || tl('No assessment questions available for {{targetSkill}} at this time.', {
+          targetSkill: targetSkill
+        }));
         setAssessmentModalVisible(false);
       }
     } catch (err) {
@@ -320,7 +324,13 @@ export default function Skill({
     const answeredCount = Object.keys(selectedAnswers).length;
     
     if (answeredCount < questions.length) {
-      alert(`Please select an answer for each question (${answeredCount}/${questions.length} answered).`);
+      alert(tl(
+        'Please select an answer for each question ({{answeredCount}}/{{length}} answered).',
+        {
+          answeredCount: answeredCount,
+          length: questions.length
+        }
+      ));
       return;
     }
 
@@ -399,7 +409,7 @@ export default function Skill({
           status: 'COMPLETED'
         })
       });
-      alert(`Module step completed! Next module unlocked.`);
+      alert(tl('Module step completed! Next module unlocked.'));
       await fetchAllSkillGapData(activeCareerName);
     } catch (err) {
       console.error('Error updating module:', err);
@@ -426,7 +436,9 @@ export default function Skill({
           is_completed: nextStep === 3
         })
       });
-      alert(`Challenge progress step ${nextStep}/3 updated successfully!`);
+      alert(tl('Challenge progress step {{nextStep}}/3 updated successfully!', {
+        nextStep: nextStep
+      }));
       await fetchAllSkillGapData(activeCareerName);
     } catch (err) {
       console.error('Error updating challenge:', err);
@@ -510,8 +522,15 @@ export default function Skill({
           icon="TrendingUp"
           type="Internship impact"
           date={internshipImpact.target_skill}
-          title={`+${Math.max(0, (internshipImpact.projected_match ?? 0) - (internshipImpact.current_match ?? 0))}% match if you close this gap`}
-          body={`${internshipImpact.current_match ?? 0}% → ${internshipImpact.projected_match ?? 0}% for ${internshipImpact.career_name || activeCareerName}. Unlocks ${internshipImpact.unlocked_positions ?? 0} more roles.`}
+          title={tl('+{{v0}}% match if you close this gap', {
+            v0: Math.max(0, (internshipImpact.projected_match ?? 0) - (internshipImpact.current_match ?? 0))
+          })}
+          body={tl('{{v0}}% → {{v1}}% for {{v2}}. Unlocks {{v3}} more roles.', {
+            v0: internshipImpact.current_match ?? 0,
+            v1: internshipImpact.projected_match ?? 0,
+            v2: internshipImpact.career_name || activeCareerName,
+            v3: internshipImpact.unlocked_positions ?? 0
+          })}
           onPress={() => onNavigate && onNavigate('Opportunities')}
         />
       ) : null}
@@ -537,7 +556,7 @@ export default function Skill({
           tone="warning"
           icon="Rocket"
           type="Project challenge"
-          date={`Step ${practiceChallenge.progress_step || 0}/${practiceChallenge.total_steps || 3}`}
+          date={tl('Step {{step}}/{{total}}', { step: practiceChallenge.progress_step || 0, total: practiceChallenge.total_steps || 3 })}
           title={practiceChallenge.title}
           body={practiceChallenge.description}
           footer={
@@ -556,7 +575,10 @@ export default function Skill({
           type="Assessment"
           date={a.completed_at ? String(a.completed_at).slice(0, 10) : ''}
           title={a.test_title}
-          body={`Score ${a.score ?? '—'}% · ${a.status || ''}`}
+          body={tl('Score {{v0}}% · {{v1}}', {
+            v0: a.score ?? '—',
+            v1: a.status || ''
+          })}
         />
       ))}
       {projectVerifications.slice(0, 3).map((p, i) => (
@@ -594,14 +616,15 @@ export default function Skill({
   }
 
   return (
-    <Page aside={aside}>
+    (<Page aside={aside}>
       <SectionTitle
         title="Skills"
         emoji="🧠"
-        subtitle={heroData?.benchmark?.name || `Benchmarked against ${activeCareerName}`}
+        subtitle={heroData?.benchmark?.name || tl('Benchmarked against {{activeCareerName}}', {
+          activeCareerName: activeCareerName
+        })}
         right={<Button label="Take assessment" icon="Target" onPress={() => handleOpenAssessmentModal(topGapSubject)} />}
       />
-
       {targetCareersList.length > 1 ? (
         <SegmentedTabs
           options={targetCareersList.map((c) => ({ id: c.id, label: c.name, icon: 'Target' }))}
@@ -610,14 +633,16 @@ export default function Skill({
           scrollable={!isWide}
         />
       ) : null}
-
       <View style={[styles.grid, isWide ? styles.gridRow : null]}>
         <Card style={isWide ? { flex: 1.1 } : null}>
           <Row justify="space-between" align="flex-start" gap={space.md}>
             <Stack gap={4} style={{ flex: 1 }}>
               <Txt variant="overline" tone="subtle">Career readiness</Txt>
               <Txt variant="h2" tone="ink">{activeCareerName}</Txt>
-              {heroData?.cohort?.rank_display ? <Pill label={`${heroData.cohort.rank_display} of ${heroData.cohort.total_candidates} students`} tone="accent" icon="Users" size="sm" /> : null}
+              {heroData?.cohort?.rank_display ? <Pill label={tl('{{rank_display}} of {{total_candidates}} students', {
+                rank_display: heroData.cohort.rank_display,
+                total_candidates: heroData.cohort.total_candidates
+              })} tone="accent" icon="Users" size="sm" /> : null}
             </Stack>
             <Ring value={overall || 0} size={96} stroke={10} tone="success">
               <Txt variant="h2" tone="ink">{isLoadingCareerData && overall == null ? '…' : overall != null ? `${overall}%` : '—'}</Txt>
@@ -664,7 +689,6 @@ export default function Skill({
           ) : null}
         </View>
       </View>
-
       <SectionTitle title="Priority gaps" size="h2" subtitle="Focus on one at a time — the learning path and practice lab follow your focus." />
       {isLoadingCareerData && !gapCards.length ? (
         <Stack gap={space.md}>
@@ -692,7 +716,9 @@ export default function Skill({
                     </Ring>
                   </Row>
                   <Row justify="space-between" style={{ marginTop: space.md }} wrap gap={8}>
-                    <Pill label={`Target ${g.target}%`} tone="neutral" style={{ backgroundColor: 'rgba(255,255,255,0.75)' }} icon="Target" />
+                    <Pill label={tl('Target {{target}}%', {
+                      target: g.target
+                    })} tone="neutral" style={{ backgroundColor: 'rgba(255,255,255,0.75)' }} icon="Target" />
                     <Row gap={8}>
                       <Button label="Assess" size="sm" variant="light" icon="ShieldCheck" onPress={() => handleOpenAssessmentModal(g.name)} />
                       <Button label="Learn" size="sm" icon="BookOpen" onPress={() => onNavigate && onNavigate('Learning', { selectedSkillName: g.name })} />
@@ -716,10 +742,11 @@ export default function Skill({
         />
       ) : (
         <Card>
-          <EmptyState icon="CircleCheck" tone="success" title="No gaps found" message={`You meet the core requirements for ${activeCareerName}.`} />
+          <EmptyState icon="CircleCheck" tone="success" title="No gaps found" message={tl('You meet the core requirements for {{activeCareerName}}.', {
+            activeCareerName: activeCareerName
+          })} />
         </Card>
       )}
-
       {careerMarketSkills.length ? (
         <Card>
           <Row justify="space-between" style={{ marginBottom: space.md }}>
@@ -747,13 +774,14 @@ export default function Skill({
           </Stack>
         </Card>
       ) : null}
-
       <View style={[styles.grid, isWide ? styles.gridRow : null]}>
         <View style={isWide ? { flex: 0.85, minWidth: 0 } : null}>
           <Card badge={{ icon: 'BookOpen', tone: 'pink' }}>
             <Txt variant="h2" tone="ink">Learning path</Txt>
             <Txt variant="small" tone="muted" style={{ marginBottom: space.md }}>
-              {learningPathData?.gap_skill ? `Modules for ${learningPathData.gap_skill}` : 'Modules for your focused gap'}
+              {learningPathData?.gap_skill ? tl('Modules for {{gap_skill}}', {
+                gap_skill: learningPathData.gap_skill
+              }) : 'Modules for your focused gap'}
             </Txt>
             {modules.length ? (
               <Timeline
@@ -789,7 +817,6 @@ export default function Skill({
           />
         </View>
       </View>
-
       <AssessmentSheet
         visible={assessmentModalVisible}
         onClose={() => setAssessmentModalVisible(false)}
@@ -800,7 +827,7 @@ export default function Skill({
         onSubmit={handleSubmitAssessmentModal}
         assessmentResult={assessmentResult}
       />
-    </Page>
+    </Page>)
   );
 }
 

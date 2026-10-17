@@ -29,6 +29,8 @@ import {
 } from '../../../ui/components';
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
+import { tl } from '../../../i18n/tl';
+
 const ROUND_KEYS = ['aptitude', 'technical', 'interview', 'gd'];
 const ROUND_META = {
   aptitude: { label: 'Aptitude', icon: 'Brain', tone: 'info' },
@@ -416,7 +418,12 @@ export default function Analytics({ user, onNavigateTab }) {
       (pipelineState.gd.enabled ? Number(scoringWeights.gd || 0) : 0)
     );
     if (totalWeights !== 100) {
-      setConfigErrorMsg(`Validation Error: Round scoring weights must sum to exactly 100% (currently ${totalWeights}%).`);
+      setConfigErrorMsg(tl(
+        'Validation Error: Round scoring weights must sum to exactly 100% (currently {{totalWeights}}%).',
+        {
+          totalWeights: totalWeights
+        }
+      ));
       return;
     }
 
@@ -529,7 +536,9 @@ export default function Analytics({ user, onNavigateTab }) {
         <Card style={isDesktop ? { flex: 1 } : null}>
           <Row justify="space-between">
             <Txt variant="h3" tone="ink">Average scores</Txt>
-            {avg.overall != null ? <Pill label={`${avg.overall}% overall`} tone="success" size="sm" /> : null}
+            {avg.overall != null ? <Pill label={tl('{{overall}}% overall', {
+              overall: avg.overall
+            })} tone="success" size="sm" /> : null}
           </Row>
           <Stack gap={12} style={{ marginTop: space.md }}>{scoreBars(avg)}</Stack>
         </Card>
@@ -541,10 +550,18 @@ export default function Analytics({ user, onNavigateTab }) {
       <Card>
         <Txt variant="h3" tone="ink">Integrity</Txt>
         <Row wrap gap={8} style={{ marginTop: space.sm }}>
-          <Pill label={`${integ.verified ?? 0} verified`} tone="success" icon="ShieldCheck" />
-          <Pill label={`${integ.warnings ?? 0} warnings`} tone="warning" icon="CircleAlert" />
-          <Pill label={`${integ.flagged ?? 0} flagged`} tone="peach" />
-          <Pill label={`${integ.failed ?? 0} failed`} tone="danger" />
+          <Pill label={tl('{{v0}} verified', {
+            v0: integ.verified ?? 0
+          })} tone="success" icon="ShieldCheck" />
+          <Pill label={tl('{{v0}} warnings', {
+            v0: integ.warnings ?? 0
+          })} tone="warning" icon="CircleAlert" />
+          <Pill label={tl('{{v0}} flagged', {
+            v0: integ.flagged ?? 0
+          })} tone="peach" />
+          <Pill label={tl('{{v0}} failed', {
+            v0: integ.failed ?? 0
+          })} tone="danger" />
         </Row>
       </Card>
       {(Array.isArray(reports.schedule_timeline) && reports.schedule_timeline.length > 0) ? (
@@ -567,7 +584,7 @@ export default function Analytics({ user, onNavigateTab }) {
                       {[
                         c.scheduled_date || c.start_date || c.date,
                         c.start_time && `${c.start_time}${c.end_time ? `–${c.end_time}` : ''}`,
-                        c.duration_display || (c.duration_minutes && `${c.duration_minutes} min`),
+                        c.duration_display || (c.duration_minutes && tl('{{duration_minutes}} min', { duration_minutes: c.duration_minutes })),
                         c.schedule_type,
                       ].filter(Boolean).join(' · ')}
                     </Txt>
@@ -740,7 +757,7 @@ export default function Analytics({ user, onNavigateTab }) {
 
   const ds = dossierData || {};
   return (
-    <Page>
+    (<Page>
       <SectionTitle
         title="Assessment hub"
         emoji="📊"
@@ -749,7 +766,6 @@ export default function Analytics({ user, onNavigateTab }) {
       />
       <SegmentedTabs options={tabs} value={activeSubTab} onChange={setActiveSubTab} />
       {activeSubTab === 'Overview' ? overview : activeSubTab === 'Assessment Reports' ? reportsTab : setup}
-
       <Sheet
         visible={scheduleReviewModalVisible}
         onClose={() => setScheduleReviewModalVisible(false)}
@@ -773,14 +789,15 @@ export default function Analytics({ user, onNavigateTab }) {
               <Card padding={space.md}>
                 <Txt variant="small" weight={700} tone="ink">{sc.sequence ? `${sc.sequence}. ` : ''}{sc.display_name || sc.round_name || sc.round}</Txt>
                 <Txt variant="caption" tone="muted">
-                  {[sc.start_date, sc.start_time && `${sc.start_time}${sc.end_time ? `–${sc.end_time}` : ''}`, (sc.duration_minutes || sc.duration_min) && `${sc.duration_minutes || sc.duration_min} min`, sc.schedule_type || sc.schedule_mode].filter(Boolean).join(' · ')}
+                  {[sc.start_date, sc.start_time && `${sc.start_time}${sc.end_time ? `–${sc.end_time}` : ''}`, (sc.duration_minutes || sc.duration_min) && tl('{{v0}} min', {
+                    v0: sc.duration_minutes || sc.duration_min
+                  }), sc.schedule_type || sc.schedule_mode].filter(Boolean).join(' · ')}
                 </Txt>
               </Card>
             ),
           }))}
         />
       </Sheet>
-
       <Sheet
         visible={!!selectedCandidateSessionId}
         onClose={() => { setSelectedCandidateSessionId(null); setDossierData(null); }}
@@ -795,9 +812,15 @@ export default function Analytics({ user, onNavigateTab }) {
         ) : (
           <>
             <Row wrap gap={6}>
-              <Pill label={`Overall ${ds.session?.overall_score ?? '—'}%`} tone="success" />
-              <Pill label={`Integrity ${ds.session?.integrity_status || '—'}`} tone={integrityTone(ds.session?.integrity_status)} />
-              <Pill label={`${ds.session?.warning_count ?? 0} warnings`} tone="warning" />
+              <Pill label={tl('Overall {{v0}}%', {
+                v0: ds.session?.overall_score ?? '—'
+              })} tone="success" />
+              <Pill label={tl('Integrity {{v0}}', {
+                v0: ds.session?.integrity_status || '—'
+              })} tone={integrityTone(ds.session?.integrity_status)} />
+              <Pill label={tl('{{v0}} warnings', {
+                v0: ds.session?.warning_count ?? 0
+              })} tone="warning" />
             </Row>
             <SegmentedTabs options={['Performance', 'Integrity', 'Dossier'].map((x) => ({ id: x, label: x }))} value={dossierActiveTab} onChange={setDossierActiveTab} size="sm" />
             {dossierActiveTab === 'Performance' ? (
@@ -848,7 +871,7 @@ export default function Analytics({ user, onNavigateTab }) {
           </>
         )}
       </Sheet>
-    </Page>
+    </Page>)
   );
 }
 
