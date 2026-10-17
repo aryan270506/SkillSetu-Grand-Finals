@@ -3031,6 +3031,35 @@ def get_role_question_bank(
     }
 
 
+async def _register_assessment_session(assessment_service_url: str, init_payload: Dict[str, Any]) -> None:
+    """
+    Registers a session with the AI assessment service (Archive 2). The launch URL only works
+    once this succeeds, so failures are surfaced to the student instead of returning a dead link.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{assessment_service_url}/api/assessment/session/init",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-assessment-secret": settings.ASSESSMENT_SERVICE_SECRET
+                },
+                json=init_payload
+            )
+    except Exception as err:
+        logger.error(f"AI assessment service unreachable at {assessment_service_url}: {err}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The AI interview service is not running right now. Please try again later."
+        )
+    if resp.status_code not in (200, 201):
+        logger.error(f"AI assessment service rejected session init ({resp.status_code}): {resp.text[:300]}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The AI interview service could not start this session. Please try again later."
+        )
+
+
 @router.post("/student/applications/{application_id}/assessment/start")
 async def start_student_application_assessment(
     application_id: int,
@@ -3292,7 +3321,7 @@ async def start_student_application_assessment(
     }
 
     # Transmit session context to Archive 2 Assessment Service
-    callback_url = f"http://127.0.0.1:8000/api/v1/assessment/results"
+    callback_url = f"{settings.BACKEND_INTERNAL_URL}/api/v1/assessment/results"
     init_payload = {
         "sessionId": session_id,
         "studentId": student.id,
@@ -3308,20 +3337,7 @@ async def start_student_application_assessment(
         "callbackUrl": callback_url
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{assessment_service_url}/api/assessment/session/init",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-assessment-secret": settings.ASSESSMENT_SERVICE_SECRET
-                },
-                json=init_payload
-            )
-            if resp.status_code not in [200, 201]:
-                logger.warning(f"Archive 2 session init returned status {resp.status_code}: {resp.text}")
-    except Exception as err:
-        logger.error(f"Failed to communicate with Archive 2 Assessment Service: {err}")
+    await _register_assessment_session(assessment_service_url, init_payload)
 
     # Persist session in PostgreSQL
     if not session:
@@ -3470,20 +3486,7 @@ async def start_student_practice_assessment(
         "callbackUrl": None  # Practice results do not affect official application status
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{assessment_service_url}/api/assessment/session/init",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-assessment-secret": settings.ASSESSMENT_SERVICE_SECRET
-                },
-                json=init_payload
-            )
-            if resp.status_code not in [200, 201]:
-                logger.warning(f"Archive 2 practice session init returned status {resp.status_code}: {resp.text}")
-    except Exception as err:
-        logger.error(f"Failed to communicate with Archive 2 for practice session: {err}")
+    await _register_assessment_session(assessment_service_url, init_payload)
 
     return {
         "status": "success",

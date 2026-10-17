@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI Interview — Past Interviews</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <title>SkillSetu — Past Reports</title>
+  <link rel="stylesheet" href="/css/style.css?v=4">
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/">AI Interview</a>
-    <nav><a href="/">New Interview</a><a href="/reports.html">Past Interviews</a></nav>
+    <a class="brand" href="/"><span class="brand-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></svg></span>SkillSetu</a>
+    <nav><a href="/">New Assessment</a><a href="/reports.html" aria-current="page">Past Reports</a></nav>
   </header>
 
+  <div class="canvas">
   <main class="container">
-    <h1>Past interviews</h1>
+    <h1>Past reports</h1>
     <p class="sub">All recorded interviews and their evaluations.</p>
     <div class="card">
       <table class="list">
@@ -22,6 +23,7 @@
       </table>
     </div>
   </main>
+  </div>
 
   <script>
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

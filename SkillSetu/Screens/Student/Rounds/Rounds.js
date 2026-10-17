@@ -36,6 +36,7 @@ import {
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
 import { tl } from '../../../i18n/tl';
+import { launchInNewTab } from '../../../ui/launchUrl';
 
 export default function Rounds({ user, onNavigate, navigationParams }) {
   const { width } = useWindowDimensions();
@@ -228,20 +229,15 @@ export default function Rounds({ user, onNavigate, navigationParams }) {
   const handleStartAIPracticeSession = async ({ applicationId, internshipId, targetRound } = {}) => {
     setPracticingAppId(applicationId || 'global');
     try {
-      const res = await startPracticeAssessment({
-        applicationId,
-        internshipId,
-        targetRound: targetRound || 'aptitude',
-        email: studentEmail,
+      await launchInNewTab(async () => {
+        const res = await startPracticeAssessment({
+          applicationId,
+          internshipId,
+          targetRound: targetRound || 'aptitude',
+          email: studentEmail,
+        });
+        return res?.assessment_url;
       });
-      if (res?.assessment_url) {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.open(res.assessment_url, '_blank');
-        } else {
-          // @ts-ignore
-          import('react-native').then(({ Linking }) => Linking.openURL(res.assessment_url));
-        }
-      }
     } catch (err) {
       alert(err.message || 'Could not launch AI practice session.');
     } finally {
@@ -252,16 +248,8 @@ export default function Rounds({ user, onNavigate, navigationParams }) {
   const handleStartOfficialAssessment = async (appId) => {
     setLaunchingAppId(appId);
     try {
-      const res = await startApplicationAssessment(appId, studentEmail);
-      if (res?.assessment_url) {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.open(res.assessment_url, '_blank');
-        } else {
-          // @ts-ignore
-          import('react-native').then(({ Linking }) => Linking.openURL(res.assessment_url));
-        }
-        setTimeout(() => loadDashboard(true), 2000);
-      }
+      const url = await launchInNewTab(async () => (await startApplicationAssessment(appId, studentEmail))?.assessment_url);
+      if (url) setTimeout(() => loadDashboard(true), 2000);
     } catch (err) {
       alert(err.message || 'Could not launch assessment.');
     } finally {

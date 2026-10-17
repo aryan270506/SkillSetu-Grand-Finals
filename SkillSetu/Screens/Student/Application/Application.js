@@ -29,6 +29,7 @@ import {
 import { colors, radii, space, webOnly } from '../../../ui/theme';
 
 import { tl } from '../../../i18n/tl';
+import { launchInNewTab } from '../../../ui/launchUrl';
 import { formatDate } from '../../../i18n/format';
 
 export default function Application({ user, profileData, onNavigate }) {
@@ -145,15 +146,8 @@ export default function Application({ user, profileData, onNavigate }) {
     setAssessmentLaunching(true);
     setAssessmentError('');
     try {
-      const res = await startApplicationAssessment(selectedApp.id, studentEmail);
-      if (res?.assessment_url) {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.open(res.assessment_url, '_blank');
-        } else {
-          Linking.openURL(res.assessment_url);
-        }
-        handleCardClick(selectedApp);
-      }
+      const url = await launchInNewTab(async () => (await startApplicationAssessment(selectedApp.id, studentEmail))?.assessment_url);
+      if (url) handleCardClick(selectedApp);
     } catch (err) {
       setAssessmentError(err.message || 'Could not launch assessment session.');
     } finally {

@@ -21,6 +21,7 @@ if (missing.length) {
 
 const { LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET } = process.env;
 const AGENT_NAME = 'ai-interviewer'; // must match agent/agent.py
+const SKILLSETU_API_URL = process.env.SKILLSETU_API_URL || 'http://127.0.0.1:8000';
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -272,7 +273,7 @@ app.post('/api/interviews/:id/heartbeat', loadSession, async (req, res) => {
 
   // Forward heartbeat to Main Backend presence engine asynchronously
   try {
-    fetch(`http://127.0.0.1:8000/api/v1/assessment/sessions/${s.id}/heartbeat`, {
+    fetch(`${SKILLSETU_API_URL}/api/v1/assessment/sessions/${s.id}/heartbeat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

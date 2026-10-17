@@ -70,6 +70,8 @@ class Settings(BaseModel):
     # Dedicated AI Assessment Service (Archive 2)
     ASSESSMENT_SERVICE_URL: str = os.getenv("ASSESSMENT_SERVICE_URL", "http://localhost:3000")
     ASSESSMENT_SERVICE_SECRET: str = os.getenv("ASSESSMENT_SERVICE_SECRET", "S8G7idwzNTn9gRlkfFwTVSDFPmmVubgWVxWcm88LZKB")
+    # Where the assessment service reaches this API (results callback). Override when not on port 8000.
+    BACKEND_INTERNAL_URL: str = os.getenv("BACKEND_INTERNAL_URL", "http://127.0.0.1:8000")
 
     # Gemini AI Scheduling & Assessment Integration
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
