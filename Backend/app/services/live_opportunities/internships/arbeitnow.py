@@ -3,6 +3,7 @@ import requests
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from app.services.live_opportunities.base_source import BaseLiveSource
+from app.services.live_opportunities.html_utils import clean_scraped_html, extract_structured_sections
 
 logger = logging.getLogger("live_source_arbeitnow")
 
@@ -77,6 +78,19 @@ class ArbeitnowLiveSource(BaseLiveSource):
                     skills.append(kw)
 
         now_dt = datetime.now(timezone.utc)
+        raw_desc = raw.get("description") or ""
+        cleaned_desc = clean_scraped_html(raw_desc)
+        sections = extract_structured_sections(cleaned_desc)
+
+        job_types = raw.get("job_types", [])
+        job_type_str = ", ".join(str(t).title() for t in job_types) if job_types else "Internship / Full-time"
+
+        posted_val = None
+        if raw.get("created_at"):
+            try:
+                posted_val = datetime.fromtimestamp(int(raw["created_at"]), tz=timezone.utc).isoformat()
+            except Exception:
+                posted_val = str(raw.get("created_at"))
 
         return {
             "id": f"arbeitnow_{slug}",
@@ -89,18 +103,31 @@ class ArbeitnowLiveSource(BaseLiveSource):
             "title": title,
             "company_name": str(raw.get("company_name", "Global Employer")).strip(),
             "company_logo": "",
-            "description": (raw.get("description") or "")[:500],
+            "company_website": raw.get("url") or "",
+            "company_overview": sections.get("company_overview"),
+            "industry": "Software & Engineering",
+            "description": cleaned_desc,
+            "responsibilities": sections.get("responsibilities"),
+            "requirements": sections.get("requirements"),
             "location": raw.get("location") or ("Remote" if raw.get("remote") else "Hybrid"),
+            "eligible_regions": raw.get("location") or "Global / Remote",
             "work_preference": "Remote" if raw.get("remote") else "Hybrid",
+            "work_mode": "Remote" if raw.get("remote") else "Hybrid",
+            "job_type": job_type_str,
+            "opportunity_type": "Internship",
+            "experience_required": "Fresher / Entry Level",
             "stipend": None,
             "stipend_min": None,
             "stipend_max": None,
             "currency": None,
             "duration": None,
+            "openings": 1,
             "min_cgpa": None,
             "application_threshold": int(raw.get("application_threshold", 80) or 80),
             "minimum_match_threshold": int(raw.get("application_threshold", 80) or 80),
             "application_deadline": None,
+            "posted_at": posted_val,
+            "created_at": posted_val,
             "fetched_at": now_dt.isoformat(),
             "required_skills": skills,
             "is_active": True,

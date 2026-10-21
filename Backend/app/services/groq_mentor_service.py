@@ -1,5 +1,7 @@
+import re
 import json
 import logging
+import time
 import urllib.request
 import urllib.error
 from typing import Dict, Any, List, Optional
@@ -20,7 +22,8 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 class GroqMentorService:
     """
     Reasoning and Tool-Execution Orchestrator for Personal AI Career Mentor.
-    Uses Groq LLM API with authorized SkillSetu tools and dynamic student context.
+    Uses Groq LLM API with authorized SkillSetu tools, Google Gemini multi-turn failover,
+    and dynamic student context.
     """
 
     @classmethod
@@ -37,28 +40,38 @@ class GroqMentorService:
         Executes the personal career mentor conversation pipeline:
         1. Retrieves authoritative student context.
         2. Builds system instructions with student profile.
-        3. Calls Groq with tool calling enabled.
-        4. Handles iterative tool execution loop.
-        5. Formulates structured rich UI response with actionable links.
+        3. Cleans history turns so latest message is not duplicated.
+        4. Calls Groq with tool calling enabled.
+        5. If Groq unavailable/rate-limited, falls back to Google Gemini.
+        6. If LLMs unavailable, falls back to context-aware deterministic engine.
+        7. Formulates structured rich UI response with actionable links.
         """
+        t0 = time.time()
         # 1. Authoritative Student Context
         student_context = StudentContextService.get_student_context(db, student_id)
         profile_summary = StudentContextService.get_context_summary_for_prompt(student_context)
 
         target_model = model or settings.GROQ_MODEL or "llama-3.3-70b-versatile"
         api_key = settings.GROQ_API_KEY
+        gemini_api_key = settings.GEMINI_API_KEY
 
         # 2. Build System Prompt
         system_prompt = cls._build_system_prompt(profile_summary, student_context) + language_instruction(language)
 
-        # 3. Build Conversation Messages Payload
+        # 3. Build Conversation Messages Payload without duplication
         messages = [{"role": "system", "content": system_prompt}]
 
-        # Add recent conversation turns (last 10 turns max to stay within context limit)
-        recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
+        history_to_process = list(conversation_history or [])
+        # Strip trailing duplicate user turn if database already stored user_message before calling service
+        if history_to_process and history_to_process[-1].get("sender", "").lower() in ("user", "human"):
+            last_content = (history_to_process[-1].get("content") or history_to_process[-1].get("text") or "").strip()
+            if last_content == user_message.strip():
+                history_to_process = history_to_process[:-1]
+
+        recent_history = history_to_process[-10:] if len(history_to_process) > 10 else history_to_process
         for msg in recent_history:
             sender = msg.get("sender", "").lower()
-            content = msg.get("content") or msg.get("text") or ""
+            content = (msg.get("content") or msg.get("text") or "").strip()
             if not content:
                 continue
 
@@ -67,103 +80,118 @@ class GroqMentorService:
             elif sender in ("ai", "assistant", "mentor"):
                 messages.append({"role": "assistant", "content": content})
 
-        # Add current user prompt
-        messages.append({"role": "user", "content": user_message})
+        # Add current user prompt exactly once
+        messages.append({"role": "user", "content": user_message.strip()})
 
-        # 4. If Groq API key is not configured, use intelligent deterministic fallback
-        if not api_key:
-            logger.warning("GROQ_API_KEY is not configured. Using deterministic SkillSetu Career Mentor engine.")
-            return cls._generate_deterministic_fallback(user_message, student_context, db)
-
-        # 5. Execute Multi-Turn Tool Calling Loop with Groq
         executed_tools_data: List[Dict[str, Any]] = []
-        max_tool_iterations = 4
-        current_iteration = 0
-
         final_text = ""
-        while current_iteration < max_tool_iterations:
-            current_iteration += 1
+        provider_used = None
 
-            payload = {
-                "model": target_model,
-                "messages": messages,
-                "tools": MENTOR_TOOL_DEFINITIONS,
-                "tool_choice": "auto",
-                "temperature": 0.3,
-                "max_tokens": 1200
-            }
-
+        # 4. Try Groq (if configured)
+        if api_key:
             try:
-                groq_resp = cls._call_groq_api(payload, api_key)
-                if not groq_resp or "choices" not in groq_resp or not groq_resp["choices"]:
-                    logger.warning("Empty response from Groq API, using deterministic fallback.")
-                    return cls._generate_deterministic_fallback(user_message, student_context, db)
+                max_tool_iterations = 4
+                current_iteration = 0
+                while current_iteration < max_tool_iterations:
+                    current_iteration += 1
+                    payload = {
+                        "model": target_model,
+                        "messages": messages,
+                        "tools": MENTOR_TOOL_DEFINITIONS,
+                        "tool_choice": "auto",
+                        "temperature": 0.3,
+                        "max_tokens": 1200
+                    }
+                    groq_resp = cls._call_groq_api(payload, api_key)
+                    if not groq_resp or "choices" not in groq_resp or not groq_resp["choices"]:
+                        break
 
-                choice = groq_resp["choices"][0]
-                assistant_msg = choice.get("message", {})
-                tool_calls = assistant_msg.get("tool_calls")
+                    choice = groq_resp["choices"][0]
+                    assistant_msg = choice.get("message", {})
+                    tool_calls = assistant_msg.get("tool_calls")
 
-                # If no tool calls, this is the final assistant response
-                if not tool_calls:
-                    final_text = assistant_msg.get("content", "")
-                    break
+                    if not tool_calls:
+                        final_text = assistant_msg.get("content", "")
+                        provider_used = "groq"
+                        break
 
-                # Process Tool Calls
-                messages.append(assistant_msg)
+                    messages.append(assistant_msg)
+                    for tc in tool_calls:
+                        t_id = tc.get("id", f"call_{len(executed_tools_data)}")
+                        fn = tc.get("function", {})
+                        fn_name = fn.get("name", "")
+                        fn_args_str = fn.get("arguments", "{}")
+                        try:
+                            fn_args = json.loads(fn_args_str) if isinstance(fn_args_str, str) else fn_args_str
+                        except Exception:
+                            fn_args = {}
 
-                for tc in tool_calls:
-                    t_id = tc.get("id", f"call_{len(executed_tools_data)}")
-                    fn = tc.get("function", {})
-                    fn_name = fn.get("name", "")
-                    fn_args_str = fn.get("arguments", "{}")
-
-                    try:
-                        fn_args = json.loads(fn_args_str) if isinstance(fn_args_str, str) else fn_args_str
-                    except Exception:
-                        fn_args = {}
-
-                    # Execute Authorized Backend Tool
-                    tool_result = MentorToolRegistry.execute_tool(
-                        tool_name=fn_name,
-                        arguments=fn_args,
-                        student_id=student_id,
-                        student_context=student_context,
-                        db=db
-                    )
-
-                    executed_tools_data.append({
-                        "tool_name": fn_name,
-                        "arguments": fn_args,
-                        "result": tool_result
-                    })
-
-                    # Append tool message result
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": t_id,
-                        "name": fn_name,
-                        "content": json.dumps(tool_result)
-                    })
-
-            except urllib.error.HTTPError as e:
-                err_body = e.read().decode("utf-8") if e.fp else str(e)
-                logger.error(f"Groq API HTTP {e.code} error: {err_body}")
-                return cls._generate_deterministic_fallback(user_message, student_context, db)
+                        tool_result = MentorToolRegistry.execute_tool(
+                            tool_name=fn_name,
+                            arguments=fn_args,
+                            student_id=student_id,
+                            student_context=student_context,
+                            db=db
+                        )
+                        executed_tools_data.append({
+                            "tool_name": fn_name,
+                            "arguments": fn_args,
+                            "result": tool_result
+                        })
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": t_id,
+                            "name": fn_name,
+                            "content": json.dumps(tool_result)
+                        })
             except Exception as e:
-                logger.error(f"Error in Groq tool calling loop: {e}", exc_info=True)
-                return cls._generate_deterministic_fallback(user_message, student_context, db)
+                logger.warning(f"Groq mentor execution failed: {e}. Attempting failover...")
+
+        # 5. Failover to Google Gemini if Groq did not produce a text answer
+        if not final_text and gemini_api_key:
+            try:
+                logger.info("Executing mentor conversational turn with Google Gemini...")
+                gemini_result = cls._call_gemini_api(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                    api_key=gemini_api_key,
+                    model_name=settings.GEMINI_MODEL
+                )
+                if gemini_result:
+                    final_text = gemini_result
+                    provider_used = "gemini"
+            except Exception as gemini_err:
+                logger.warning(f"Gemini mentor execution failed: {gemini_err}. Attempting deterministic fallback...")
+
+        # 6. Fallback to intelligent context-aware deterministic engine if all external LLMs failed
+        if not final_text:
+            logger.info("Using context-aware deterministic SkillSetu Career Mentor fallback engine.")
+            fallback_res = cls._generate_deterministic_fallback(
+                user_message=user_message,
+                context=student_context,
+                db=db,
+                conversation_history=conversation_history
+            )
+            final_text = fallback_res.get("text", "")
+            if not executed_tools_data and fallback_res.get("richContent"):
+                return fallback_res
 
         if not final_text:
             final_text = cls._summarize_tool_executions(user_message, executed_tools_data, student_context)
 
-        # 6. Extract Rich UI Content (Cards, Buttons, Badges)
+        # 7. Extract Rich UI Content (Cards, Buttons, Badges)
         rich_content = cls._extract_rich_ui_content(user_message, executed_tools_data, student_context)
+
+        latency_ms = int((time.time() - t0) * 1000)
+        logger.info(f"Mentor turn completed in {latency_ms}ms via {provider_used or 'deterministic'}.")
 
         return {
             "text": final_text,
             "richContent": rich_content,
             "toolCallsCount": len(executed_tools_data),
-            "toolsUsed": [t["tool_name"] for t in executed_tools_data]
+            "toolsUsed": [t["tool_name"] for t in executed_tools_data],
+            "provider": provider_used or "deterministic",
+            "latencyMs": latency_ms
         }
 
     @classmethod
@@ -215,6 +243,55 @@ class GroqMentorService:
                 raise e
 
         return None
+
+    @classmethod
+    def _call_gemini_api(
+        cls,
+        messages: List[Dict[str, Any]],
+        system_prompt: str,
+        api_key: str,
+        model_name: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Executes conversation turn using Google Gemini (gemini-3.5-flash-lite) API.
+        Extracts candidate text and records latency / token metrics.
+        """
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=api_key)
+            target_model = model_name or settings.GEMINI_MODEL or "gemini-3.5-flash-lite"
+
+            contents = []
+            for m in messages:
+                if m.get("role") == "system":
+                    continue
+                role = "user" if m.get("role") == "user" else "model"
+                text_part = m.get("content") or ""
+                if text_part.strip():
+                    contents.append(types.Content(role=role, parts=[types.Part.from_text(text=text_part)]))
+
+            if not contents:
+                return None
+
+            t0 = time.time()
+            resp = client.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.3,
+                    max_output_tokens=1200
+                )
+            )
+            latency_ms = int((time.time() - t0) * 1000)
+            token_count = resp.usage_metadata.total_token_count if resp and hasattr(resp, "usage_metadata") and resp.usage_metadata else None
+            logger.info(f"Gemini mentor turn succeeded in {latency_ms}ms with model {target_model} (tokens: {token_count}).")
+            return resp.text.strip() if resp and resp.text else None
+        except Exception as e:
+            logger.error(f"Gemini mentor API call failed: {e}")
+            return None
 
     @classmethod
     def _build_system_prompt(cls, profile_summary: str, student_context: Dict[str, Any]) -> str:
@@ -293,6 +370,12 @@ CRITICAL OPERATIONAL RULES:
    - Speak directly to the student as an encouraging, authoritative mentor.
    - Use clean GitHub-flavored markdown with bolding, bullet points, and numbered lists.
    - Keep answers structured, concrete, and directly actionable.
+
+6. ACTIVE LISTENING & MULTI-TURN CONTINUITY:
+   - Carefully review prior messages in the conversation history.
+   - When the student responds to a question, suggestion, or choice you previously offered, ALWAYS address their specific answer directly.
+   - NEVER restart the conversation, reset to an introductory greeting, or ignore what the student just answered.
+   - Build continuously on their stated choices, goals, and answers.
 """
 
     @classmethod
@@ -401,19 +484,109 @@ CRITICAL OPERATIONAL RULES:
         cls,
         user_message: str,
         context: Dict[str, Any],
-        db: Session
+        db: Session,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Deterministic, profile- and application-aware response engine when Groq API key is not supplied or offline.
-        Uses real SkillSetu database calculations, student context, and AppKnowledgeService.
+        Uses real SkillSetu database calculations, student context, conversation history, and AppKnowledgeService.
         """
-        msg_lower = user_message.lower()
+        msg_lower = user_message.lower().strip()
         st_name = context.get("student", {}).get("name", "Student")
         target_career = context.get("career", {}).get("targetCareer", "Full Stack Developer")
         readiness = context.get("career", {}).get("careerReadiness", 0)
         verified = [v.get("skill_name") for v in context.get("skills", {}).get("verified", [])]
         gaps = context.get("skillGaps", [])
         resume_score = context.get("resume", {}).get("resumeScore", 0)
+
+        # Inspect conversation history to understand multi-turn context
+        last_assistant_msg = ""
+        prior_turns_count = 0
+        if conversation_history:
+            for prev in reversed(conversation_history):
+                sender = prev.get("sender", "").lower()
+                if sender in ("ai", "assistant", "mentor") and not last_assistant_msg:
+                    last_assistant_msg = (prev.get("content") or prev.get("text") or "").strip()
+                if sender in ("user", "human"):
+                    prior_turns_count += 1
+
+        last_ai_lower = last_assistant_msg.lower()
+
+        # Check if the user is answering or confirming a prior question from the mentor
+        is_confirmation = any(w in msg_lower for w in ("yes", "sure", "ok", "okay", "yep", "let's do", "sounds good", "please", "definitely", "agree", "proceed", "start"))
+        is_first_option = any(w in msg_lower for w in ("first", "1", "option 1", "former"))
+        is_second_option = any(w in msg_lower for w in ("second", "2", "option 2", "latter"))
+
+        # Check if user is asking an explicit workflow, screen, or metric question
+        search_res = AppKnowledgeService.search_app_knowledge(user_message)
+        matched_workflows = search_res.get("matchedWorkflows", [])
+        metric_info = AppKnowledgeService.get_metric_explanation(user_message)
+        is_workflow_or_metric = bool(
+            (metric_info and any(q_word in msg_lower for q_word in ("how", "calculate", "formula", "what is", "why", "work", "mean"))) or
+            (matched_workflows and any(w in msg_lower for w in ("how", "where", "connect", "step", "tab", "screen", "find", "use")))
+        )
+
+        # Skill matching from context (only when replying about learning a skill, not querying an app workflow)
+        matched_skill_in_answer = None
+        if not is_workflow_or_metric:
+            all_relevant_skills = [g.get("skill_name") for g in gaps] + verified + ["Docker", "FastAPI", "Python", "PostgreSQL", "React", "Redis", "System Design", "AWS", "Kubernetes", "Git"]
+            for s in all_relevant_skills:
+                if s and re.search(rf"\b{re.escape(s.lower())}\b", msg_lower):
+                    if s.lower() == "git" and "github" in msg_lower:
+                        continue
+                    matched_skill_in_answer = s
+                    break
+
+        # 0. Active Follow-up & Answer Processing when replying to prior assistant question
+        if matched_skill_in_answer:
+            target_skill = matched_skill_in_answer
+            courses_res = MentorToolRegistry.execute_tool(
+                "search_courses",
+                {"skill_name": target_skill},
+                context.get("student", {}).get("id", 1),
+                context,
+                db
+            )
+            c_list = courses_res.get("courses", [])
+            c_sample = c_list[0] if c_list else {"title": f"Mastering {target_skill}", "provider": "NPTEL"}
+            text = (
+                f"Understood! Focusing on **{target_skill}** is an excellent strategic choice for your **{target_career}** progression.\n\n"
+                f"**Immediate Action Plan for {target_skill}:**\n"
+                f"1. **Targeted Course:** Enroll in **{c_sample.get('title')}** ({c_sample.get('provider', 'NPTEL')}) via the **Learning** tab.\n"
+                f"2. **Hands-on Proof:** Implement a project repository demonstrating {target_skill} and push it to your connected GitHub.\n"
+                f"3. **Skill Verification:** Complete the diagnostic quiz on the **Skills** tab to earn your verified badge and boost your readiness above {min(100, int(readiness + 15))}%."
+            )
+            return {
+                "text": text,
+                "richContent": {
+                    "type": "skill_card",
+                    "title": c_sample.get("title", f"Learn {target_skill}"),
+                    "skillName": target_skill,
+                    "provider": c_sample.get("provider", "NPTEL"),
+                    "url": c_sample.get("url", ""),
+                    "buttonLabel": "Enroll Free in Module",
+                    "actionTab": "Learning"
+                }
+            }
+
+        elif is_confirmation and ("docker" in last_ai_lower or "learning" in last_ai_lower or "course" in last_ai_lower or "skill" in last_ai_lower):
+            top_gap = gaps[0].get("skill_name", "Docker") if gaps else "System Design"
+            text = (
+                f"Great, let's get started on closing your priority gap in **{top_gap}**!\n\n"
+                f"• **Step 1:** Head to the **Learning** tab to start the targeted module for {top_gap}.\n"
+                f"• **Step 2:** Take the short skill assessment to verify this competency.\n"
+                f"• **Impact:** Earning this verified badge will directly improve your internship matching rate for **{target_career}**."
+            )
+            return {
+                "text": text,
+                "richContent": {
+                    "type": "skill_card",
+                    "title": f"Priority Focus: {top_gap}",
+                    "skillName": top_gap,
+                    "buttonLabel": "Start Learning Roadmap",
+                    "actionTab": "Learning"
+                }
+            }
 
         # 1. Check if user is asking about an Application Metric / Calculation
         metric_info = AppKnowledgeService.get_metric_explanation(user_message)
@@ -423,7 +596,6 @@ CRITICAL OPERATIONAL RULES:
             m_exp = metric_info["explanation"]
             m_loc = metric_info.get("whereFound", "SkillSetu")
             
-            # Check if this is a combined question regarding the student's specific score
             student_value_text = ""
             if "readiness" in m_name.lower() or "readiness" in msg_lower:
                 student_value_text = (
@@ -463,7 +635,6 @@ CRITICAL OPERATIONAL RULES:
         matched_tabs = search_res.get("matchedTabs", [])
         matched_workflows = search_res.get("matchedWorkflows", [])
 
-        # If pure navigation or feature question
         if (matched_workflows or (matched_tabs and any(w in msg_lower for w in ("where", "how do i", "how to", "what does", "feature", "button", "tab", "screen", "find", "use")))):
             if matched_workflows:
                 wf = matched_workflows[0]
@@ -636,7 +807,25 @@ CRITICAL OPERATIONAL RULES:
                 }
             }
 
-        # 7. Default General Career & App Overview
+        # 7. Ongoing conversation follow-up (when user responded to a prior assistant question/comment)
+        elif prior_turns_count > 0:
+            text = (
+                f"I noted your answer: **\"{user_message}\"**.\n\n"
+                f"For your target track as **{target_career}** (Current Readiness: **{readiness:.0f}%**):\n"
+                f"• **Priority Gap to Bridge:** {gaps[0].get('skill_name') if gaps else 'Cloud Architecture'}\n"
+                f"• **Verified Core Competencies:** {', '.join(verified[:3]) if verified else 'Foundational CS'}\n\n"
+                f"Would you like to explore matching internships on the **Opportunities** tab, launch targeted learning on the **Learning** tab, or run a mock interview on the **Interview** tab?"
+            )
+            return {
+                "text": text,
+                "richContent": {
+                    "type": "text_link",
+                    "label": "Open Learning Roadmap",
+                    "actionTab": "Learning"
+                }
+            }
+
+        # 8. Initial First Turn Overview (only when there are no prior turns)
         else:
             text = (
                 f"Hello {st_name}! I am your Personal AI Career Mentor with complete knowledge of your profile and the entire SkillSetu platform.\n\n"

@@ -388,16 +388,60 @@ app.get('/api/interviews/:id/context', agentOnly, loadSession, (req, res) => {
   res.json({ name, jd, resumeText, candidateContext, mode, questionCount });
 });
 
-// Agent transcript line append
+// Agent transcript line append with sequence ordering, deduplication, and monotonic timestamps
 app.post('/api/interviews/:id/transcript', agentOnly, async (req, res) => {
   const role = req.body.role === 'ai' ? 'ai' : 'candidate';
   const text = String(req.body.text || '').replace(/''/g, "'").trim();
+  const id = req.body.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const seq = typeof req.body.seq === 'number' ? req.body.seq : null;
+  const createdAt = req.body.createdAt || now();
+
   if (!text) return res.json({ ok: true });
+
   const result = await updateSession(req.params.id, (s) => {
     if (s.status !== 'in_progress' && s.status !== 'created') return false;
-    s.transcript.push({ role, text, at: now() });
+    if (!Array.isArray(s.transcript)) s.transcript = [];
+
+    // 1. Deduplicate by message ID
+    const existingIndex = s.transcript.findIndex((m) => m.id && m.id === id);
+    if (existingIndex !== -1) {
+      if (text.length > s.transcript[existingIndex].text.length) {
+        s.transcript[existingIndex].text = text;
+        s.transcript[existingIndex].at = createdAt;
+      }
+      return true;
+    }
+
+    // 2. Deduplicate near-duplicate adjacent identical text within 2000ms
+    const lastItem = s.transcript[s.transcript.length - 1];
+    if (lastItem && lastItem.role === role && lastItem.text === text) {
+      const timeDiff = Math.abs(new Date(createdAt).getTime() - new Date(lastItem.at || 0).getTime());
+      if (timeDiff < 2000) {
+        return true;
+      }
+    }
+
+    // 3. Assign sequence number if missing
+    const assignedSeq = seq !== null ? seq : (s.transcript.length > 0 ? (s.transcript[s.transcript.length - 1].seq || 0) + 1 : 1);
+
+    // 4. Append item
+    s.transcript.push({
+      id,
+      seq: assignedSeq,
+      role,
+      text,
+      at: createdAt,
+    });
+
+    // 5. Keep stably sorted by seq / createdAt
+    s.transcript.sort((a, b) => {
+      if (a.seq && b.seq && a.seq !== b.seq) return a.seq - b.seq;
+      return new Date(a.at).getTime() - new Date(b.at).getTime();
+    });
+
     return true;
   });
+
   if (result === null) return res.status(404).json({ error: 'Interview not found' });
   res.json({ ok: result });
 });

@@ -1,4 +1,5 @@
 import { API_BASE } from '../../../ui/config';
+import { clearOpportunityPreviewCache } from './opportunityPreviewCache';
 
 // In-memory session identifier generator & accessor
 let currentSessionId = null;
@@ -274,6 +275,7 @@ export async function unbookmarkInternship(id, email = '', sessionId = null) {
  */
 export async function clearOpportunitySessionCache(sessionId = null, email = '') {
   try {
+    clearOpportunityPreviewCache();
     const sid = sessionId || currentSessionId;
     if (sid || email) {
       await fetch(`${API_BASE}/internships/cache/clear?session_id=${encodeURIComponent(sid || '')}&email=${encodeURIComponent(email || '')}`, {
@@ -293,6 +295,7 @@ export async function clearOpportunitySessionCache(sessionId = null, email = '')
     resetSessionId();
   } catch (err) {
     console.warn('[internshipService] clearOpportunitySessionCache error:', err);
+    clearOpportunityPreviewCache();
     resetSessionId();
   }
 }

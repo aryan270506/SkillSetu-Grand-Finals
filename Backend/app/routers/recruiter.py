@@ -192,6 +192,21 @@ class CreateInternshipPostingRequest(BaseModel):
     application_threshold: Optional[int] = 80
     minimum_match_threshold: Optional[int] = None
     deadline: Optional[str] = None
+    automation_mode: Optional[str] = "REVIEW_GATED"
+    automation_enabled: Optional[bool] = False
+    pipeline_config: Optional[Dict[str, Any]] = None
+    evaluation_rubrics: Optional[Dict[str, Any]] = None
+    eligibility_rules: Optional[Dict[str, Any]] = None
+    scoring_weights: Optional[Dict[str, Any]] = None
+    automation_policy: Optional[Dict[str, Any]] = None
+
+
+class SuggestPipelineDraftRequest(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    department: Optional[str] = ""
+    work_mode: Optional[str] = "Hybrid"
+    openings: Optional[int] = 1
 
 
 class UpdateInternshipPostingRequest(BaseModel):
@@ -208,6 +223,8 @@ class UpdateInternshipPostingRequest(BaseModel):
     minimum_match_threshold: Optional[int] = None
     status: Optional[str] = None
     deadline: Optional[str] = None
+    automation_mode: Optional[str] = None
+    automation_enabled: Optional[bool] = None
 
 
 class ScheduleInterviewRequest(BaseModel):
@@ -1204,6 +1221,11 @@ def get_company_internships(
                 "minimum_match_threshold": p.application_threshold if p.application_threshold is not None else 80,
                 "deadline": p.deadline.isoformat() if p.deadline else None,
                 "status": p.status or "Active",
+                "automation_mode": p.automation_mode or "REVIEW_GATED",
+                "automation_enabled": bool(p.automation_enabled),
+                "automation_paused": bool(p.automation_paused),
+                "active_pipeline_version_id": p.active_pipeline_version_id,
+                "draft_pipeline_version_id": p.draft_pipeline_version_id,
                 "applied_count": app_counts.get(p.id, {}).get("applied", 0),
                 "shortlisted_count": app_counts.get(p.id, {}).get("shortlisted", 0),
                 "interview_count": app_counts.get(p.id, {}).get("interview", 0),
@@ -1454,6 +1476,11 @@ def get_company_internship_detail(
             "minimum_match_threshold": posting.application_threshold if posting.application_threshold is not None else 80,
             "deadline": posting.deadline.isoformat() if posting.deadline else None,
             "status": posting.status or "Active",
+            "automation_mode": posting.automation_mode or "REVIEW_GATED",
+            "automation_enabled": bool(posting.automation_enabled),
+            "automation_paused": bool(posting.automation_paused),
+            "active_pipeline_version_id": posting.active_pipeline_version_id,
+            "draft_pipeline_version_id": posting.draft_pipeline_version_id,
             "created_at": posting.created_at.isoformat() if posting.created_at else None,
             "updated_at": posting.updated_at.isoformat() if posting.updated_at else None,
             "applicants": applicant_list
@@ -2123,6 +2150,10 @@ def create_internship_posting(
     if not deadline_val:
         deadline_val = datetime.now(timezone.utc) + timedelta(days=60)
 
+    valid_modes = {"FULL_AUTOMATION", "REVIEW_GATED", "MANUAL_ONLY"}
+    auto_mode = payload.automation_mode if (payload.automation_mode in valid_modes) else "REVIEW_GATED"
+    auto_enabled = bool(payload.automation_enabled) if payload.automation_enabled is not None else False
+
     posting = models.InternshipPosting(
         company_id=company.id,
         recruiter_id=current_user.id,
@@ -2137,11 +2168,43 @@ def create_internship_posting(
         openings=payload.openings or 1,
         application_threshold=threshold,
         deadline=deadline_val,
-        status="Active"
+        status="Active",
+        automation_mode=auto_mode,
+        automation_enabled=auto_enabled,
+        automation_paused=False
     )
     db.add(posting)
     db.commit()
     db.refresh(posting)
+
+    # If explicitly enabled upon creation, initialize and publish a baseline pipeline version if none exists
+    if auto_enabled and not posting.active_pipeline_version_id and not payload.pipeline_config:
+        try:
+            baseline = pipeline_versioning_service._create_default_baseline_version(db, posting)
+            posting.active_pipeline_version_id = baseline.id
+            db.commit()
+            db.refresh(posting)
+        except Exception as be:
+            logger.warning(f"Could not initialize default baseline pipeline: {be}")
+
+    # If an initial pipeline draft was configured, save it as a draft pipeline version
+    if payload.pipeline_config:
+        try:
+            draft = pipeline_versioning_service.create_or_update_pipeline_draft(
+                db=db,
+                internship_id=posting.id,
+                recruiter_id=current_user.id,
+                pipeline_config=payload.pipeline_config,
+                evaluation_rubrics=payload.evaluation_rubrics or {},
+                eligibility_rules=payload.eligibility_rules or {},
+                scoring_weights=payload.scoring_weights or {},
+                automation_policy=payload.automation_policy or {"mode": auto_mode}
+            )
+            posting.draft_pipeline_version_id = draft.id
+            db.commit()
+            db.refresh(posting)
+        except Exception as e:
+            logger.warning(f"Could not persist initial pipeline draft: {e}")
 
     # Invalidate student opportunities cache immediately
     SessionCacheService.clear_all_cache()
@@ -2163,6 +2226,11 @@ def create_internship_posting(
             "deadline": posting.deadline.isoformat() if posting.deadline else None,
             "required_skills": canonical_skills,
             "status": posting.status,
+            "automation_mode": posting.automation_mode,
+            "automation_enabled": posting.automation_enabled,
+            "automation_paused": posting.automation_paused,
+            "active_pipeline_version_id": posting.active_pipeline_version_id,
+            "draft_pipeline_version_id": posting.draft_pipeline_version_id,
             "created_at": posting.created_at.isoformat() if posting.created_at else None
         }
     }
@@ -2219,6 +2287,30 @@ def update_internship_posting(
         canonical_skills = get_canonical_skill_names(db, skills_list)
         posting.required_skills = json.dumps(canonical_skills)
 
+    if payload.automation_mode is not None:
+        if payload.automation_mode in {"FULL_AUTOMATION", "REVIEW_GATED", "MANUAL_ONLY"}:
+            posting.automation_mode = payload.automation_mode
+        else:
+            raise HTTPException(status_code=400, detail="Invalid automation_mode")
+    if payload.automation_enabled is not None:
+        new_enabled = bool(payload.automation_enabled)
+        if new_enabled:
+            if not posting.active_pipeline_version_id:
+                try:
+                    baseline = pipeline_versioning_service._create_default_baseline_version(db, posting)
+                    posting.active_pipeline_version_id = baseline.id
+                except Exception as be:
+                    logger.warning(f"Could not initialize default baseline pipeline on update: {be}")
+            active_ver = db.query(models.RecruitmentPipelineVersion).filter(
+                models.RecruitmentPipelineVersion.id == posting.active_pipeline_version_id,
+                models.RecruitmentPipelineVersion.status == "PUBLISHED"
+            ).first()
+            if not active_ver or not (active_ver.pipeline_config or {}).get("rounds"):
+                raise HTTPException(status_code=400, detail="Cannot enable recruitment automation: recruitment pipeline is incomplete.")
+            posting.automation_enabled = True
+        else:
+            posting.automation_enabled = False
+
     new_thresh = payload.application_threshold if payload.application_threshold is not None else payload.minimum_match_threshold
     if new_thresh is not None:
         if 50 <= new_thresh <= 100:
@@ -2251,6 +2343,11 @@ def update_internship_posting(
             "deadline": posting.deadline.isoformat() if posting.deadline else None,
             "required_skills": parse_json_safely(posting.required_skills, []),
             "status": posting.status,
+            "automation_mode": posting.automation_mode,
+            "automation_enabled": posting.automation_enabled,
+            "automation_paused": posting.automation_paused,
+            "active_pipeline_version_id": posting.active_pipeline_version_id,
+            "draft_pipeline_version_id": posting.draft_pipeline_version_id,
             "created_at": posting.created_at.isoformat() if posting.created_at else None,
             "updated_at": posting.updated_at.isoformat() if posting.updated_at else None
         }
@@ -3451,3 +3548,355 @@ def get_recruiter_analytics(
             }
         }
     }
+
+
+# ==========================================
+# RECRUITMENT AUTOMATION, PIPELINE VERSIONING & OVERRIDE ENDPOINTS
+# ==========================================
+
+from app.schemas.recruitment_automation import RecruiterOverrideCreate, RecruiterOverrideRevoke
+from app.services import (
+    gemini_jd_analysis_service,
+    pipeline_versioning_service,
+    recruiter_override_service,
+    final_selection_service,
+    job_queue_service
+)
+
+
+@router.post("/internships/pipeline/suggest-draft")
+def suggest_pipeline_draft_endpoint(
+    payload: SuggestPipelineDraftRequest = Body(...),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """
+    Invokes Gemini to analyze job description and suggest a pipeline configuration preview
+    on-the-fly during internship creation or editing, before or after saving.
+    """
+    pipeline_dict = gemini_jd_analysis_service.analyze_job_description_and_suggest_pipeline(
+        title=payload.title.strip() if payload.title else "Intern",
+        description=payload.description.strip() if payload.description else f"Role: {payload.title}",
+        department=payload.department.strip() if payload.department else None,
+        work_mode=payload.work_mode.strip() if payload.work_mode else "Hybrid",
+        openings=payload.openings or 1
+    )
+    return {
+        "status": "success",
+        "pipeline_config": pipeline_dict.get("pipeline_config", {}),
+        "evaluation_rubrics": pipeline_dict.get("evaluation_rubrics", {}),
+        "eligibility_rules": pipeline_dict.get("eligibility_rules", {}),
+        "scoring_weights": pipeline_dict.get("scoring_weights", {}),
+        "automation_policy": pipeline_dict.get("automation_policy", {})
+    }
+
+
+@router.post("/internships/{internship_id}/pipeline/generate-draft")
+def generate_pipeline_draft_endpoint(
+    internship_id: int,
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """
+    Invokes Gemini to analyze the job description and create/update a DRAFT pipeline version.
+    """
+    posting = db.query(models.InternshipPosting).filter(
+        models.InternshipPosting.id == internship_id,
+        models.InternshipPosting.company_id == recruiter.company_id
+    ).first()
+    if not posting:
+        raise HTTPException(status_code=404, detail="Internship posting not found.")
+
+    pipeline_dict = gemini_jd_analysis_service.analyze_job_description_and_suggest_pipeline(
+        title=posting.title,
+        description=posting.description or f"Role: {posting.title}",
+        department=posting.department,
+        work_mode=posting.work_mode,
+        openings=posting.openings or 1
+    )
+
+    draft = pipeline_versioning_service.create_or_update_pipeline_draft(
+        db=db,
+        internship_id=posting.id,
+        recruiter_id=recruiter.id,
+        pipeline_config=pipeline_dict["pipeline_config"],
+        evaluation_rubrics=pipeline_dict["evaluation_rubrics"],
+        eligibility_rules=pipeline_dict["eligibility_rules"],
+        scoring_weights=pipeline_dict["scoring_weights"],
+        automation_policy=pipeline_dict["automation_policy"]
+    )
+
+    return {
+        "status": "success",
+        "draft_version_id": draft.id,
+        "version_number": draft.version_number,
+        "content_hash": draft.content_hash,
+        "pipeline_config": draft.pipeline_config,
+        "evaluation_rubrics": draft.evaluation_rubrics,
+        "eligibility_rules": draft.eligibility_rules,
+        "scoring_weights": draft.scoring_weights,
+        "automation_policy": draft.automation_policy
+    }
+
+
+@router.get("/internships/{internship_id}/pipeline/versions")
+def list_pipeline_versions_endpoint(
+    internship_id: int,
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """Lists all pipeline versions (Draft, Published, Superseded) with candidate enrollment counts."""
+    posting = db.query(models.InternshipPosting).filter(
+        models.InternshipPosting.id == internship_id,
+        models.InternshipPosting.company_id == recruiter.company_id
+    ).first()
+    if not posting:
+        raise HTTPException(status_code=404, detail="Internship posting not found.")
+
+    versions = db.query(models.RecruitmentPipelineVersion).filter(
+        models.RecruitmentPipelineVersion.internship_id == internship_id
+    ).order_by(models.RecruitmentPipelineVersion.version_number.desc()).all()
+
+    items = []
+    for v in versions:
+        cand_count = db.query(models.InternshipApplication).filter(
+            models.InternshipApplication.pipeline_version_id == v.id
+        ).count()
+        items.append({
+            "id": v.id,
+            "version_number": v.version_number,
+            "status": v.status,
+            "content_hash": v.content_hash,
+            "published_at": v.published_at.isoformat() if v.published_at else None,
+            "enrolled_candidates_count": cand_count,
+            "is_active": (posting.active_pipeline_version_id == v.id)
+        })
+
+    return {
+        "status": "success",
+        "internship_id": internship_id,
+        "active_version_id": posting.active_pipeline_version_id,
+        "draft_version_id": posting.draft_pipeline_version_id,
+        "automation_enabled": posting.automation_enabled,
+        "automation_mode": posting.automation_mode,
+        "versions": items
+    }
+
+
+@router.post("/internships/{internship_id}/pipeline/publish")
+def publish_pipeline_version_endpoint(
+    internship_id: int,
+    migrate_unstarted: bool = Body(False, embed=True),
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """Publishes the draft pipeline version into an immutable published snapshot."""
+    posting = db.query(models.InternshipPosting).filter(
+        models.InternshipPosting.id == internship_id,
+        models.InternshipPosting.company_id == recruiter.company_id
+    ).first()
+    if not posting:
+        raise HTTPException(status_code=404, detail="Internship posting not found.")
+
+    try:
+        published_ver, migrated_count = pipeline_versioning_service.publish_pipeline_version(
+            db=db,
+            internship_id=internship_id,
+            recruiter_id=recruiter.id,
+            migrate_unstarted_applicants=migrate_unstarted
+        )
+        return {
+            "status": "success",
+            "published_version_id": published_ver.id,
+            "version_number": published_ver.version_number,
+            "content_hash": published_ver.content_hash,
+            "migrated_unstarted_count": migrated_count
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/internships/{internship_id}/automation/configure")
+def configure_automation_endpoint(
+    internship_id: int,
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """
+    Configures automation mode (FULL_AUTOMATION, REVIEW_GATED, MANUAL_ONLY)
+    and enables, pauses, or resumes automation.
+    """
+    posting = db.query(models.InternshipPosting).filter(
+        models.InternshipPosting.id == internship_id,
+        models.InternshipPosting.company_id == recruiter.company_id
+    ).first()
+    if not posting:
+        raise HTTPException(status_code=404, detail="Internship posting not found.")
+
+    next_enabled = None
+    if "automation_enabled" in payload:
+        next_enabled = bool(payload["automation_enabled"])
+    elif "enabled" in payload:
+        next_enabled = bool(payload["enabled"])
+
+    if next_enabled is not None:
+        if next_enabled:
+            if not posting.active_pipeline_version_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot enable recruitment automation without an active published recruitment pipeline version. Please generate and publish a pipeline version first."
+                )
+            active_ver = db.query(models.RecruitmentPipelineVersion).filter(
+                models.RecruitmentPipelineVersion.id == posting.active_pipeline_version_id,
+                models.RecruitmentPipelineVersion.status == "PUBLISHED"
+            ).first()
+            if not active_ver or not (active_ver.pipeline_config or {}).get("rounds"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot enable recruitment automation: recruitment pipeline is incomplete."
+                )
+            posting.automation_enabled = True
+        else:
+            posting.automation_enabled = False
+
+    if "automation_paused" in payload:
+        posting.automation_paused = bool(payload["automation_paused"])
+    elif "paused" in payload:
+        posting.automation_paused = bool(payload["paused"])
+
+    mode = payload.get("automation_mode") or payload.get("mode")
+    if mode is not None:
+        if mode not in ["FULL_AUTOMATION", "REVIEW_GATED", "MANUAL_ONLY"]:
+            raise HTTPException(status_code=400, detail="Invalid automation_mode")
+        posting.automation_mode = mode
+
+    db.commit()
+    return {
+        "status": "success",
+        "internship_id": internship_id,
+        "automation_enabled": posting.automation_enabled,
+        "automation_paused": posting.automation_paused,
+        "automation_mode": posting.automation_mode
+    }
+
+
+@router.post("/internships/{internship_id}/applications/{application_id}/override")
+def apply_application_override_endpoint(
+    internship_id: int,
+    application_id: int,
+    override_data: RecruiterOverrideCreate,
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """Applies an auditable manual override to an application with required reason code and justification."""
+    try:
+        override, app_rec = recruiter_override_service.apply_recruiter_override(
+            db=db,
+            recruiter_id=recruiter.id,
+            application_id=application_id,
+            override_data=override_data
+        )
+        return {
+            "status": "success",
+            "override_id": override.id,
+            "application_id": app_rec.id,
+            "new_status": app_rec.status,
+            "is_manually_overridden": app_rec.is_manually_overridden
+        }
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+
+
+@router.post("/internships/{internship_id}/applications/{application_id}/override/revoke")
+def revoke_application_override_endpoint(
+    internship_id: int,
+    application_id: int,
+    revoke_params: RecruiterOverrideRevoke,
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """Revokes active manual override and optionally re-evaluates candidate against pinned rules."""
+    try:
+        app_rec = recruiter_override_service.revoke_recruiter_override(
+            db=db,
+            recruiter_id=recruiter.id,
+            application_id=application_id,
+            revoke_params=revoke_params
+        )
+        return {
+            "status": "success",
+            "application_id": app_rec.id,
+            "status": app_rec.status,
+            "is_manually_overridden": app_rec.is_manually_overridden
+        }
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+
+
+@router.get("/jobs/dead-letter")
+def list_dead_letter_jobs_endpoint(
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """Lists dead-letter background jobs with retry count and failure details."""
+    dead_jobs = db.query(models.RecruitmentJob).filter(
+        models.RecruitmentJob.status == "DEAD_LETTER"
+    ).order_by(models.RecruitmentJob.id.desc()).limit(50).all()
+
+    items = []
+    for j in dead_jobs:
+        items.append({
+            "id": j.id,
+            "job_type": j.job_type,
+            "status": j.status,
+            "retry_count": j.retry_count,
+            "max_retries": j.max_retries,
+            "error_log": j.error_log[:500] if j.error_log else None,
+            "created_at": j.created_at.isoformat() if j.created_at else None
+        })
+
+    return {"status": "success", "dead_letter_jobs": items}
+
+
+@router.post("/jobs/{job_id}/retry")
+def retry_dead_letter_job_endpoint(
+    job_id: int,
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """Permission-protected endpoint to safely retry a dead-letter job."""
+    resurrected = job_queue_service.retry_dead_letter_job(
+        job_id=job_id,
+        recruiter_or_admin_id=recruiter.id
+    )
+    if not resurrected:
+        raise HTTPException(status_code=400, detail="Job not found or not in DEAD_LETTER status.")
+
+    return {"status": "success", "job_id": job_id, "resurrected": True}
+
+
+@router.post("/internships/{internship_id}/final-selection")
+def trigger_final_selection_endpoint(
+    internship_id: int,
+    auto_select: bool = Body(False, embed=True),
+    db: Session = Depends(get_db),
+    recruiter: models.RecruiterUser = Depends(get_current_recruiter)
+):
+    """Triggers vacancy-aware finalist ranking and optional final selection."""
+    posting = db.query(models.InternshipPosting).filter(
+        models.InternshipPosting.id == internship_id,
+        models.InternshipPosting.company_id == recruiter.company_id
+    ).first()
+    if not posting:
+        raise HTTPException(status_code=404, detail="Internship posting not found.")
+
+    result = final_selection_service.rank_and_select_candidates(
+        db=db,
+        internship_id=internship_id,
+        auto_select=auto_select
+    )
+    return {"status": "success", "selection_result": result}

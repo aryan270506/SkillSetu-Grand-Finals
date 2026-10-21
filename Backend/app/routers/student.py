@@ -3,7 +3,7 @@ import json
 import hashlib
 from datetime import datetime
 from typing import Optional, List, Union, Any, Dict
-from fastapi import APIRouter, HTTPException, status, Depends, File, UploadFile, Form, Query, Body, Request
+from fastapi import APIRouter, HTTPException, status, Depends, File, UploadFile, Form, Query, Body, Request, Header
 
 from pydantic import BaseModel, EmailStr
 
@@ -3863,6 +3863,117 @@ def get_student_applications(
             "scholarships": scholarships,
             "all": applications_list
         }
+    }
+
+
+# ==========================================
+# CANDIDATE VERSION-PINNED RECRUITMENT TIMELINE & FEEDBACK DOSSIER
+# ==========================================
+
+from app.services.pipeline_versioning_service import pin_candidate_to_active_version
+
+
+@router.get("/applications/{application_id}/timeline")
+def get_student_application_timeline_endpoint(
+    application_id: int,
+    email: Optional[str] = Query(None, description="Authenticated student email"),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns candidate's pinned recruitment timeline, round progress,
+    and constructive feedback dossier.
+    Enforces privacy protection preventing cross-student snooping.
+    """
+    student = None
+    if email:
+        student = db.query(models.StudentUser).filter(models.StudentUser.email == email.lower().strip()).first()
+    if not student and authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "").strip()
+        if "@" in token:
+            student = db.query(models.StudentUser).filter(models.StudentUser.email == token.lower().strip()).first()
+        else:
+            try:
+                from app.security import SECRET_KEY, ALGORITHM
+                import jwt
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                sub_email = payload.get("sub")
+                if sub_email:
+                    student = db.query(models.StudentUser).filter(models.StudentUser.email == sub_email.lower().strip()).first()
+            except Exception:
+                pass
+
+    if not student:
+        raise HTTPException(status_code=401, detail="Student authentication required.")
+
+    app = db.query(models.InternshipApplication).filter(
+        models.InternshipApplication.id == application_id
+    ).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application record not found.")
+
+    # Privacy enforcement: reject attempts to access another candidate's record
+    if app.student_id != student.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Access forbidden: you cannot access another candidate's recruitment records."
+        )
+
+    # Resolve pinned pipeline version
+    pinned_version = pin_candidate_to_active_version(db, app.id)
+    pipeline_config = pinned_version.pipeline_config or {}
+    rounds_config = pipeline_config.get("rounds", [])
+
+    # Fetch assessment session
+    session = db.query(models.CandidateAssessmentSession).filter(
+        models.CandidateAssessmentSession.application_id == app.id
+    ).first()
+
+    round_results = {}
+    if session and session.round_results:
+        try:
+            round_results = json.loads(session.round_results)
+        except Exception:
+            pass
+
+    # Build timeline stages
+    timeline_stages = []
+    current_round_key = session.current_round if session else (rounds_config[0]["round_key"] if rounds_config else "aptitude")
+
+    for idx, r in enumerate(rounds_config, start=1):
+        r_key = r.get("round_key")
+        r_result = round_results.get(r_key, {})
+        has_completed = bool(r_result)
+
+        if has_completed:
+            stage_status = "COMPLETED"
+        elif r_key == current_round_key:
+            stage_status = "IN_PROGRESS" if (session and session.status == "IN_PROGRESS") else "ACTIVE"
+        else:
+            stage_status = "UPCOMING"
+
+        timeline_stages.append({
+            "stage_number": idx,
+            "round_key": r_key,
+            "round_name": r.get("round_name"),
+            "duration_minutes": r.get("duration_minutes", 30),
+            "status": stage_status,
+            "score": r_result.get("score") if isinstance(r_result, dict) else None,
+            "passing_cutoff": r.get("passing_cutoff", 60.0),
+            "feedback": r_result.get("evaluation", {}).get("feedback") if isinstance(r_result, dict) else None
+        })
+
+    return {
+        "status": "success",
+        "application_id": app.id,
+        "internship_id": app.internship_id,
+        "candidate_status": app.status,
+        "eligibility_status": app.eligibility_status,
+        "pipeline_version_number": pinned_version.version_number,
+        "overall_score": session.overall_score if session else None,
+        "integrity_status": session.integrity_status if session else "VERIFIED",
+        "timeline_stages": timeline_stages,
+        "eligibility_breakdown": app.eligibility_breakdown
     }
 
 

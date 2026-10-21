@@ -9,7 +9,9 @@ import {
   Card,
   EmptyState,
   FeatureCard,
+  Icon,
   IconButton,
+  Inset,
   Page,
   Pill,
   ProgressBar,
@@ -17,6 +19,7 @@ import {
   SearchField,
   SectionTitle,
   SegmentedTabs,
+  Sheet,
   Skeleton,
   Stack,
   StatTile,
@@ -56,6 +59,161 @@ export default function Internship({ user, onOpenPostModal }) {
   const [candidateEvalVisible, setCandidateEvalVisible] = useState(false);
   const [evalAppId, setEvalAppId] = useState(null);
   const [evalInternshipId, setEvalInternshipId] = useState(null);
+
+  // Gemini Recruitment Automation State
+  const [draftPipeline, setDraftPipeline] = useState(null);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [publishingPipeline, setPublishingPipeline] = useState(false);
+  const [configuringAutomation, setConfiguringAutomation] = useState(false);
+  const [runningSweep, setRunningSweep] = useState(false);
+
+  // Dead Letter Queue Modal State
+  const [showDeadLetterModal, setShowDeadLetterModal] = useState(false);
+  const [deadLetters, setDeadLetters] = useState([]);
+  const [loadingDeadLetters, setLoadingDeadLetters] = useState(false);
+  const [retryingJobId, setRetryingJobId] = useState(null);
+
+  const handleGenerateAiPipeline = async () => {
+    if (!job?.id) return;
+    setGeneratingDraft(true);
+    try {
+      const res = await recruiterService.generatePipelineDraft(token, job.id);
+      setDraftPipeline(res.draft);
+      alert(`AI Pipeline Draft v${res.draft.version_number} generated! Proposed ${res.draft.config.rounds?.length || 0} rounds with strict eligibility thresholds.`);
+    } catch (err) {
+      alert(`Failed to generate draft: ${err.message}`);
+    } finally {
+      setGeneratingDraft(false);
+    }
+  };
+
+  const handlePublishDraft = async () => {
+    if (!job?.id || !draftPipeline) return;
+    setPublishingPipeline(true);
+    try {
+      await recruiterService.publishPipelineVersion(token, job.id, {
+        version_number: draftPipeline.version_number,
+        config: draftPipeline.config,
+      });
+      await recruiterService.configureAutomation(token, job.id, {
+        mode: 'REVIEW_GATED',
+        enabled: true,
+        paused: false,
+      });
+      alert(`Pipeline v${draftPipeline.version_number} published & pinned! Automation enabled in REVIEW_GATED mode.`);
+      setDraftPipeline(null);
+      await loadDetail(job.id);
+      await loadInternships(true);
+    } catch (err) {
+      alert(`Failed to publish pipeline: ${err.message}`);
+    } finally {
+      setPublishingPipeline(false);
+    }
+  };
+
+  const handleToggleAutomation = async () => {
+    if (!job?.id) return;
+    setConfiguringAutomation(true);
+    try {
+      const nextEnabled = !job.automation_enabled;
+      await recruiterService.configureAutomation(token, job.id, {
+        mode: job.automation_mode || 'REVIEW_GATED',
+        enabled: nextEnabled,
+        paused: false,
+      });
+      await loadDetail(job.id);
+      await loadInternships(true);
+      alert(`Automation ${nextEnabled ? 'enabled' : 'disabled'}.`);
+    } catch (err) {
+      alert(`Failed to update automation: ${err.message}`);
+    } finally {
+      setConfiguringAutomation(false);
+    }
+  };
+
+  const handleTogglePause = async () => {
+    if (!job?.id) return;
+    setConfiguringAutomation(true);
+    try {
+      const nextPaused = !job.automation_paused;
+      await recruiterService.configureAutomation(token, job.id, {
+        mode: job.automation_mode || 'REVIEW_GATED',
+        enabled: job.automation_enabled,
+        paused: nextPaused,
+      });
+      await loadDetail(job.id);
+      await loadInternships(true);
+      alert(`Automation ${nextPaused ? 'paused' : 'resumed'}.`);
+    } catch (err) {
+      alert(`Failed to update pause state: ${err.message}`);
+    } finally {
+      setConfiguringAutomation(false);
+    }
+  };
+
+  const handleChangeMode = async (mode) => {
+    if (!job?.id) return;
+    setConfiguringAutomation(true);
+    try {
+      await recruiterService.configureAutomation(token, job.id, {
+        mode,
+        enabled: job.automation_enabled,
+        paused: job.automation_paused,
+      });
+      await loadDetail(job.id);
+      await loadInternships(true);
+      alert(`Automation mode updated to ${mode}.`);
+    } catch (err) {
+      alert(`Failed to change mode: ${err.message}`);
+    } finally {
+      setConfiguringAutomation(false);
+    }
+  };
+
+  const handleRunFinalSelection = async () => {
+    if (!job?.id) return;
+    setRunningSweep(true);
+    try {
+      const res = await recruiterService.executeFinalSelection(token, job.id);
+      const result = res.selection_result || res;
+      const count = result.selected ? result.selected.length : (result.selected_count || 0);
+      const vac = result.vacancies || 0;
+      alert(`Final selection completed! ${count} candidate(s) selected out of ${vac} vacancies.`);
+      await loadDetail(job.id);
+      await loadInternships(true);
+    } catch (err) {
+      alert(`Final selection sweep failed: ${err.message}`);
+    } finally {
+      setRunningSweep(false);
+    }
+  };
+
+  const handleOpenDeadLetters = async () => {
+    setShowDeadLetterModal(true);
+    setLoadingDeadLetters(true);
+    try {
+      const res = await recruiterService.getDeadLetterJobs(token);
+      setDeadLetters(res.dead_letter_jobs || []);
+    } catch (err) {
+      alert(`Failed to load dead letters: ${err.message}`);
+    } finally {
+      setLoadingDeadLetters(false);
+    }
+  };
+
+  const handleRetryJob = async (jobId) => {
+    setRetryingJobId(jobId);
+    try {
+      await recruiterService.retryJob(token, jobId);
+      alert(`Job ${jobId} reenqueued for processing.`);
+      const res = await recruiterService.getDeadLetterJobs(token);
+      setDeadLetters(res.dead_letter_jobs || []);
+    } catch (err) {
+      alert(`Failed to retry job: ${err.message}`);
+    } finally {
+      setRetryingJobId(null);
+    }
+  };
 
   const handleOpenCandidateEvaluation = (app) => {
     setEvalAppId(app.id);
@@ -326,6 +484,114 @@ export default function Internship({ user, onOpenPostModal }) {
         ))}
       </View>
 
+      {/* Gemini AI Recruitment Automation Controls */}
+      <Card padding={space.lg} tone="accent" style={{ marginTop: space.lg }}>
+        <Row justify="space-between" align="center" wrap gap={8}>
+          <Row gap={8} align="center">
+            <Icon name="Bot" size={20} color={colors.lilacInk} />
+            <Stack gap={2}>
+              <Txt variant="h3" tone="ink">Gemini Recruitment Automation</Txt>
+              <Txt variant="caption" tone="muted">
+                {job.active_pipeline_version_id
+                  ? `Active Pipeline v${job.active_pipeline_version_id} · SHA-256 Fingerprinted`
+                  : 'No published pipeline pinned yet'}
+              </Txt>
+            </Stack>
+          </Row>
+          <Row gap={6} wrap>
+            <Pill
+              label={job.automation_mode || 'REVIEW_GATED'}
+              tone={job.automation_mode === 'FULL_AUTOMATION' ? 'success' : job.automation_mode === 'REVIEW_GATED' ? 'warning' : 'neutral'}
+              size="sm"
+            />
+            <Pill
+              label={job.automation_enabled ? (job.automation_paused ? 'Paused' : 'Active') : 'Disabled'}
+              tone={!job.automation_enabled ? 'neutral' : job.automation_paused ? 'warning' : 'success'}
+              size="sm"
+            />
+          </Row>
+        </Row>
+
+        {draftPipeline ? (
+          <Inset tone="accent" style={{ marginTop: space.md }}>
+            <Txt variant="small" weight={700} tone="ink">Draft Pipeline v{draftPipeline.version_number} Ready</Txt>
+            <Txt variant="caption" tone="muted">
+              Rounds: {(draftPipeline.config?.rounds || []).map(r => r.name).join(' → ') || 'None'}
+            </Txt>
+            <Row gap={8} style={{ marginTop: 8 }}>
+              <Button
+                label="Publish Pipeline & Enable Automation"
+                icon="Check"
+                size="sm"
+                loading={publishingPipeline}
+                onPress={handlePublishDraft}
+              />
+              <Button
+                label="Discard Draft"
+                size="sm"
+                variant="light"
+                onPress={() => setDraftPipeline(null)}
+              />
+            </Row>
+          </Inset>
+        ) : null}
+
+        <Row wrap gap={8} style={{ marginTop: space.md }}>
+          <Button
+            label="Generate AI Pipeline"
+            icon="Sparkles"
+            size="sm"
+            variant="secondary"
+            loading={generatingDraft}
+            onPress={handleGenerateAiPipeline}
+          />
+          <Button
+            label={job.automation_enabled ? (job.automation_paused ? 'Resume' : 'Pause') : 'Enable Automation'}
+            size="sm"
+            variant={job.automation_enabled && !job.automation_paused ? 'secondary' : 'primary'}
+            loading={configuringAutomation}
+            onPress={job.automation_enabled ? handleTogglePause : handleToggleAutomation}
+          />
+          {job.automation_enabled ? (
+            <Button
+              label="Disable"
+              size="sm"
+              variant="light"
+              loading={configuringAutomation}
+              onPress={handleToggleAutomation}
+            />
+          ) : null}
+          <Button
+            label="Selection Sweep"
+            icon="Award"
+            size="sm"
+            variant="light"
+            loading={runningSweep}
+            onPress={handleRunFinalSelection}
+          />
+          <Button
+            label="Dead-Letter Jobs"
+            icon="AlertTriangle"
+            size="sm"
+            variant="danger"
+            onPress={handleOpenDeadLetters}
+          />
+        </Row>
+
+        <Row gap={6} align="center" style={{ marginTop: space.sm }}>
+          <Txt variant="caption" tone="muted">Mode:</Txt>
+          {['FULL_AUTOMATION', 'REVIEW_GATED', 'MANUAL_ONLY'].map((m) => (
+            <Pressable key={m} onPress={() => handleChangeMode(m)} style={webOnly({ cursor: 'pointer' })}>
+              <Pill
+                label={m.replace(/_/g, ' ')}
+                tone={(job.automation_mode || 'REVIEW_GATED') === m ? 'accent' : 'neutral'}
+                size="sm"
+              />
+            </Pressable>
+          ))}
+        </Row>
+      </Card>
+
       <Row justify="space-between" style={{ marginTop: space.lg, marginBottom: space.sm }}>
         <Txt variant="h2" tone="ink">Applicants</Txt>
         {detailLoading ? <Txt variant="caption" tone="muted">Refreshing…</Txt> : null}
@@ -421,6 +687,63 @@ export default function Internship({ user, onOpenPostModal }) {
           if (selectedInternshipId) loadDetail(selectedInternshipId);
         }}
       />
+      <Sheet
+        visible={showDeadLetterModal}
+        onClose={() => setShowDeadLetterModal(false)}
+        title="Recruitment Dead-Letter Queue"
+        subtitle="Recoverable background worker errors & retry actions"
+        icon="AlertTriangle"
+        tone="danger"
+        width={760}
+      >
+        {loadingDeadLetters ? (
+          <Stack gap={10}>
+            <Skeleton height={80} radius={radii.lg} />
+            <Skeleton height={80} radius={radii.lg} />
+          </Stack>
+        ) : !deadLetters.length ? (
+          <EmptyState
+            icon="CheckCircle"
+            tone="success"
+            title="Dead-Letter Queue is Clean"
+            message="No failed background jobs found. All screening, progression, and selection workers are operating normally."
+          />
+        ) : (
+          <Stack gap={space.md}>
+            <Txt variant="caption" tone="muted">
+              {deadLetters.length} jobs exhausted maximum retry limits. Retrying is transaction-safe and idempotent.
+            </Txt>
+            {deadLetters.map((jobItem) => (
+              <Card key={jobItem.id} padding={space.lg}>
+                <Row justify="space-between" align="flex-start" wrap gap={8}>
+                  <Stack gap={4} style={{ flex: 1, minWidth: 240 }}>
+                    <Row gap={8} align="center">
+                      <Pill label={jobItem.job_type} tone="danger" size="sm" />
+                      <Txt variant="small" weight={700} tone="ink">Job #{jobItem.id}</Txt>
+                    </Row>
+                    <Txt variant="caption" tone="ink">
+                      Entity: {jobItem.entity_type} #{jobItem.entity_id}
+                    </Txt>
+                    <Txt variant="caption" tone="danger" numberOfLines={3}>
+                      Error: {jobItem.last_error || 'Execution failure'}
+                    </Txt>
+                    <Txt variant="caption" tone="muted">
+                      Attempts: {jobItem.attempts}/{jobItem.max_retries} · Key: {jobItem.idempotency_key}
+                    </Txt>
+                  </Stack>
+                  <Button
+                    label="Retry Job"
+                    icon="RefreshCw"
+                    size="sm"
+                    loading={retryingJobId === jobItem.id}
+                    onPress={() => handleRetryJob(jobItem.id)}
+                  />
+                </Row>
+              </Card>
+            ))}
+          </Stack>
+        )}
+      </Sheet>
     </Page>)
   );
 }

@@ -297,8 +297,18 @@ function triggerTerminationModal(data) {
   }
 }
 
+// Format transcript timestamp with real clock time and elapsed interview offset
+function formatTranscriptTimestamp() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour12: false });
+  const elapsedSec = roundStartTime ? Math.max(0, Math.floor((Date.now() - roundStartTime) / 1000)) : 0;
+  const mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+  const ss = String(elapsedSec % 60).padStart(2, '0');
+  return `${timeStr} (+${mm}:${ss})`;
+}
+
 // Append transcript item
-function appendTranscriptMsg(role, speaker, text) {
+function appendTranscriptMsg(role, speaker, text, timestamp) {
   const el = document.createElement('div');
   el.className = `msg ${role}`;
   const who = document.createElement('div');
@@ -306,7 +316,7 @@ function appendTranscriptMsg(role, speaker, text) {
   who.textContent = speaker;
   const time = document.createElement('span');
   time.className = 'time';
-  time.textContent = $('timer').textContent;
+  time.textContent = timestamp || formatTranscriptTimestamp();
   who.appendChild(time);
   const body = document.createElement('div');
   body.textContent = text;
@@ -315,21 +325,77 @@ function appendTranscriptMsg(role, speaker, text) {
   $('transcript').scrollTop = $('transcript').scrollHeight;
 }
 
-function upsertSegment(segmentId, role, text) {
-  let el = segments.get(segmentId);
-  if (!el) {
-    el = document.createElement('div');
-    el.className = `msg ${role}`;
+let liveCandidateSegmentEl = null;
+
+function handleLiveTranscriptUpdate(msg) {
+  if (msg.role !== 'candidate' || !msg.text) return;
+
+  // Immediate visual feedback on active caption bar
+  const captionEl = $('caption');
+  if (captionEl) {
+    captionEl.textContent = msg.text;
+    captionEl.classList.add('active');
+  }
+
+  // Update or insert live transcript element in sidebar
+  const transcriptEl = $('transcript');
+  if (!transcriptEl) return;
+
+  if (!liveCandidateSegmentEl) {
+    liveCandidateSegmentEl = document.createElement('div');
+    liveCandidateSegmentEl.className = 'msg candidate provisional';
     const who = document.createElement('div');
     who.className = 'who';
-    who.textContent = role === 'ai' ? 'Dora' : session.name;
+    who.textContent = session?.name || 'You';
     const time = document.createElement('span');
     time.className = 'time';
-    time.textContent = $('timer').textContent;
+    time.textContent = formatTranscriptTimestamp();
     who.appendChild(time);
-    el.append(who, document.createElement('div'));
-    segments.set(segmentId, el);
-    $('transcript').appendChild(el);
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    body.textContent = msg.text;
+    liveCandidateSegmentEl.append(who, body);
+    transcriptEl.appendChild(liveCandidateSegmentEl);
+  } else {
+    const body = liveCandidateSegmentEl.querySelector('.msg-body') || liveCandidateSegmentEl.lastChild;
+    if (body) body.textContent = msg.text;
+  }
+
+  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+
+  if (msg.isFinal) {
+    if (liveCandidateSegmentEl) {
+      liveCandidateSegmentEl.classList.remove('provisional');
+      liveCandidateSegmentEl = null;
+    }
+  }
+}
+
+function upsertSegment(segmentId, role, text, timestamp) {
+  let el = segments.get(segmentId);
+  if (!el) {
+    // If candidate has a provisional element with matching/overlapping text, adopt it
+    if (role === 'candidate' && liveCandidateSegmentEl) {
+      el = liveCandidateSegmentEl;
+      el.dataset.segmentId = segmentId;
+      el.classList.remove('provisional');
+      segments.set(segmentId, el);
+      liveCandidateSegmentEl = null;
+    } else {
+      el = document.createElement('div');
+      el.className = `msg ${role}`;
+      el.dataset.segmentId = segmentId;
+      const who = document.createElement('div');
+      who.className = 'who';
+      who.textContent = role === 'ai' ? 'Dora' : session?.name || 'You';
+      const time = document.createElement('span');
+      time.className = 'time';
+      time.textContent = timestamp || formatTranscriptTimestamp();
+      who.appendChild(time);
+      el.append(who, document.createElement('div'));
+      segments.set(segmentId, el);
+      $('transcript').appendChild(el);
+    }
   }
   el.lastChild.textContent = text;
   $('transcript').scrollTop = $('transcript').scrollHeight;
@@ -434,6 +500,11 @@ async function finishWhenQuiet() {
 }
 
 async function connectRoom({ url, token }) {
+  if (room) {
+    try {
+      await room.disconnect();
+    } catch (_) {}
+  }
   room = new Room({ adaptiveStream: false, dynacast: false });
 
   room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -442,8 +513,13 @@ async function connectRoom({ url, token }) {
 
   room.on(RoomEvent.DataReceived, (payload, _participant, _kind, topic) => {
     if (topic !== 'interview') return;
-    const msg = JSON.parse(new TextDecoder().decode(payload));
-    if (msg.type === 'end') finishWhenQuiet();
+    try {
+      const msg = JSON.parse(new TextDecoder().decode(payload));
+      if (msg.type === 'end') finishWhenQuiet();
+      if (msg.type === 'transcript_update') handleLiveTranscriptUpdate(msg);
+    } catch (e) {
+      console.warn('Error parsing interview data message:', e);
+    }
   });
 
   room.on(RoomEvent.ParticipantDisconnected, (p) => {
@@ -453,10 +529,11 @@ async function connectRoom({ url, token }) {
   room.registerTextStreamHandler('lk.transcription', async (reader, participantInfo) => {
     const segmentId = reader.info.attributes?.['lk.segment_id'] || reader.info.id;
     const role = participantInfo.identity === room.localParticipant.identity ? 'candidate' : 'ai';
+    const segmentStartTime = formatTranscriptTimestamp();
     let text = '';
     for await (const chunk of reader) {
       text += chunk;
-      upsertSegment(segmentId, role, text);
+      upsertSegment(segmentId, role, text, segmentStartTime);
     }
   });
 
@@ -1064,6 +1141,8 @@ async function handleRoundSubmit() {
     submissionPayload = {
       codingSourceCode: $('codeEditor')?.value || '',
       codingLanguage: activeRoundData?.codingProblem?.language || 'python',
+      theoryAnswers: aptitudeTheoryAnswers,
+      theoryTranscript: aptitudeTheoryAnswers,
     };
   } else if (currentRound === 'gd') {
     submissionPayload = { transcript: session?.transcript || [] };

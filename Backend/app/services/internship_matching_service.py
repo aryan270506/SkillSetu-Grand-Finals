@@ -329,6 +329,7 @@ class InternshipMatchingService:
         # =========================================================================
         hard_failures = []
         eligibility_reasons = []
+        unknown_eligibility = False
 
         # 1. CGPA Cutoff
         min_cgpa = _get_prop(listing, "min_cgpa")
@@ -345,7 +346,11 @@ class InternshipMatchingService:
                     else:
                         eligibility_reasons.append(f"Meets minimum CGPA cutoff of {min_cgpa_val:.1f} (Your CGPA: {val_10:.1f})")
                 except Exception:
-                    pass
+                    unknown_eligibility = True
+                    eligibility_reasons.append(f"Minimum CGPA requirement: {min_cgpa_val:.1f} (Academic verification required)")
+            else:
+                unknown_eligibility = True
+                eligibility_reasons.append(f"Minimum CGPA requirement: {min_cgpa_val:.1f} (Academic record pending verification)")
 
         raw_req_skills = required_skills or _get_prop(listing, "required_skills", []) or _get_prop(listing, "skills", []) or []
         if isinstance(raw_req_skills, str):
@@ -704,6 +709,9 @@ class InternshipMatchingService:
             readiness_status = "NEEDS_DEVELOPMENT"
             eligibility_status = "POSSIBLY_ELIGIBLE" if total_score >= max(40.0, application_threshold - 30) else "GAP_EXISTS"
 
+        if unknown_eligibility and eligibility_status == "ELIGIBLE":
+            eligibility_status = "NEEDS_VERIFICATION"
+
         if hard_failures:
             total_score = 0.0
             readiness_status = "NOT_ELIGIBLE"
@@ -755,23 +763,42 @@ class InternshipMatchingService:
             "company": _get_prop(listing, "company_name", _get_prop(listing, "company", "")),
             "company_id": _get_prop(listing, "company_id"),
             "company_logo": _get_prop(listing, "company_logo", ""),
+            "company_website": _get_prop(listing, "company_website") or _get_prop(listing, "source_url") or "",
+            "company_overview": _get_prop(listing, "company_overview") or _get_prop(listing, "about_company") or "",
+            "industry": _get_prop(listing, "industry") or "Technology & Software",
             "description": _get_prop(listing, "description", ""),
             "responsibilities": _get_prop(listing, "responsibilities", _get_prop(listing, "description", "")),
+            "requirements": _get_prop(listing, "requirements"),
             "department": _get_prop(listing, "department"),
             "location": _get_prop(listing, "location_name", _get_prop(listing, "location", "")),
+            "eligible_regions": _get_prop(listing, "eligible_regions") or _get_prop(listing, "location") or "Worldwide / Remote",
             "work_preference": _get_prop(listing, "work_preference", _get_prop(listing, "work_mode", "Remote")),
             "work_mode": _get_prop(listing, "work_preference", _get_prop(listing, "work_mode", "Remote")),
+            "job_type": _get_prop(listing, "job_type") or _get_prop(listing, "opportunity_type") or "Internship",
+            "opportunity_type": _get_prop(listing, "opportunity_type") or _get_prop(listing, "job_type") or "Internship",
+            "experience_required": _get_prop(listing, "experience_required") or "Not specified",
             "stipend": _get_prop(listing, "stipend", ""),
             "stipend_min": _get_prop(listing, "stipend_min"),
             "stipend_max": _get_prop(listing, "stipend_max"),
             "duration": _get_prop(listing, "duration", ""),
             "openings": _get_prop(listing, "openings", 1),
             "minimum_cgpa": float(_get_prop(listing, "min_cgpa") or _get_prop(listing, "minimum_cgpa") or 0.0),
-            "degree": _get_prop(listing, "degree"),
-            "branch": _get_prop(listing, "branch"),
+            "degree": _get_prop(listing, "degree") or "B.Tech / B.E. / BCA / MCA / B.Sc (Computer Science / IT)",
+            "branch": _get_prop(listing, "branch") or "Any Engineering / Computing discipline",
             "graduation_year": _get_prop(listing, "graduation_year"),
             "academic_requirements": _get_prop(listing, "academic_requirements"),
             "required_skill_levels": _get_prop(listing, "required_skill_levels"),
+            "mandatory_skills": matched_skills + missing_skills,
+            "preferred_skills": developing_skills,
+            "mandatory_qualifications": [
+                f"Minimum CGPA: {float(_get_prop(listing, 'min_cgpa')):.1f}" if _get_prop(listing, "min_cgpa") else "Pursuing or completed degree in Computer Science, IT, or related engineering discipline",
+                f"Core competency in {req_skill_names[0]}" if req_skill_names else "Strong foundational problem solving and coding proficiency"
+            ],
+            "preferred_qualifications": [
+                f"Hands-on project repository or coursework in {s}" for s in (developing_skills[:2] or req_skill_names[1:3])
+            ],
+            "application_instructions": _get_prop(listing, "application_instructions") or "Apply via official employer/source portal with updated resume and portfolio.",
+            "required_documents": _get_prop(listing, "required_documents") or ["Updated Resume (PDF)", "GitHub / Project Portfolio"],
             "match_score": total_score,
             "target_score": float(application_threshold),
             "application_threshold": application_threshold,
@@ -808,6 +835,8 @@ class InternshipMatchingService:
             "application_url": _get_prop(listing, "apply_url") or _get_prop(listing, "application_url"),
             "application_deadline": deadline_str,
             "deadline": deadline_str,
+            "posted_at": _get_prop(listing, "posted_at") or _get_prop(listing, "created_at"),
+            "created_at": _get_prop(listing, "created_at") or _get_prop(listing, "posted_at"),
             "source_url": _get_prop(listing, "source_url"),
             "fetched_at": fetched_at
         }

@@ -27,11 +27,18 @@ def get_canonical_round_label(round_key: str) -> str:
 
 class CandidateProgressionService:
     @staticmethod
-    def get_effective_round_sequence(config: Optional[models.InternshipAssessmentConfig]) -> List[str]:
+    def get_effective_round_sequence(
+        config: Optional[models.InternshipAssessmentConfig] = None,
+        pipeline_version: Optional[models.RecruitmentPipelineVersion] = None
+    ) -> List[str]:
         """
-        Extracts ordered, enabled round sequence from assessment config.
-        Returns empty list if no assessment config or no enabled rounds configured.
+        Extracts ordered, enabled round sequence from assessment config or version-pinned pipeline.
+        Returns empty list if neither is configured.
         """
+        if pipeline_version and pipeline_version.pipeline_config:
+            rounds = pipeline_version.pipeline_config.get("rounds", [])
+            return [str(r.get("round_key") or r.get("round_type")).lower().strip() for r in rounds if r.get("enabled", True)]
+
         if not config or not config.is_active or not config.pipeline_config:
             return []
 
@@ -88,11 +95,20 @@ class CandidateProgressionService:
     def get_round_threshold(
         config: Optional[models.InternshipAssessmentConfig],
         posting: Optional[models.InternshipPosting],
-        round_key: str
+        round_key: str,
+        pipeline_version: Optional[models.RecruitmentPipelineVersion] = None
     ) -> float:
         """
         Extracts passing score threshold for the given round.
         """
+        if pipeline_version and pipeline_version.pipeline_config:
+            rounds = pipeline_version.pipeline_config.get("rounds", [])
+            for r in rounds:
+                if str(r.get("round_key") or r.get("round_type")).lower().strip() == str(round_key).lower().strip():
+                    return float(r.get("passing_cutoff") or r.get("passing_score", 60.0))
+            if pipeline_version.scoring_weights:
+                return float(pipeline_version.scoring_weights.get("overall_passing_threshold", 60.0))
+
         if config and config.pipeline_config:
             try:
                 p_dict = json.loads(config.pipeline_config) if isinstance(config.pipeline_config, str) else config.pipeline_config
@@ -198,8 +214,9 @@ class CandidateProgressionService:
             models.InternshipAssessmentConfig.is_active == True
         ).first()
 
-        round_seq = cls.get_effective_round_sequence(config)
-        has_pipeline = bool(config and config.is_active and len(round_seq) > 0)
+        pipeline_version = app.pipeline_version or (posting.active_pipeline_version if posting else None)
+        round_seq = cls.get_effective_round_sequence(config, pipeline_version=pipeline_version)
+        has_pipeline = bool(len(round_seq) > 0)
 
         session = db.query(models.CandidateAssessmentSession).filter(
             models.CandidateAssessmentSession.application_id == application_id
@@ -267,7 +284,7 @@ class CandidateProgressionService:
             current_round_name = "Shortlisted"
             current_round_idx = -1
             round_score = cls.get_candidate_round_score(session, round_seq[0], app)
-            threshold = cls.get_round_threshold(config, posting, round_seq[0])
+            threshold = cls.get_round_threshold(config, posting, round_seq[0], pipeline_version=pipeline_version)
             next_round_key = round_seq[0]
             next_round_name = get_canonical_round_label(round_seq[0])
             is_final_round = False
@@ -285,7 +302,7 @@ class CandidateProgressionService:
             current_round_name = get_canonical_round_label(current_round_key)
 
             round_score = cls.get_candidate_round_score(session, current_round_key, app)
-            threshold = cls.get_round_threshold(config, posting, current_round_key)
+            threshold = cls.get_round_threshold(config, posting, current_round_key, pipeline_version=pipeline_version)
 
             # Ranking
             ranking_map = cls.calculate_round_ranking(db, internship_id, current_round_key)
@@ -293,6 +310,12 @@ class CandidateProgressionService:
 
             # Dynamic determination of final round from configured sequence
             is_final_round = current_round_idx >= (len(round_seq) - 1)
+
+            is_session_completed = (session is not None and getattr(session, "status", None) == "COMPLETED")
+            has_integrity_issue = bool(session and getattr(session, "integrity_status", None) in ["FLAGGED", "HIGH_RISK"] and not app.is_manually_overridden)
+            is_score_qualified = bool(round_score >= threshold or app.is_manually_overridden)
+
+            is_eligible_to_advance = is_session_completed and is_score_qualified and not has_integrity_issue
             
             if is_selected:
                 next_round_key = None
@@ -305,16 +328,16 @@ class CandidateProgressionService:
                 next_round_key = None
                 next_round_name = "Selection (Final Decision)"
                 can_progress = False
-                can_select_candidate = True
+                can_select_candidate = is_eligible_to_advance
                 pipeline_status = "FINAL_ROUND"
-                qualification_status = "FINAL_ROUND"
+                qualification_status = "FINAL_ROUND" if is_session_completed else "AWAITING_ASSESSMENT"
             else:
                 next_round_key = round_seq[current_round_idx + 1]
                 next_round_name = get_canonical_round_label(next_round_key)
-                can_progress = True
+                can_progress = is_eligible_to_advance
                 can_select_candidate = False
                 pipeline_status = "IN_PROGRESS"
-                qualification_status = "IN_PIPELINE"
+                qualification_status = "IN_PIPELINE" if is_session_completed else "AWAITING_ASSESSMENT"
 
         return {
             "has_pipeline": True,
@@ -387,7 +410,8 @@ class CandidateProgressionService:
             models.InternshipAssessmentConfig.is_active == True
         ).first()
 
-        round_seq = cls.get_effective_round_sequence(config)
+        pipeline_version = app.pipeline_version or (posting.active_pipeline_version if posting else None)
+        round_seq = cls.get_effective_round_sequence(config, pipeline_version=pipeline_version)
         if not round_seq:
             raise ValueError("No active assessment pipeline is configured for this internship.")
 
@@ -464,8 +488,15 @@ class CandidateProgressionService:
         prev_round_name = get_canonical_round_label(current_round_key)
         is_final_round = current_idx >= (len(round_seq) - 1)
 
-        # 1. SEND TO NEXT ROUND (or SELECT_FOR_NEXT_ROUND)
+        # 1. SEND TO NEXT ROUND (or SELECTED_FOR_NEXT_ROUND)
         if norm_action in ["SEND_TO_NEXT_ROUND", "SELECTED_FOR_NEXT_ROUND", "PROGRESS"]:
+            # Guard: ensure current round is completed and integrity is clean before advancing
+            if session and session.status != "COMPLETED" and not app.is_manually_overridden:
+                raise ValueError(f"Cannot advance candidate: Assessment for {prev_round_name} is pending completion.")
+
+            if session and session.integrity_status in ["FLAGGED", "HIGH_RISK"] and not app.is_manually_overridden:
+                raise ValueError(f"Cannot advance candidate: Assessment flagged for integrity violation. Recruiter override required.")
+
             if is_final_round:
                 # If triggered at final round, transition to final selection
                 app.status = "SELECTED"
@@ -482,7 +513,9 @@ class CandidateProgressionService:
                     previous_status=prev_status,
                     new_status="SELECTED",
                     changed_by_recruiter_id=recruiter_id,
-                    notes=audit_note
+                    actor_type="RECRUITER",
+                    notes=audit_note,
+                    metadata_json={"event": "CANDIDATE_SELECTED", "final_round": prev_round_name}
                 )
                 db.add(audit)
                 db.commit()
@@ -517,9 +550,11 @@ class CandidateProgressionService:
                 audit = models.ApplicationStatusAudit(
                     application_id=app.id,
                     previous_status=prev_status,
-                    new_status=f"SENT_TO_NEXT_ROUND ({next_round_name})",
+                    new_status="SHORTLISTED",
                     changed_by_recruiter_id=recruiter_id,
-                    notes=audit_note
+                    actor_type="RECRUITER",
+                    notes=audit_note,
+                    metadata_json={"event": "ROUND_ADVANCEMENT", "from_round": current_round_key, "to_round": next_round_key}
                 )
                 db.add(audit)
                 db.commit()
@@ -542,6 +577,9 @@ class CandidateProgressionService:
 
         # 2. SELECT CANDIDATE (FINAL ROUND SELECTION -> SELECTED)
         elif norm_action in ["SELECT_CANDIDATE", "SELECT", "SELECTED"]:
+            if session and session.status != "COMPLETED" and not app.is_manually_overridden:
+                raise ValueError(f"Cannot select candidate: Final round assessment ({prev_round_name}) is pending completion.")
+
             app.status = "SELECTED"
             session.status = "COMPLETED"
             session.completed_at = now_utc
@@ -556,7 +594,9 @@ class CandidateProgressionService:
                 previous_status=prev_status,
                 new_status="SELECTED",
                 changed_by_recruiter_id=recruiter_id,
-                notes=audit_note
+                actor_type="RECRUITER",
+                notes=audit_note,
+                metadata_json={"event": "CANDIDATE_SELECTED", "round": prev_round_name}
             )
             db.add(audit)
             db.commit()
@@ -589,7 +629,9 @@ class CandidateProgressionService:
                 previous_status=prev_status,
                 new_status="NOT_SELECTED",
                 changed_by_recruiter_id=recruiter_id,
-                notes=audit_note
+                actor_type="RECRUITER",
+                notes=audit_note,
+                metadata_json={"event": "CANDIDATE_NOT_SELECTED", "round": prev_round_name}
             )
             db.add(audit)
             db.commit()
@@ -628,12 +670,15 @@ class CandidateProgressionService:
         norm_action = action.upper().strip()
 
         # Validate active pipeline upfront for progression actions
+        posting = db.query(models.InternshipPosting).filter(models.InternshipPosting.id == internship_id).first()
+        pipeline_ver = posting.active_pipeline_version if posting else None
+
         if norm_action in ["SEND_TO_NEXT_ROUND", "SELECTED_FOR_NEXT_ROUND", "PROGRESS", "SELECT_CANDIDATE"]:
             config = db.query(models.InternshipAssessmentConfig).filter(
                 models.InternshipAssessmentConfig.internship_id == internship_id,
                 models.InternshipAssessmentConfig.is_active == True
             ).first()
-            round_seq = cls.get_effective_round_sequence(config)
+            round_seq = cls.get_effective_round_sequence(config, pipeline_version=pipeline_ver)
             if not round_seq:
                 raise ValueError("No active assessment pipeline is configured for this internship.")
 
@@ -643,7 +688,7 @@ class CandidateProgressionService:
                 models.InternshipAssessmentConfig.internship_id == internship_id,
                 models.InternshipAssessmentConfig.is_active == True
             ).first()
-            round_seq = cls.get_effective_round_sequence(config)
+            round_seq = cls.get_effective_round_sequence(config, pipeline_version=pipeline_ver)
             r_key = (current_round or (round_seq[0] if round_seq else "aptitude")).lower().strip()
 
             ranking_map = cls.calculate_round_ranking(db, internship_id, r_key)

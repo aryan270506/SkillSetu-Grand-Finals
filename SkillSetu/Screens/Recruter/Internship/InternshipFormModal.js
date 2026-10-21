@@ -1,6 +1,24 @@
 import React, { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { recruiterService } from '../services/recruiterService';
-import { Button, Card, Chip, ChipGroup, Field, IconButton, Inset, ProgressBar, Row, Sheet, Skeleton, Stack, Txt } from '../../../ui/components';
+import {
+  Button,
+  Card,
+  Checkbox,
+  Chip,
+  ChipGroup,
+  Field,
+  Icon,
+  IconButton,
+  Inset,
+  Pill,
+  ProgressBar,
+  Row,
+  Sheet,
+  Skeleton,
+  Stack,
+  Txt,
+} from '../../../ui/components';
 import { colors, space } from '../../../ui/theme';
 
 import { tl } from '../../../i18n/tl';
@@ -52,6 +70,12 @@ export default function InternshipFormModal({
   const [deadline, setDeadline] = useState('');
   const [statusVal, setStatusVal] = useState('Active');
 
+  // Recruitment Automation State
+  const [automationMode, setAutomationMode] = useState('REVIEW_GATED');
+  const [automationEnabled, setAutomationEnabled] = useState(false);
+  const [generatingPipeline, setGeneratingPipeline] = useState(false);
+  const [pipelineDraft, setPipelineDraft] = useState(null);
+
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -86,6 +110,9 @@ export default function InternshipFormModal({
       defaultDl.setDate(defaultDl.getDate() + 60);
       setDeadline(defaultDl.toISOString().split('T')[0]);
       setStatusVal('Active');
+      setAutomationMode('REVIEW_GATED');
+      setAutomationEnabled(false);
+      setPipelineDraft(null);
       setErrorMsg('');
       setSuccessMsg('');
     }
@@ -127,6 +154,8 @@ export default function InternshipFormModal({
     }
 
     setStatusVal(data.status || 'Active');
+    setAutomationMode(data.automation_mode || 'REVIEW_GATED');
+    setAutomationEnabled(Boolean(data.automation_enabled));
   };
 
   const fetchFullDetail = async (id) => {
@@ -162,6 +191,43 @@ export default function InternshipFormModal({
 
   const handleRemoveSkill = (skill) => {
     setSkillsList(skillsList.filter((s) => s !== skill));
+  };
+
+  const handleGeneratePipelineDraft = async () => {
+    if (!title.trim()) {
+      setErrorMsg('Please specify a role title first to generate an AI pipeline draft.');
+      return;
+    }
+    setGeneratingPipeline(true);
+    setErrorMsg('');
+    try {
+      const finalSkills = Array.from(
+        new Set([
+          ...skillsList,
+          ...(skillInputText.trim()
+            ? skillInputText.split(',').map((s) => s.trim()).filter(Boolean)
+            : []),
+        ])
+      );
+      if (isEdit && internship?.id) {
+        const res = await recruiterService.generatePipelineDraft(token, internship.id);
+        setPipelineDraft(res.pipeline_config ? res : { pipeline_config: res.draft?.config || res.draft || res });
+      } else {
+        const res = await recruiterService.suggestPipelineDraft(token, {
+          title: title.trim(),
+          description: description.trim() || `Role: ${title.trim()}. Skills: ${finalSkills.join(', ')}`,
+          department: department.trim(),
+          work_mode: workMode,
+          openings: parseInt(openings, 10) || 1,
+        });
+        setPipelineDraft(res);
+      }
+    } catch (err) {
+      console.warn('Failed to generate pipeline draft:', err);
+      setErrorMsg(err.message || 'Failed to generate AI pipeline draft with Gemini.');
+    } finally {
+      setGeneratingPipeline(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -222,6 +288,15 @@ export default function InternshipFormModal({
       minimum_match_threshold: threshNum,
       deadline: deadlineIso || (deadline.trim() ? deadline.trim() : null),
       status: statusVal,
+      automation_mode: automationMode,
+      automation_enabled: Boolean(automationEnabled),
+      ...(pipelineDraft?.pipeline_config ? {
+        pipeline_config: pipelineDraft.pipeline_config,
+        evaluation_rubrics: pipelineDraft.evaluation_rubrics,
+        eligibility_rules: pipelineDraft.eligibility_rules,
+        scoring_weights: pipelineDraft.scoring_weights,
+        automation_policy: pipelineDraft.automation_policy,
+      } : {}),
     };
 
     setSubmitting(true);
@@ -313,6 +388,130 @@ export default function InternshipFormModal({
             <Chip key={s} label={s} icon="Plus" onPress={() => handleToggleSuggestedSkill(s)} />
           ))}
         </Row>
+      </Card>
+
+      {/* Recruitment Automation Controls */}
+      <Card padding={space.lg} tone="accent">
+        <Row justify="space-between" align="center" wrap gap={8}>
+          <Row gap={8} align="center">
+            <Icon name="Bot" size={20} color={colors.lilacInk} />
+            <Stack gap={2}>
+              <Txt variant="title" tone="ink">Recruitment Automation</Txt>
+              <Txt variant="caption" tone="muted">
+                Orchestrate candidate screening, round assessments, and progression with Gemini AI.
+              </Txt>
+            </Stack>
+          </Row>
+          <Pill
+            label={automationMode}
+            tone={automationMode === 'FULL_AUTOMATION' ? 'success' : automationMode === 'REVIEW_GATED' ? 'accent' : 'neutral'}
+            size="sm"
+          />
+        </Row>
+
+        <Stack gap={6} style={{ marginTop: space.md }}>
+          <Txt variant="small" weight={600} tone="ink">Automation Mode</Txt>
+          <ChipGroup
+            options={[
+              { id: 'REVIEW_GATED', label: 'Review-Gated (Recommended)' },
+              { id: 'FULL_AUTOMATION', label: 'Full Automation' },
+              { id: 'MANUAL_ONLY', label: 'Manual Only' },
+            ]}
+            value={automationMode}
+            multiple={false}
+            tone="accent"
+            onChange={(val) => val && setAutomationMode(val)}
+          />
+        </Stack>
+
+        <Inset
+          tone={automationMode === 'FULL_AUTOMATION' ? 'success' : automationMode === 'REVIEW_GATED' ? 'accent' : 'neutral'}
+          style={{ marginTop: space.sm }}
+        >
+          {automationMode === 'REVIEW_GATED' ? (
+            <Stack gap={4}>
+              <Row gap={6} align="center">
+                <Icon name="ShieldCheck" size={15} color={colors.lilacInk} />
+                <Txt variant="small" weight={700} tone="ink">Review Checkpoints Active (Human-in-the-Loop)</Txt>
+              </Row>
+              <Txt variant="caption" tone="muted">
+                Gemini automatically screens applicants and scores assessments, but holds candidate advancement for your approval at designated checkpoints before advancing.
+              </Txt>
+            </Stack>
+          ) : automationMode === 'FULL_AUTOMATION' ? (
+            <Stack gap={4}>
+              <Row gap={6} align="center">
+                <Icon name="Zap" size={15} color={colors.mintInk} />
+                <Txt variant="small" weight={700} tone="ink">Autonomous Progression</Txt>
+              </Row>
+              <Txt variant="caption" tone="muted">
+                Eligible candidates meeting cutoff criteria are advanced automatically across rounds and ranked for final selection. Requires separate explicit activation.
+              </Txt>
+            </Stack>
+          ) : (
+            <Stack gap={4}>
+              <Row gap={6} align="center">
+                <Icon name="User" size={15} color={colors.textMuted} />
+                <Txt variant="small" weight={700} tone="ink">Manual Recruiter Control Only</Txt>
+              </Row>
+              <Txt variant="caption" tone="muted">
+                AI background progression is disabled. All candidate evaluations, shortlisting, and round advancement require manual recruiter actions.
+              </Txt>
+            </Stack>
+          )}
+        </Inset>
+
+        <View style={{ marginTop: space.md, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.borderSoft }}>
+          <Checkbox
+            checked={automationEnabled}
+            onChange={setAutomationEnabled}
+            label="Enable recruitment automation for this opening"
+          />
+          <Txt variant="caption" tone="muted" style={{ marginLeft: 32, marginTop: 4 }}>
+            Safe default: disabled. Publishing the internship and enabling automation remain separate operations.
+          </Txt>
+        </View>
+
+        <View style={{ marginTop: space.md }}>
+          <Row justify="space-between" align="center" wrap gap={8}>
+            <Txt variant="small" weight={600} tone="ink">Recruitment Pipeline Draft</Txt>
+            <Button
+              label={generatingPipeline ? "Analyzing with Gemini..." : "Generate Pipeline Draft with Gemini"}
+              icon="Sparkles"
+              size="sm"
+              variant="secondary"
+              loading={generatingPipeline}
+              onPress={handleGeneratePipelineDraft}
+            />
+          </Row>
+
+          {pipelineDraft ? (
+            <Inset tone="neutral" style={{ marginTop: space.sm }}>
+              <Row justify="space-between" align="center">
+                <Txt variant="small" weight={700} tone="ink">Gemini Proposed Pipeline Preview</Txt>
+                <Pill label={`${(pipelineDraft.pipeline_config?.rounds || []).length} Stages`} size="sm" tone="info" />
+              </Row>
+              <Stack gap={6} style={{ marginTop: space.xs }}>
+                {(pipelineDraft.pipeline_config?.rounds || []).map((round, idx) => (
+                  <Row key={round.round_key || idx} justify="space-between" align="center" style={{ paddingVertical: 4 }}>
+                    <Row gap={8} align="center">
+                      <Pill label={`R${round.order || idx + 1}`} size="sm" />
+                      <Txt variant="small" weight={600} tone="ink">{round.round_name}</Txt>
+                    </Row>
+                    <Row gap={6} align="center">
+                      <Txt variant="caption" tone="muted">{round.duration_minutes}m · Cutoff {round.passing_cutoff}%</Txt>
+                      {round.review_gated ? (
+                        <Pill label="Checkpoint" tone="warning" size="sm" />
+                      ) : (
+                        <Pill label="Auto-Advance" tone="success" size="sm" />
+                      )}
+                    </Row>
+                  </Row>
+                ))}
+              </Stack>
+            </Inset>
+          ) : null}
+        </View>
       </Card>
 
       <Card padding={space.lg} tone="accent">

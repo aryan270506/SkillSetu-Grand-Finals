@@ -231,12 +231,14 @@ export class AssessmentOrchestratorAgent extends BaseAgent {
 
       // Notify authoritative Main Backend if callbackUrl is configured
       if (updated.callbackUrl) {
-        try {
+          const roundKey = updated.currentRound || 'final';
           const callbackPayload = {
+            idempotencyKey: `cb_${sessionId}_${roundKey}_${Date.now()}`,
             assessmentId: sessionId,
             studentId: updated.studentId,
             applicationId: updated.applicationId,
             internshipId: updated.internshipId,
+            roundKey: roundKey,
             status: 'completed',
             overallScore: finalSynthesis.evaluation?.overallScore ?? null,
             roundResults: updated.roundResults,

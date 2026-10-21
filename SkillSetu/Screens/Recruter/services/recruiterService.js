@@ -612,6 +612,133 @@ export const recruiterService = {
     }
     return await res.json();
   },
+
+  // Recruitment Automation & Pipeline Versioning
+  async suggestPipelineDraft(token, payload = {}) {
+    const res = await fetch(`${API_BASE}/recruiter/internships/pipeline/suggest-draft`, {
+      method: 'POST',
+      headers: getHeaders(token),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to suggest pipeline draft');
+    }
+    return await res.json();
+  },
+
+  async generatePipelineDraft(token, internshipId, payload = {}) {
+    const res = await fetch(`${API_BASE}/recruiter/internships/${internshipId}/pipeline/generate-draft`, {
+      method: 'POST',
+      headers: getHeaders(token),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to generate pipeline draft');
+    }
+    return await res.json();
+  },
+
+  async getPipelineVersions(token, internshipId) {
+    const res = await fetch(`${API_BASE}/recruiter/internships/${internshipId}/pipeline/versions`, {
+      method: 'GET',
+      headers: getHeaders(token),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch pipeline versions');
+    }
+    return await res.json();
+  },
+
+  async publishPipelineVersion(token, internshipId, payload) {
+    const res = await fetch(`${API_BASE}/recruiter/internships/${internshipId}/pipeline/publish`, {
+      method: 'POST',
+      headers: getHeaders(token),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to publish pipeline version');
+    }
+    return await res.json();
+  },
+
+  async configureAutomation(token, internshipId, payload) {
+    const res = await fetch(`${API_BASE}/recruiter/internships/${internshipId}/automation/configure`, {
+      method: 'POST',
+      headers: getHeaders(token),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to configure automation');
+    }
+    return await res.json();
+  },
+
+  async submitDecisionOverride(token, internshipId, applicationId, payload) {
+    const res = await fetch(`${API_BASE}/recruiter/internships/${internshipId}/applications/${applicationId}/override`, {
+      method: 'POST',
+      headers: getHeaders(token),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to submit decision override');
+    }
+    return await res.json();
+  },
+
+  async revokeDecisionOverride(token, internshipId, applicationId, payload) {
+    const res = await fetch(`${API_BASE}/recruiter/internships/${internshipId}/applications/${applicationId}/override/revoke`, {
+      method: 'POST',
+      headers: getHeaders(token),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to revoke decision override');
+    }
+    return await res.json();
+  },
+
+  async getDeadLetterJobs(token) {
+    const res = await fetch(`${API_BASE}/recruiter/jobs/dead-letter`, {
+      method: 'GET',
+      headers: getHeaders(token),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch dead-letter jobs');
+    }
+    return await res.json();
+  },
+
+  async retryJob(token, jobId) {
+    const res = await fetch(`${API_BASE}/recruiter/jobs/${jobId}/retry`, {
+      method: 'POST',
+      headers: getHeaders(token),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to retry job');
+    }
+    return await res.json();
+  },
+
+  async executeFinalSelection(token, internshipId) {
+    const res = await fetch(`${API_BASE}/recruiter/internships/${internshipId}/final-selection`, {
+      method: 'POST',
+      headers: getHeaders(token),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to execute final selection sweep');
+    }
+    return await res.json();
+  },
 };
 
 export default recruiterService;

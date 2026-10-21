@@ -17,6 +17,7 @@ import {
   Icon,
   IconButton,
   Inset,
+  OpportunityHoverPreview,
   Page,
   Pill,
   Row,
@@ -314,41 +315,54 @@ export default function Scolarship({ user, profileData }) {
     const passed = cps.filter((c) => c.passed === true).length;
     const urgent = sch.days_remaining != null && sch.days_remaining <= 30;
     return (
-      (<Card key={sch.id || sch.name} style={styles.card} badge={{ icon: 'GraduationCap', tone: eligTone(sch.eligibility_status) === 'neutral' ? 'warning' : eligTone(sch.eligibility_status) }}>
-        <Stack gap={4}>
-          <Txt variant="overline" tone="subtle" numberOfLines={1}>{sch.provider}</Txt>
-          <Txt variant="h3" tone="ink" numberOfLines={2}>{sch.name}</Txt>
-          <Txt variant="small" tone="muted" numberOfLines={2}>{sch.description}</Txt>
-        </Stack>
-        <Row wrap gap={6} style={{ marginTop: space.md }}>
-          {sch.award_description || sch.award_amount ? <Pill label={sch.award_description || formatCurrency(sch.award_amount)} tone="warning" icon="Wallet" size="sm" /> : null}
-          {sch.application_deadline ? <Pill label={`${fmtDate(sch.application_deadline)}${sch.days_remaining != null ? tl('· {{days_remaining}}d left', {
-            days_remaining: sch.days_remaining
-          }) : ''}`} tone={urgent ? 'danger' : 'neutral'} icon="Clock" size="sm" /> : null}
-        </Row>
-        {cps.length ? (
-          <Inset tone="neutral" padding={space.sm} style={{ marginTop: space.md }}>
-            <Row justify="space-between" style={{ marginBottom: 6 }}>
-              <Txt variant="caption" weight={700} tone="ink">Eligibility checks</Txt>
-              <Txt variant="caption" tone="muted">{passed}/{cps.length} passed</Txt>
-            </Row>
-            {cps.slice(0, 3).map((c) => (
-              <Row key={c.criterion} gap={8} style={{ marginTop: 4 }} align="flex-start">
-                <Icon name={c.passed === true ? 'CircleCheck' : c.passed === false ? 'X' : 'CircleAlert'} size={14} color={c.passed === true ? colors.mintInk : c.passed === false ? '#B4232A' : colors.butterInk} />
-                <Txt variant="caption" tone="default" style={{ flex: 1 }} numberOfLines={1}>{c.criterion}: {c.student_value} ({c.required})</Txt>
-              </Row>
-            ))}
-          </Inset>
-        ) : null}
-        <Row justify="space-between" style={{ marginTop: space.lg }} wrap gap={8}>
-          <Pill label={`${eligLabel(sch.eligibility_status)}${sch.match_percentage != null ? ` · ${Math.round(sch.match_percentage)}%` : ''}`} tone={eligTone(sch.eligibility_status)} />
-          <Row gap={8}>
-            <IconButton icon="Bookmark" variant={sch.is_saved ? 'dark' : 'soft'} onPress={() => handleToggleSave(sch)} disabled={savingId === sch.id} accessibilityLabel="Save" />
-            <IconButton icon="Ellipsis" onPress={() => handleViewDetails(sch)} accessibilityLabel="Details" />
-            <Button label="Apply" size="sm" iconRight="ArrowUpRight" onPress={() => handleApply(sch)} loading={applyingId === sch.id} />
+      <OpportunityHoverPreview
+        key={sch.id || sch.name}
+        type="scholarship"
+        item={sch}
+        studentEmail={studentEmail}
+        onOpenDetails={() => handleViewDetails(sch)}
+        onSave={() => handleToggleSave(sch)}
+        onApply={() => handleApply(sch)}
+        saving={savingId === sch.id}
+        applying={applyingId === sch.id}
+        style={styles.card}
+      >
+        <Card style={{ flex: 1 }} badge={{ icon: 'GraduationCap', tone: eligTone(sch.eligibility_status) === 'neutral' ? 'warning' : eligTone(sch.eligibility_status) }}>
+          <Stack gap={4}>
+            <Txt variant="overline" tone="subtle" numberOfLines={1}>{sch.provider}</Txt>
+            <Txt variant="h3" tone="ink" numberOfLines={2}>{sch.name}</Txt>
+            <Txt variant="small" tone="muted" numberOfLines={2}>{sch.description}</Txt>
+          </Stack>
+          <Row wrap gap={6} style={{ marginTop: space.md }}>
+            {sch.award_description || sch.award_amount ? <Pill label={sch.award_description || formatCurrency(sch.award_amount)} tone="warning" icon="Wallet" size="sm" /> : null}
+            {sch.application_deadline ? <Pill label={`${fmtDate(sch.application_deadline)}${sch.days_remaining != null ? tl('· {{days_remaining}}d left', {
+              days_remaining: sch.days_remaining
+            }) : ''}`} tone={urgent ? 'danger' : 'neutral'} icon="Clock" size="sm" /> : null}
           </Row>
-        </Row>
-      </Card>)
+          {cps.length ? (
+            <Inset tone="neutral" padding={space.sm} style={{ marginTop: space.md }}>
+              <Row justify="space-between" style={{ marginBottom: 6 }}>
+                <Txt variant="caption" weight={700} tone="ink">Eligibility checks</Txt>
+                <Txt variant="caption" tone="muted">{passed}/{cps.length} passed</Txt>
+              </Row>
+              {cps.slice(0, 3).map((c) => (
+                <Row key={c.criterion} gap={8} style={{ marginTop: 4 }} align="flex-start">
+                  <Icon name={c.passed === true ? 'CircleCheck' : c.passed === false ? 'X' : 'CircleAlert'} size={14} color={c.passed === true ? colors.mintInk : c.passed === false ? '#B4232A' : colors.butterInk} />
+                  <Txt variant="caption" tone="default" style={{ flex: 1 }} numberOfLines={1}>{c.criterion}: {typeof c.student_value === 'object' ? (c.student_value?.value ?? JSON.stringify(c.student_value)) : (c.student_value ?? '')} ({typeof c.required === 'object' ? (c.required?.value ?? JSON.stringify(c.required)) : (c.required ?? '')})</Txt>
+                </Row>
+              ))}
+            </Inset>
+          ) : null}
+          <Row justify="space-between" style={{ marginTop: space.lg }} wrap gap={8}>
+            <Pill label={`${eligLabel(sch.eligibility_status)}${sch.match_percentage != null ? ` · ${Math.round(sch.match_percentage)}%` : ''}`} tone={eligTone(sch.eligibility_status)} />
+            <Row gap={8}>
+              <IconButton icon="Bookmark" variant={sch.is_saved ? 'dark' : 'soft'} onPress={() => handleToggleSave(sch)} disabled={savingId === sch.id} accessibilityLabel="Save" />
+              <IconButton icon="Ellipsis" onPress={() => handleViewDetails(sch)} accessibilityLabel="Details" />
+              <Button label="Apply" size="sm" iconRight="ArrowUpRight" onPress={() => handleApply(sch)} loading={applyingId === sch.id} />
+            </Row>
+          </Row>
+        </Card>
+      </OpportunityHoverPreview>
     );
   };
 

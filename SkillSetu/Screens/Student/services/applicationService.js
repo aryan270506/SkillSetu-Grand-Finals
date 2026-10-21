@@ -168,5 +168,29 @@ export async function evaluatePracticeAnswer(payload, email = '') {
   }
 }
 
+/**
+ * Fetch official, version-pinned candidate progression timeline and authorized feedback dossier.
+ * Strictly enforces candidate privacy server-side.
+ */
+export async function fetchApplicationTimeline(applicationId, token = '', email = '') {
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const params = email ? `?email=${encodeURIComponent(email)}` : '';
+    const res = await fetch(`${API_BASE}/student/applications/${applicationId}/timeline${params}`, {
+      method: 'GET',
+      headers,
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to fetch application timeline');
+    }
+    return data;
+  } catch (err) {
+    console.error('[applicationService] fetchApplicationTimeline error:', err);
+    throw err;
+  }
+}
+
 
 

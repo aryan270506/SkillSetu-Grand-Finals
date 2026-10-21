@@ -11,14 +11,47 @@ from app.routers import student, recruiter, admin, taxonomy, github, courses, le
 from app import models
 from app.services.init_db_service import init_system_on_startup
 
+import asyncio
+import os
+from app.services import job_queue_service
+from app.services import ai_recruitment_orchestrator  # registers durable queue job handlers
+
 logger = logging.getLogger("skillsetu_backend")
+
+async def _background_queue_worker():
+    worker_id = f"worker_pid_{os.getpid()}"
+    logger.info(f"Started durable recruitment queue worker ({worker_id})")
+    iteration = 0
+    while not job_queue_service.is_shutdown_requested():
+        try:
+            processed = job_queue_service.process_queue_iteration(worker_id)
+            if not processed:
+                await asyncio.sleep(1.0)
+            else:
+                await asyncio.sleep(0.05)
+
+            iteration += 1
+            if iteration % 60 == 0:
+                job_queue_service.reap_stale_jobs(stale_threshold_seconds=300)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Error in queue worker loop: {e}")
+            await asyncio.sleep(2.0)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 1. Startup: Create tables, seed ESCO dataset into PostgreSQL, seed providers, download AI model
     init_system_on_startup()
+    worker_task = asyncio.create_task(_background_queue_worker())
     yield
     # 2. Shutdown
+    job_queue_service.stop_worker_loop()
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
     logger.info("SkillSetu Backend shutdown complete.")
 
 app = FastAPI(

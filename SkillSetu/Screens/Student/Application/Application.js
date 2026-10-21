@@ -4,6 +4,7 @@ import {
   fetchStudentApplications,
   checkApplicationAssessment,
   startApplicationAssessment,
+  fetchApplicationTimeline,
 } from '../services/applicationService';
 import {
   Avatar,
@@ -48,6 +49,10 @@ export default function Application({ user, profileData, onNavigate }) {
   const [assessmentChecking, setAssessmentChecking] = useState(false);
   const [assessmentLaunching, setAssessmentLaunching] = useState(false);
   const [assessmentError, setAssessmentError] = useState('');
+
+  // Official Version-Pinned Progression Timeline
+  const [pipelineTimeline, setPipelineTimeline] = useState(null);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
 
   // API State
   const [appData, setAppData] = useState({
@@ -127,9 +132,11 @@ export default function Application({ user, profileData, onNavigate }) {
     setShowDrawer(true);
     setAssessmentInfo(null);
     setAssessmentError('');
+    setPipelineTimeline(null);
 
     if (app.type === 'internship') {
       setAssessmentChecking(true);
+      setLoadingTimeline(true);
       try {
         const info = await checkApplicationAssessment(app.id, studentEmail);
         setAssessmentInfo(info);
@@ -137,6 +144,15 @@ export default function Application({ user, profileData, onNavigate }) {
         console.warn('Failed to check application assessment:', err);
       } finally {
         setAssessmentChecking(false);
+      }
+
+      try {
+        const tlData = await fetchApplicationTimeline(app.id, user?.token || user?.access_token || '', studentEmail);
+        setPipelineTimeline(tlData);
+      } catch (err) {
+        console.warn('Failed to load versioned timeline:', err);
+      } finally {
+        setLoadingTimeline(false);
       }
     }
   };
@@ -314,6 +330,57 @@ export default function Application({ user, profileData, onNavigate }) {
               {sel.atsScore != null ? <Pill label={`ATS ${sel.atsScore}`} tone="info" icon="FileText" /> : null}
               {sel.resumeUsed ? <Pill label={sel.resumeUsed} icon="FileText" /> : null}
             </Row>
+
+            {pipelineTimeline ? (
+              <Card padding={space.lg} tone="accent">
+                <Row justify="space-between" align="center">
+                  <Row gap={8} align="center">
+                    <Icon name="ShieldCheck" size={18} color={colors.lilacInk} />
+                    <Txt variant="h3" tone="ink">Recruitment Process</Txt>
+                  </Row>
+                  <Pill
+                    label={`Pinned v${pipelineTimeline.pipeline_version?.version_number || 1}`}
+                    tone="accent"
+                    size="sm"
+                  />
+                </Row>
+                <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+                  {pipelineTimeline.pipeline_version?.title || 'Versioned Pipeline'} · Immutable evaluation criteria
+                </Txt>
+
+                {pipelineTimeline.feedback_dossier ? (
+                  <Inset tone="neutral" style={{ marginTop: space.sm }}>
+                    <Txt variant="small" weight={700} tone="ink">Authorized Feedback</Txt>
+                    <Txt variant="caption" tone="ink" style={{ marginTop: 2 }}>
+                      {pipelineTimeline.feedback_dossier.evaluation_summary || 'Evaluation in progress according to approved rubrics.'}
+                    </Txt>
+                    <Row gap={8} style={{ marginTop: 4 }}>
+                      <Pill
+                        label={pipelineTimeline.feedback_dossier.evaluation_state || 'PENDING'}
+                        tone={pipelineTimeline.feedback_dossier.evaluation_state === 'PASS' ? 'success' : 'neutral'}
+                        size="sm"
+                      />
+                    </Row>
+                  </Inset>
+                ) : null}
+
+                {(pipelineTimeline.audit_history || []).length ? (
+                  <Stack gap={6} style={{ marginTop: space.sm }}>
+                    <Txt variant="overline" tone="ink">Official Status Log</Txt>
+                    {pipelineTimeline.audit_history.map((item, idx) => (
+                      <Row key={idx} justify="space-between" align="center">
+                        <Txt variant="caption" tone="ink">
+                          {item.new_status}
+                        </Txt>
+                        <Txt variant="caption" tone="muted">
+                          {item.timestamp ? item.timestamp.split('T')[0] : ''}
+                        </Txt>
+                      </Row>
+                    ))}
+                  </Stack>
+                ) : null}
+              </Card>
+            ) : null}
 
             {timeline.length ? (
               <Card padding={space.lg}>

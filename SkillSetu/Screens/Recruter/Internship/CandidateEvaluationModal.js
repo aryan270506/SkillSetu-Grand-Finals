@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { recruiterService } from '../services/recruiterService';
 import {
   Avatar,
@@ -35,10 +35,17 @@ export default function CandidateEvaluationModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [evalData, setEvalData] = useState(null);
-  const [activeTab, setActiveTab] = useState('Overview'); // 'Overview', 'Skills', 'Evidence', 'Resumes'
+  const [activeTab, setActiveTab] = useState('Overview'); // 'Overview', 'Skills', 'Evidence', 'Resumes', 'Override'
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showUnshortlistConfirm, setShowUnshortlistConfirm] = useState(false);
   const [previewResumeType, setPreviewResumeType] = useState(null); // 'ORIGINAL' or 'PERSONALIZED'
+
+  // Recruiter Decision Override State
+  const [overrideType, setOverrideType] = useState('FORCE_ADVANCE_ROUND');
+  const [overrideReasonCode, setOverrideReasonCode] = useState('COMPREHENSIVE_HUMAN_INTERVIEW');
+  const [overrideJustification, setOverrideJustification] = useState('');
+  const [submittingOverride, setSubmittingOverride] = useState(false);
+  const [revokingOverride, setRevokingOverride] = useState(false);
 
   useEffect(() => {
     if (visible && internshipId && applicationId) {
@@ -100,6 +107,46 @@ export default function CandidateEvaluationModal({
     }
   };
 
+  const handleSubmitOverride = async () => {
+    if (!evalData?.application?.id || !internshipId) return;
+    if (!overrideJustification || overrideJustification.trim().length < 15) {
+      alert('Mandatory justification (minimum 15 characters) is required for an authoritative recruiter override.');
+      return;
+    }
+    setSubmittingOverride(true);
+    try {
+      const res = await recruiterService.submitDecisionOverride(token, internshipId, evalData.application.id, {
+        override_type: overrideType,
+        reason_code: overrideReasonCode,
+        justification: overrideJustification.trim(),
+      });
+      await loadEvaluation();
+      if (onStatusUpdated) onStatusUpdated();
+      alert(res.message || 'Recruiter override applied successfully.');
+      setOverrideJustification('');
+    } catch (err) {
+      alert(tl('Failed to apply override: {{message}}', { message: err.message }));
+    } finally {
+      setSubmittingOverride(false);
+    }
+  };
+
+  const handleRevokeOverride = async () => {
+    if (!evalData?.application?.id || !internshipId) return;
+    setRevokingOverride(true);
+    try {
+      const res = await recruiterService.revokeDecisionOverride(token, internshipId, evalData.application.id, {
+        justification: 'Revoked by recruiter from evaluation modal',
+      });
+      await loadEvaluation();
+      if (onStatusUpdated) onStatusUpdated();
+      alert(res.message || 'Recruiter override revoked.');
+    } catch (err) {
+      alert(tl('Failed to revoke override: {{message}}', { message: err.message }));
+    } finally {
+      setRevokingOverride(false);
+    }
+  };
 
   const candidate = evalData?.candidate || {};
   const internship = evalData?.internship || {};
@@ -126,6 +173,7 @@ export default function CandidateEvaluationModal({
   const tabs = [
     { id: 'Overview', label: 'Overview', icon: 'ShieldCheck' },
     ...(hasPipeline ? [{ id: 'Progression', label: 'Rounds', icon: 'Route' }] : []),
+    { id: 'Override', label: 'Override & Audit', icon: 'Sliders' },
     { id: 'Skills', label: 'Skills', icon: 'Zap' },
     { id: 'Evidence', label: 'Evidence', icon: 'GitBranch' },
     { id: 'Resumes', label: 'Resumes', icon: 'FileText' },
@@ -458,6 +506,142 @@ export default function CandidateEvaluationModal({
               </Card>
             ) : null}
           </>
+        ) : null}
+
+        {activeTab === 'Override' ? (
+          <Stack gap={space.md}>
+            {evalData?.active_override ? (
+              <Card padding={space.lg} tone="warning">
+                <Row justify="space-between" align="flex-start" wrap gap={8}>
+                  <Stack gap={4}>
+                    <Row gap={8} align="center">
+                      <Icon name="AlertTriangle" size={18} color={colors.warning} />
+                      <Txt variant="h3" tone="ink">Active Recruiter Override</Txt>
+                    </Row>
+                    <Txt variant="small" weight={700} tone="ink">
+                      Action: {evalData.active_override.override_type} · Reason: {evalData.active_override.reason_code}
+                    </Txt>
+                    <Txt variant="caption" tone="muted">
+                      Justification: "{evalData.active_override.justification}"
+                    </Txt>
+                    <Txt variant="caption" tone="subtle">
+                      Applied at: {evalData.active_override.created_at ? evalData.active_override.created_at.split('T')[0] : 'Recently'}
+                    </Txt>
+                  </Stack>
+                  <Button
+                    label="Revoke Override"
+                    variant="danger"
+                    size="sm"
+                    loading={revokingOverride}
+                    onPress={handleRevokeOverride}
+                  />
+                </Row>
+              </Card>
+            ) : null}
+
+            <Card padding={space.lg}>
+              <Txt variant="h3" tone="ink">Apply Manual Decision Override</Txt>
+              <Txt variant="caption" tone="muted" style={{ marginBottom: space.sm }}>
+                Recruiter overrides take strict precedence over AI automation and progression gates. Every override is logged to the immutable audit ledger.
+              </Txt>
+
+              <Txt variant="overline" tone="ink" style={{ marginTop: space.sm }}>Decision Action</Txt>
+              <Row wrap gap={6} style={{ marginTop: 4 }}>
+                {[
+                  { key: 'FORCE_ADVANCE_ROUND', label: 'Force Advance Round' },
+                  { key: 'MANUAL_SHORTLIST', label: 'Manual Shortlist' },
+                  { key: 'MANUAL_FINAL_SELECT', label: 'Select Candidate' },
+                  { key: 'PUT_ON_HOLD', label: 'Put On Hold' },
+                  { key: 'MANUAL_REJECT', label: 'Manual Reject' },
+                  { key: 'REVERT_ROUND', label: 'Revert Round' },
+                ].map((item) => (
+                  <Pressable
+                    key={item.key}
+                    onPress={() => setOverrideType(item.key)}
+                    style={webOnly({ cursor: 'pointer' })}
+                  >
+                    <Pill
+                      label={item.label}
+                      tone={overrideType === item.key ? 'accent' : 'neutral'}
+                      size="sm"
+                    />
+                  </Pressable>
+                ))}
+              </Row>
+
+              <Txt variant="overline" tone="ink" style={{ marginTop: space.md }}>Mandatory Reason Code</Txt>
+              <Row wrap gap={6} style={{ marginTop: 4 }}>
+                {[
+                  'COMPREHENSIVE_HUMAN_INTERVIEW',
+                  'EVALUATION_SYSTEM_ERROR',
+                  'DOCUMENTED_ACCOMMODATION',
+                  'EVIDENT_PROCTORING_FALSE_POSITIVE',
+                  'EXTERNAL_VERIFIED_CREDENTIAL',
+                  'POLICY_EXCEPTION',
+                ].map((r) => (
+                  <Pressable
+                    key={r}
+                    onPress={() => setOverrideReasonCode(r)}
+                    style={webOnly({ cursor: 'pointer' })}
+                  >
+                    <Pill
+                      label={r.replace(/_/g, ' ')}
+                      tone={overrideReasonCode === r ? 'info' : 'neutral'}
+                      size="sm"
+                    />
+                  </Pressable>
+                ))}
+              </Row>
+
+              <Txt variant="overline" tone="ink" style={{ marginTop: space.md }}>Mandatory Justification</Txt>
+              <TextInput
+                value={overrideJustification}
+                onChangeText={setOverrideJustification}
+                placeholder="Explain the factual basis for overriding AI evaluation..."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={3}
+                style={{
+                  minHeight: 70,
+                  padding: 10,
+                  marginTop: 4,
+                  borderRadius: radii.md,
+                  borderWidth: 1,
+                  borderColor: colors.borderMuted,
+                  backgroundColor: colors.surfaceSunken,
+                  color: colors.textInk,
+                  fontSize: 13,
+                }}
+              />
+
+              <Button
+                label="Submit Authoritative Override"
+                icon="ShieldCheck"
+                loading={submittingOverride}
+                onPress={handleSubmitOverride}
+                style={{ marginTop: space.md }}
+              />
+            </Card>
+
+            {(evalData?.audit_history || []).length ? (
+              <Card padding={space.lg}>
+                <Txt variant="h3" tone="ink" style={{ marginBottom: space.sm }}>Decision Audit Ledger</Txt>
+                <Stack gap={8}>
+                  {evalData.audit_history.map((entry, idx) => (
+                    <Inset key={entry.id || idx} tone="neutral" padding={space.sm}>
+                      <Row justify="space-between" align="center">
+                        <Txt variant="small" weight={700} tone="ink">
+                          {entry.previous_status || 'INITIAL'} → {entry.new_status}
+                        </Txt>
+                        <Pill label={entry.actor_type || 'SYSTEM'} tone={entry.actor_type === 'RECRUITER' ? 'accent' : 'neutral'} size="sm" />
+                      </Row>
+                      {entry.reason ? <Txt variant="caption" tone="muted">{entry.reason}</Txt> : null}
+                    </Inset>
+                  ))}
+                </Stack>
+              </Card>
+            ) : null}
+          </Stack>
         ) : null}
       </>
     );

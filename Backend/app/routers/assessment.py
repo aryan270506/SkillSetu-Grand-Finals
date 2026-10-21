@@ -19,6 +19,7 @@ from app.services.skill_evidence_service import record_verified_assessment_evide
 from app.services.candidate_progression_service import CandidateProgressionService, get_canonical_round_label
 from app.services.student_context_service import StudentContextBuilder
 from app.services.assessment_presence_service import AssessmentPresenceService
+from app.services.system_evaluation_service import synthesize_session_evaluation, derive_round_completion_badge
 
 logger = logging.getLogger("skillsetu_assessment_api")
 router = APIRouter()
@@ -154,16 +155,19 @@ class SaveAssessmentConfigRequest(BaseModel):
 
 
 class AssessmentResultPayload(BaseModel):
+    idempotencyKey: Optional[str] = None
     assessmentId: str
     studentId: Optional[int] = None
     applicationId: Optional[int] = None
     internshipId: Optional[int] = None
+    roundKey: Optional[str] = None
     status: str = "completed"
     overallScore: Optional[float] = None
     roundResults: Optional[Dict[str, Any]] = None
     evaluation: Optional[Dict[str, Any]] = None
     integrityStatus: Optional[str] = "VERIFIED"
     warningCount: Optional[int] = 0
+    clientTelemetry: Optional[Dict[str, Any]] = None
 
 
 class PracticeStartRequest(BaseModel):
@@ -1059,14 +1063,28 @@ def get_recruiter_assessments_dashboard(
     ).all()
     config_map = {c.internship_id: c for c in configs}
 
+    # Preload pipeline versions for company postings
+    posting_ids = [p.id for p in postings]
+    all_versions = db.query(models.RecruitmentPipelineVersion).filter(
+        models.RecruitmentPipelineVersion.internship_id.in_(posting_ids)
+    ).all() if posting_ids else []
+    version_map = {v.id: v for v in all_versions}
+    latest_published_version_map = {}
+    for v in all_versions:
+        if v.status == "PUBLISHED":
+            cur = latest_published_version_map.get(v.internship_id)
+            if not cur or v.version_number > cur.version_number:
+                latest_published_version_map[v.internship_id] = v
+
     # 2. Build Internship Cards for ALL company postings
     internship_cards = []
     default_selected_id = internship_id or (postings[0].id if postings else None)
 
     for p in postings:
         p_apps = [a for a in all_applications if a.internship_id == p.id]
+        p_version = version_map.get(p.active_pipeline_version_id) or latest_published_version_map.get(p.id)
         cfg = config_map.get(p.id)
-        r_seq = CandidateProgressionService.get_effective_round_sequence(cfg) if cfg else []
+        r_seq = CandidateProgressionService.get_effective_round_sequence(cfg, pipeline_version=p_version)
         r_labels = [get_canonical_round_label(r) for r in r_seq]
 
         p_shortlisted = 0
@@ -1131,7 +1149,7 @@ def get_recruiter_assessments_dashboard(
             "selected": p_selected,
             "rejected": p_rejected,
             "active_round": active_round,
-            "has_pipeline": bool(cfg and len(r_seq) > 0),
+            "has_pipeline": bool(len(r_seq) > 0),
             "round_sequence": r_seq,
             "pipeline_sequence": r_labels,
             "is_selected": (p.id == default_selected_id)
@@ -1163,26 +1181,62 @@ def get_recruiter_assessments_dashboard(
             "description": selected_posting.description or "Comprehensive internship program.",
             "application_threshold": selected_posting.application_threshold or 80,
             "required_skills": req_skills_list,
-            "total_applicants": len([a for a in all_applications if a.internship_id == selected_posting.id])
+            "total_applicants": len([a for a in all_applications if a.internship_id == selected_posting.id]),
+            "automation_enabled": bool(selected_posting.automation_enabled),
+            "automation_mode": getattr(selected_posting, "automation_mode", "REVIEW_GATED") or "REVIEW_GATED",
+            "automation_paused": bool(getattr(selected_posting, "automation_paused", False)),
+            "vacancies": getattr(selected_posting, "vacancies", None) or selected_posting.openings or 1
         }
 
     pipeline_rounds_breakdown = []
     if selected_posting:
-        sel_cfg = config_map.get(selected_posting.id)
-        sel_seq = CandidateProgressionService.get_effective_round_sequence(sel_cfg) if sel_cfg else []
-        for r_idx, r_key in enumerate(sel_seq):
-            pipeline_rounds_breakdown.append({
-                "sequence": r_idx + 1,
-                "round_key": r_key,
-                "round_name": get_canonical_round_label(r_key),
-                "type": r_key.upper(),
-                "duration": "30 min" if r_key in ["aptitude", "interview"] else ("45 min" if r_key == "technical" else "40 min"),
-                "candidates_count": 0,
-                "completed_count": 0,
-                "in_progress_count": 0,
-                "pending_count": 0,
-                "scheduled_count": 0
-            })
+        active_version = version_map.get(selected_posting.active_pipeline_version_id) or latest_published_version_map.get(selected_posting.id)
+        if active_version and active_version.pipeline_config and active_version.pipeline_config.get("rounds"):
+            rounds_cfg = active_version.pipeline_config.get("rounds", [])
+            for r_idx, r_dict in enumerate(rounds_cfg):
+                r_key = str(r_dict.get("round_key") or f"round_{r_idx+1}").lower().strip()
+                r_name = r_dict.get("round_name") or get_canonical_round_label(r_key)
+                r_type = str(r_dict.get("round_type", "ASSESSMENT")).upper()
+                dur = f"{r_dict.get('duration_minutes', 30)} min"
+                cutoff = float(r_dict.get("passing_cutoff", 60.0))
+                is_gated = bool(r_dict.get("review_gated", False))
+
+                pipeline_rounds_breakdown.append({
+                    "sequence": r_idx + 1,
+                    "round_key": r_key,
+                    "round_name": r_name,
+                    "type": r_type,
+                    "duration": dur,
+                    "passing_cutoff": cutoff,
+                    "review_gated": is_gated,
+                    "candidates_count": 0,
+                    "completed_count": 0,
+                    "in_progress_count": 0,
+                    "pending_count": 0,
+                    "passed_count": 0,
+                    "failed_count": 0,
+                    "awaiting_review_count": 0
+                })
+        else:
+            sel_cfg = config_map.get(selected_posting.id)
+            sel_seq = CandidateProgressionService.get_effective_round_sequence(sel_cfg) if sel_cfg else []
+            for r_idx, r_key in enumerate(sel_seq):
+                pipeline_rounds_breakdown.append({
+                    "sequence": r_idx + 1,
+                    "round_key": r_key,
+                    "round_name": get_canonical_round_label(r_key),
+                    "type": r_key.upper(),
+                    "duration": "30 min" if r_key in ["aptitude", "interview"] else ("45 min" if r_key == "technical" else "40 min"),
+                    "passing_cutoff": 60.0,
+                    "review_gated": False,
+                    "candidates_count": 0,
+                    "completed_count": 0,
+                    "in_progress_count": 0,
+                    "pending_count": 0,
+                    "passed_count": 0,
+                    "failed_count": 0,
+                    "awaiting_review_count": 0
+                })
 
     # Filter applications for selected internship (or all if none selected)
     active_applications = [a for a in all_applications if (not default_selected_id or a.internship_id == default_selected_id)]
@@ -1216,9 +1270,7 @@ def get_recruiter_assessments_dashboard(
 
         app_st = (app.status or "APPLIED").upper()
         sess_st = (sess.status if sess else "NOT_STARTED").upper()
-        overall_sc = round(sess.overall_score, 1) if (sess and sess.overall_score is not None) else (
-            round(app.match_score_at_apply, 1) if app.match_score_at_apply else 80.0
-        )
+        overall_sc = round(sess.overall_score, 1) if (sess and sess.overall_score is not None) else None
 
         if app_st in ["SELECTED", "HIRED"]:
             selected_count += 1
@@ -1313,17 +1365,43 @@ def get_recruiter_assessments_dashboard(
         college_str = f"{student.university or 'University'} '{student.graduation_year or '27'} • {student.branch or student.degree or 'Engineering'}" if student else "Engineering Institute"
         avatar_initials = "".join([part[0] for part in (student.name or "Candidate").split()[:2]]).upper() if student else "CD"
 
+        # Resolve rubric, passing cutoff & system evaluation from pipeline definition
+        current_round_def = None
+        for r_def in pipeline_rounds_breakdown:
+            if r_def.get("round_key") == current_r_key:
+                current_round_def = r_def
+                break
+
+        passing_cutoff = float(current_round_def.get("passing_cutoff") or 70.0) if current_round_def else 70.0
+
+        system_eval = synthesize_session_evaluation(
+            session=sess,
+            application=app,
+            posting=posting,
+            passing_cutoff=passing_cutoff,
+            round_name=current_r_name
+        )
+
+        round_badge = derive_round_completion_badge(
+            session=sess,
+            application=app,
+            progression=prog,
+            round_def=current_round_def,
+            is_evaluated=system_eval["is_evaluated"]
+        )
+
         cand_card = {
             "id": cand_id_str,
             "application_id": app.id,
+            "round_status_key": round_badge["key"],
+            "round_status_label": round_badge["label"],
+            "round_status_tone": round_badge["tone"],
             "session_id": sess.id if sess else None,
             "student_id": student.id if student else None,
             "name": student.name if student else "Candidate",
             "college": college_str,
-            "degree": student.degree or "B.Tech Computer Science",
-            "cgpa": student.cgpa_or_percentage or "8.5",
-            "matchPct": f"{int(overall_sc)}%",
-            "role": posting.title if posting else "Internship",
+            "matchPct": f"{int(round(app.match_score_at_apply))}%" if app.match_score_at_apply else (f"{int(overall_sc)}%" if overall_sc is not None else "Pending"),
+            "assessment_score": overall_sc,
             "dept": posting.department or "Engineering",
             "round": f"Round {prog.get('current_round_index', 0) + 1}: {current_r_name}",
             "current_round_key": current_r_key,
@@ -1391,50 +1469,64 @@ def get_recruiter_assessments_dashboard(
             }
         }
 
-        # Candidate Dossier Workspace Object
-        journey_steps = [
-            {"text": f"{app.applied_at.strftime('%b %d') if app.applied_at else 'Recent'}: Applied to {posting.title if posting else 'Internship'}"},
-            {"text": f"Automated Screening Cleared ({int(overall_sc)}/100)"},
-        ]
-        if app_st == "SHORTLISTED":
-            journey_steps.append({"text": "Candidate Shortlisted for Assessment Pipeline"})
+
+        # Build clean chronological audit trail from database without duplicate synthetic entries
+        journey_steps = []
+        if app.applied_at:
+            journey_steps.append({
+                "text": f"Applied to {posting.title if posting else 'Internship'}",
+                "timestamp": app.applied_at.isoformat(),
+                "actor": "Candidate",
+                "status": "APPLIED"
+            })
+
+        seen_audits = set()
         for aud in prog.get("progression_history", []):
-            journey_steps.append({"text": f"{aud.get('new_status')}: {aud.get('notes') or 'Advanced to next stage'}"})
-        if state_res["is_completed"]:
-            journey_steps.append({"text": f"{current_r_name} Completed ({int(overall_sc)}/100)", "active": True})
+            aud_key = (aud.get("new_status"), (aud.get("notes") or "").strip())
+            if aud_key in seen_audits:
+                continue
+            seen_audits.add(aud_key)
+            status_text = aud.get("new_status", "UPDATED").replace("_", " ").title()
+            notes_str = f" - {aud.get('notes')}" if aud.get("notes") else ""
+            journey_steps.append({
+                "text": f"{status_text}{notes_str}",
+                "timestamp": aud.get("timestamp"),
+                "actor": aud.get("actor_type") or ("Recruiter" if aud.get("changed_by_recruiter_id") else "System"),
+                "status": aud.get("new_status")
+            })
+
+        # Append current active/scheduled stage indicator
+        if app_st in ["SELECTED", "HIRED"]:
+            journey_steps.append({"text": "Final Selection & Offer Extended", "active": True, "status": "SELECTED"})
+        elif app_st == "REJECTED":
+            journey_steps.append({"text": "Application Terminated", "active": True, "status": "REJECTED"})
+        elif state_res["is_completed"]:
+            score_disp = f" ({int(round(sess.overall_score))}/100)" if (sess and sess.overall_score is not None) else ""
+            journey_steps.append({"text": f"{current_r_name} Completed{score_disp}", "active": True, "status": "COMPLETED"})
         elif state_res["is_live"]:
-            journey_steps.append({"text": f"{current_r_name} (In Progress - Live)", "active": True})
+            journey_steps.append({"text": f"{current_r_name} (In Progress - Live)", "active": True, "status": "IN_PROGRESS"})
         elif state_res["is_reconnecting"]:
-            journey_steps.append({"text": f"{current_r_name} (Reconnecting)", "active": True})
+            journey_steps.append({"text": f"{current_r_name} (Reconnecting)", "active": True, "status": "RECONNECTING"})
         elif state_res["is_waiting"]:
-            journey_steps.append({"text": f"{current_r_name} (Waiting for Candidate)", "active": True})
+            journey_steps.append({"text": f"{current_r_name} (Waiting for Candidate)", "active": True, "status": "WAITING"})
         else:
-            journey_steps.append({"text": f"{current_r_name} (Scheduled for {round_sched['formatted_date']})", "active": True})
+            journey_steps.append({"text": f"{current_r_name} (Scheduled for {round_sched['formatted_date']})", "active": True, "status": "SCHEDULED"})
 
         if prog.get("next_round_name"):
-            journey_steps.append({"text": f"Upcoming: {prog.get('next_round_name')}", "pending": True})
-        elif app_st in ["SELECTED", "HIRED"]:
-            journey_steps.append({"text": "Final Selection & Offer Extended", "active": True})
+            journey_steps.append({"text": f"Upcoming Round: {prog.get('next_round_name')}", "pending": True, "status": "UPCOMING"})
 
         dossier = {
             **cand_card,
             "top_competencies": top_competencies,
-            "ratings": eval_data.get("ratings") or {
-                "techDepth": 5 if overall_sc >= 85 else 4,
-                "problemSolving": 5 if overall_sc >= 80 else 4,
-                "sysDesign": 4,
-                "communication": 4,
-                "teamFit": 5
-            },
-            "composite_score": eval_data.get("composite_score") or int(overall_sc),
-            "strengths": eval_data.get("strengths") or (
-                f"Candidate demonstrated solid technical fundamentals in {posting.title if posting else 'role'}. "
-                f"Completed {current_r_name} with strong conceptual clarity."
-            ),
-            "areas_for_improvement": eval_data.get("areas_for_improvement") or (
-                "Continue building practical experience with distributed deployments and edge-case load handling."
-            ),
-            "verdict": eval_data.get("verdict") or ("Strongly Recommend" if overall_sc >= 85 else "Recommend"),
+            "ratings": system_eval["ratings"],
+            "composite_score": system_eval["composite_score"],
+            "strengths": system_eval["strengths"],
+            "areas_for_improvement": system_eval["areas_for_improvement"],
+            "evaluation_summary": system_eval.get("evaluation_summary", ""),
+            "verdict": system_eval["verdict"],
+            "is_evaluated": system_eval["is_evaluated"],
+            "evaluation_source": system_eval.get("source", "SYSTEM"),
+            "recruiter_notes": eval_data.get("recruiter_notes") or app.notes or "",
             "journey_steps": journey_steps,
             "round_results": r_results,
             "integrity_status": sess.integrity_status if sess else "VERIFIED",
@@ -1702,7 +1794,8 @@ def submit_recruiter_assessment_evaluation(
     db: Session = Depends(get_db)
 ):
     """
-    Persists recruiter candidate scorecard, rubric ratings, verdict, and feedback into PostgreSQL.
+    Persists recruiter review notes and feedback into PostgreSQL.
+    System assessment scores, star ratings, and verdicts remain authoritative and system-generated.
     """
     app_record = db.query(models.InternshipApplication).join(
         models.InternshipPosting, models.InternshipPosting.id == models.InternshipApplication.internship_id
@@ -1719,39 +1812,33 @@ def submit_recruiter_assessment_evaluation(
         models.CandidateAssessmentSession.company_id == company.id
     ).first()
 
-    eval_dict = {
-        "ratings": payload.ratings or {},
-        "verdict": payload.verdict or "Recommend",
-        "strengths": payload.strengths or "",
-        "areas_for_improvement": payload.areas_for_improvement or "",
-        "composite_score": payload.composite_score or 85,
-        "notes": payload.notes or "",
-        "evaluated_by_recruiter_id": current_user.id,
-        "evaluated_at": datetime.now(timezone.utc).isoformat()
-    }
+    existing_eval = {}
+    if session and session.evaluation:
+        try:
+            existing_eval = json.loads(session.evaluation) if isinstance(session.evaluation, str) else session.evaluation
+        except Exception:
+            existing_eval = {}
+
+    # System-generated scores, stars, and verdicts are preserved. Recruiter can save review notes and observations.
+    review_notes = payload.notes or ""
+    existing_eval["recruiter_notes"] = review_notes
+    existing_eval["reviewed_by_recruiter_id"] = current_user.id
+    existing_eval["reviewed_at"] = datetime.now(timezone.utc).isoformat()
 
     if session:
-        existing_eval = {}
-        if session.evaluation:
-            try:
-                existing_eval = json.loads(session.evaluation) if isinstance(session.evaluation, str) else session.evaluation
-            except Exception:
-                pass
-        existing_eval.update(eval_dict)
         session.evaluation = json.dumps(existing_eval)
-        if session.status != "COMPLETED":
-            session.status = "COMPLETED"
-            session.completed_at = datetime.now(timezone.utc)
 
-    # Persist notes into application
-    app_record.notes = f"Recruiter Evaluation: {payload.verdict} | Composite: {payload.composite_score or 85}/100"
+    # Persist review notes into application record
+    if review_notes:
+        app_record.notes = review_notes
+
     db.commit()
 
     return {
         "status": "success",
-        "message": "Candidate evaluation saved successfully.",
+        "message": "Recruiter review notes saved successfully.",
         "application_id": payload.application_id,
-        "evaluation": eval_dict
+        "evaluation": existing_eval
     }
 
 
@@ -1785,16 +1872,19 @@ def progress_recruiter_assessment_round(
     else:
         norm_action = action_raw.upper()
 
-    res = CandidateProgressionService.progress_single_candidate(
-        db=db,
-        company_id=company.id,
-        recruiter_id=current_user.id,
-        internship_id=app.internship_id,
-        application_id=payload.application_id,
-        action=norm_action,
-        notes=payload.notes or f"Recruiter action: {norm_action}"
-    )
-    return res
+    try:
+        res = CandidateProgressionService.progress_single_candidate(
+            db=db,
+            company_id=company.id,
+            recruiter_id=current_user.id,
+            internship_id=app.internship_id,
+            application_id=payload.application_id,
+            action=norm_action,
+            notes=payload.notes or f"Recruiter action: {norm_action}"
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ==========================================
@@ -1987,7 +2077,32 @@ def get_student_application_assessment(
         models.InternshipAssessmentConfig.is_active == True
     ).first()
 
-    if not config or not config.pipeline_config:
+    pipeline_dict = {}
+    if config and config.pipeline_config:
+        pipeline_dict = json.loads(config.pipeline_config) if isinstance(config.pipeline_config, str) else (config.pipeline_config or {})
+    else:
+        ver = app_record.pipeline_version or (posting.active_pipeline_version if posting else None)
+        if ver and ver.pipeline_config:
+            rounds = ver.pipeline_config.get("rounds", [])
+            if rounds:
+                pipeline_dict = {
+                    r.get("round_key", "aptitude"): {
+                        "enabled": r.get("enabled", True),
+                        "name": r.get("round_name", r.get("round_key", "Round").capitalize()),
+                        "duration_min": r.get("duration_minutes", 30),
+                        "passing_score": r.get("passing_cutoff", 60),
+                        "question_count": r.get("parameters", {}).get("question_count", 6),
+                        "difficulty": r.get("parameters", {}).get("difficulty", "Medium"),
+                        "schedule": r.get("parameters", {}).get("schedule", {}),
+                        "theory_enabled": True,
+                        "coding_enabled": True,
+                        "languages": r.get("parameters", {}).get("languages", ["python", "javascript"]),
+                    }
+                    for r in rounds
+                }
+                pipeline_dict["round_sequence"] = [r.get("round_key") for r in rounds if r.get("enabled", True)]
+
+    if not pipeline_dict:
         return {
             "has_assessment": False,
             "has_pipeline": False,
@@ -2003,7 +2118,6 @@ def get_student_application_assessment(
     ).first()
 
     now_utc = datetime.now(timezone.utc)
-    pipeline_dict = json.loads(config.pipeline_config) if isinstance(config.pipeline_config, str) else (config.pipeline_config or {})
 
     canonical_labels = {
         "aptitude": "Aptitude",
@@ -3133,14 +3247,40 @@ async def start_student_application_assessment(
         models.InternshipAssessmentConfig.is_active == True
     ).first()
 
-    if not config or not config.pipeline_config:
+    pipeline_dict = {}
+    scoring_dict = {}
+    if config and config.pipeline_config:
+        pipeline_dict = json.loads(config.pipeline_config) if isinstance(config.pipeline_config, str) else config.pipeline_config
+        scoring_dict = json.loads(config.scoring_weights) if config.scoring_weights and isinstance(config.scoring_weights, str) else (config.scoring_weights or {})
+    else:
+        ver = app_record.pipeline_version or (posting.active_pipeline_version if posting else None)
+        if ver and ver.pipeline_config:
+            rounds = ver.pipeline_config.get("rounds", [])
+            if rounds:
+                pipeline_dict = {
+                    r.get("round_key", "aptitude"): {
+                        "enabled": r.get("enabled", True),
+                        "name": r.get("round_name", r.get("round_key", "Round").capitalize()),
+                        "duration_min": r.get("duration_minutes", 30),
+                        "passing_score": r.get("passing_cutoff", 60),
+                        "question_count": r.get("parameters", {}).get("question_count", 6),
+                        "difficulty": r.get("parameters", {}).get("difficulty", "Medium"),
+                        "schedule": r.get("parameters", {}).get("schedule", {}),
+                        "theory_enabled": True,
+                        "coding_enabled": True,
+                        "languages": r.get("parameters", {}).get("languages", ["python", "javascript"]),
+                    }
+                    for r in rounds
+                }
+                pipeline_dict["round_sequence"] = [r.get("round_key") for r in rounds if r.get("enabled", True)]
+                scoring_dict = ver.scoring_weights or {}
+
+    if not pipeline_dict:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active assessment pipeline is configured for this internship."
         )
 
-    pipeline_dict = json.loads(config.pipeline_config) if isinstance(config.pipeline_config, str) else config.pipeline_config
-    scoring_dict = json.loads(config.scoring_weights) if config.scoring_weights and isinstance(config.scoring_weights, str) else (config.scoring_weights or {})
     now_utc = datetime.now(timezone.utc)
 
     canonical_labels = {
@@ -3510,96 +3650,86 @@ async def start_student_practice_assessment(
 # ==========================================
 
 @router.post("/assessment/results")
+@router.post("/assessments/callback")
+@router.post("/assessment/callback")
 def receive_assessment_results(
     payload: AssessmentResultPayload,
     x_assessment_secret: Optional[str] = Header(None),
+    idempotency_key_header: Optional[str] = Header(None, alias="Idempotency-Key"),
     db: Session = Depends(get_db)
 ):
     """
     Secure server-to-server webhook endpoint called by Archive 2 when assessment is finalized.
-    Updates application status, stores round results and forensic timeline, and feeds
-    verified skills into SkillSetu canonical skill evidence pipeline.
+    Enforces shared secret authentication, PostgreSQL-backed idempotency, row locking,
+    safe 8-state evaluation, and feeds verified skills into SkillSetu canonical skill evidence pipeline.
     """
-    # Verify shared service secret
-    if not x_assessment_secret or x_assessment_secret != settings.ASSESSMENT_SERVICE_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized service communication."
-        )
+    from app.services.assessment_callback_service import process_assessment_callback
+    from app.schemas.recruitment_automation import AssessmentCallbackPayload as HardenedPayload
 
+    effective_idempotency_key = payload.idempotencyKey or idempotency_key_header
+    if not effective_idempotency_key:
+        effective_idempotency_key = f"evt_{payload.assessmentId}_{payload.status}_{int(payload.overallScore or 0)}"
+
+    hardened_dto = HardenedPayload(
+        idempotencyKey=effective_idempotency_key,
+        assessmentId=payload.assessmentId,
+        studentId=payload.studentId or 0,
+        applicationId=payload.applicationId,
+        internshipId=payload.internshipId or 0,
+        roundKey=payload.roundKey or "aptitude",
+        status=payload.status,
+        overallScore=payload.overallScore,
+        roundResults=payload.roundResults,
+        evaluation=payload.evaluation,
+        integrityStatus=payload.integrityStatus or "VERIFIED",
+        warningCount=payload.warningCount or 0,
+        clientTelemetry=payload.clientTelemetry
+    )
+
+    result = process_assessment_callback(
+        db=db,
+        payload=hardened_dto,
+        shared_secret=x_assessment_secret
+    )
+
+    # Integrate verified skill evidence into canonical student skills pipeline if available
     session = db.query(models.CandidateAssessmentSession).filter(
         models.CandidateAssessmentSession.id == payload.assessmentId
     ).first()
 
-    if not session:
-        # Fallback by application ID if session was created manually
-        if payload.applicationId:
-            session = db.query(models.CandidateAssessmentSession).filter(
-                models.CandidateAssessmentSession.application_id == payload.applicationId
-            ).first()
+    if session and session.student_id and payload.roundResults:
+        try:
+            tech_round = payload.roundResults.get("technical")
+            if tech_round and isinstance(tech_round, dict):
+                tech_score = int(tech_round.get("score") or 0)
+                if tech_score >= 60:
+                    lang = tech_round.get("evaluation", {}).get("coding", {}).get("language") or "Python"
+                    record_verified_assessment_evidence(
+                        db=db,
+                        student_id=session.student_id,
+                        skill_name=lang.capitalize(),
+                        score_pct=tech_score,
+                        attempt_id=session.internship_id
+                    )
 
-    now_utc = datetime.now(timezone.utc)
+            apt_round = payload.roundResults.get("aptitude")
+            if apt_round and isinstance(apt_round, dict):
+                apt_score = int(apt_round.get("score") or 0)
+                if apt_score >= 60:
+                    record_verified_assessment_evidence(
+                        db=db,
+                        student_id=session.student_id,
+                        skill_name="Problem Solving",
+                        score_pct=apt_score,
+                        attempt_id=session.internship_id
+                    )
+        except Exception as e:
+            logger.warning(f"Could not record canonical skill evidence from assessment: {e}")
 
-    if session:
-        session.status = payload.status.upper()
-        if payload.overallScore is not None:
-            session.overall_score = payload.overallScore
-        if payload.integrityStatus:
-            session.integrity_status = payload.integrityStatus.upper()
-        if payload.warningCount is not None:
-            session.warning_count = payload.warningCount
-        if payload.roundResults:
-            session.round_results = json.dumps(payload.roundResults)
-        if payload.evaluation:
-            session.evaluation = json.dumps(payload.evaluation)
-        session.completed_at = now_utc
-
-        # Update associated InternshipApplication
-        if session.application_id:
-            app_record = db.query(models.InternshipApplication).filter(
-                models.InternshipApplication.id == session.application_id
-            ).first()
-            if app_record:
-                score_pct = int(payload.overallScore or 0)
-                app_record.notes = f"AI Assessment Completed: {score_pct}% | Integrity: {session.integrity_status}"
-                if score_pct >= 70 and session.integrity_status == "VERIFIED":
-                    app_record.status = "SHORTLISTED"
-                else:
-                    app_record.status = "UNDER_REVIEW"
-
-        # Integrate verified skill evidence into canonical student skills pipeline
-        if session.student_id and payload.roundResults:
-            try:
-                # 1. Technical round coding / theory evidence
-                tech_round = payload.roundResults.get("technical")
-                if tech_round and isinstance(tech_round, dict):
-                    tech_score = int(tech_round.get("score") or 0)
-                    if tech_score >= 60:
-                        # Extract languages tested
-                        lang = tech_round.get("evaluation", {}).get("coding", {}).get("language") or "Python"
-                        record_verified_assessment_evidence(
-                            db=db,
-                            student_id=session.student_id,
-                            skill_name=lang.capitalize(),
-                            score_pct=tech_score,
-                            attempt_id=session.internship_id
-                        )
-
-                # 2. Aptitude evidence
-                apt_round = payload.roundResults.get("aptitude")
-                if apt_round and isinstance(apt_round, dict):
-                    apt_score = int(apt_round.get("score") or 0)
-                    if apt_score >= 60:
-                        record_verified_assessment_evidence(
-                            db=db,
-                            student_id=session.student_id,
-                            skill_name="Problem Solving",
-                            score_pct=apt_score,
-                            attempt_id=session.internship_id
-                        )
-            except Exception as e:
-                logger.warning(f"Could not record canonical skill evidence from assessment: {e}")
-
-        db.commit()
-
-    return {"status": "success", "assessment_id": payload.assessmentId}
+    return {
+        "status": "success",
+        "assessment_id": payload.assessmentId,
+        "eval_state": result.get("eval_state"),
+        "idempotent": result.get("idempotent", False),
+        "application_status": result.get("application_status")
+    }

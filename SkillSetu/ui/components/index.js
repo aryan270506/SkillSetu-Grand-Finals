@@ -5,3 +5,4 @@ export * from './display';
 export * from './inputs';
 export { default as AppFrame, BrandMark, Dock, Page, ToolRail, useLayout } from './AppFrame';
 export { default as LanguageSwitcher } from './LanguageSwitcher';
+export { default as OpportunityHoverPreview } from './OpportunityHoverPreview';

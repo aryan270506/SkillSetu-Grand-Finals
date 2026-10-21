@@ -30,6 +30,7 @@ import {
   Icon,
   IconButton,
   Inset,
+  OpportunityHoverPreview,
   Page,
   Pill,
   ProgressBar,
@@ -82,6 +83,8 @@ export default function Internship({ user, profileData, onNavigate }) {
   // Modals & UI State
   const [selectedDetailJob, setSelectedDetailJob] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   const [selectedPlanJob, setSelectedPlanJob] = useState(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showAppliedModal, setShowAppliedModal] = useState(false);
@@ -642,9 +645,22 @@ export default function Internship({ user, profileData, onNavigate }) {
     }
   };
 
-  const handleViewDetails = (job) => {
+  const handleViewDetails = async (job) => {
     setSelectedDetailJob(job);
+    setDescExpanded(false);
     setShowDetailsModal(true);
+    setDetailsLoading(true);
+    const targetJobId = job.id;
+    try {
+      const fullDetail = await fetchInternshipDetail(job.id, studentEmail);
+      if (fullDetail) {
+        setSelectedDetailJob((prev) => (prev && prev.id === targetJobId ? { ...prev, ...fullDetail } : prev));
+      }
+    } catch (err) {
+      console.warn('[Internship] Failed to fetch full detail:', err);
+    } finally {
+      setDetailsLoading(false);
+    }
   };
 
   const handleClearFilters = () => {
@@ -663,16 +679,42 @@ export default function Internship({ user, profileData, onNavigate }) {
   const thresholdOf = (job) => job.application_threshold ?? job.minimum_match_threshold ?? 80;
   const isReady = (job) => job.readiness_status === 'READY_TO_APPLY' || ((job.match_score || 0) >= thresholdOf(job) && job.hard_eligible !== false);
   const companyOf = (job) => job.company || job.company_name || 'Company';
-  const stripHtml = (html) =>
-    String(html || '')
-      .replace(/<\s*br\s*\/?>/gi, '\n')
-      .replace(/<\/(p|li|h\d)>/gi, '\n')
-      .replace(/<li>/gi, '• ')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+
+  const sanitizeJobHtml = (html) => {
+    if (!html) return '';
+    let str = String(html);
+    str = str.replace(/<(script|style|iframe|form)[^>]*>[\s\S]*?<\/\1>/gi, '');
+    str = str.replace(/<\s*br\s*\/?>/gi, '\n');
+    str = str.replace(/<\/(p|div|section|article|h[1-6]|tr|blockquote)>/gi, '\n\n');
+    str = str.replace(/<\/li>/gi, '\n');
+    str = str.replace(/<(li|dt)>/gi, '\n• ');
+    str = str.replace(/<[a-zA-Z\/][^>]*$/g, '');
+    str = str.replace(/<[^>]+>/g, ' ');
+    const entities = {
+      '&nbsp;': ' ',
+      '&amp;': '&',
+      '&lt;': '<',
+      '&gt;': '>',
+      '&quot;': '"',
+      '&#39;': "'",
+      '&apos;': "'",
+      '&rsquo;': "'",
+      '&lsquo;': "'",
+      '&ldquo;': '"',
+      '&rdquo;': '"',
+      '&bull;': '•',
+      '&middot;': '·',
+      '&mdash;': '—',
+      '&ndash;': '–',
+    };
+    str = str.replace(/&[a-zA-Z0-9#]+;/g, (m) => entities[m] || m);
+    str = str
+      .split('\n')
+      .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+      .join('\n');
+    return str.replace(/\n{3,}/g, '\n\n').trim();
+  };
+  const stripHtml = sanitizeJobHtml;
   const [certIssuer, setCertIssuer] = useState('');
   const [certFile, setCertFile] = useState(null);
 
@@ -723,7 +765,11 @@ export default function Internship({ user, profileData, onNavigate }) {
           {job.application_deadline ? <Pill label={tl('Due {{v0}}', {
             v0: formatDate(job.application_deadline, { month: 'short', day: 'numeric' })
           })} icon="Calendar" size="sm" /> : null}
-          {skills.slice(0, 4).map((s) => <Pill key={s} label={s} tone="info" size="sm" />)}
+          {skills.slice(0, 4).map((s, idx) => {
+            const sName = typeof s === 'string' ? s : (s?.skill_name || s?.name || 'Skill');
+            const sKey = typeof s === 'string' ? s : (s?.skill_id || s?.id || s?.skill_name || idx);
+            return <Pill key={sKey} label={sName} tone="info" size="sm" />;
+          })}
           {skills.length > 4 ? <Pill label={`+${skills.length - 4}`} size="sm" /> : null}
         </Row>
         <Row justify="space-between" style={{ marginTop: space.lg }} wrap gap={8}>
@@ -742,10 +788,28 @@ export default function Internship({ user, profileData, onNavigate }) {
         </Row>
       </>
     );
-    return featured ? (
-      <FeatureCard key={job.id} tilt={isDesktop}>{body}</FeatureCard>
+    const cardContent = featured ? (
+      <FeatureCard tilt={isDesktop}>{body}</FeatureCard>
     ) : (
-      <Card key={job.id} style={styles.jobCard}>{body}</Card>
+      <Card style={{ flex: 1 }}>{body}</Card>
+    );
+
+    return (
+      <OpportunityHoverPreview
+        key={job.id}
+        type="internship"
+        item={job}
+        studentEmail={studentEmail}
+        isReady={ready}
+        onOpenDetails={() => handleViewDetails(job)}
+        onSave={() => handleToggleSave(job)}
+        onApply={() => (ready ? handleApply(job) : openPlanModal(job))}
+        saving={savingId === job.id}
+        applying={applyingId === job.id}
+        style={featured ? { width: '100%' } : styles.jobCard}
+      >
+        {cardContent}
+      </OpportunityHoverPreview>
     );
   };
 
@@ -840,7 +904,7 @@ export default function Internship({ user, profileData, onNavigate }) {
           <EmptyState icon="Briefcase" title="No roles match these filters" message="Try clearing filters or searching for a different skill." action={<Button label="Clear filters" onPress={handleClearFilters} />} />
         </Card>
       )}
-      {/* Details */}
+      {/* Enhanced Internship Details Modal */}
       <Sheet
         visible={showDetailsModal && !!selectedDetailJob}
         onClose={() => setShowDetailsModal(false)}
@@ -848,42 +912,537 @@ export default function Internship({ user, profileData, onNavigate }) {
         subtitle={selectedDetailJob ? `${companyOf(selectedDetailJob)}${selectedDetailJob.location ? ` · ${selectedDetailJob.location}` : ''}` : ''}
         icon="Briefcase"
         tone="info"
-        width={760}
+        width={800}
         footer={
           selectedDetailJob ? (
-            <>
-              <Button label={selectedDetailJob.is_saved ? 'Saved' : 'Save'} icon="Bookmark" variant="secondary" onPress={() => handleToggleSave(selectedDetailJob)} />
-              {isReady(selectedDetailJob) ? (
-                <Button label="Apply" iconRight="ArrowUpRight" onPress={() => { setShowDetailsModal(false); handleApply(selectedDetailJob); }} />
-              ) : (
-                <Button label="Improve match" icon="Route" onPress={() => { setShowDetailsModal(false); openPlanModal(selectedDetailJob); }} />
-              )}
-            </>
+            <Row justify="space-between" align="center" style={{ width: '100%' }} wrap gap={8}>
+              <Row gap={8} align="center">
+                <Button
+                  label={selectedDetailJob.is_saved ? 'Saved' : 'Save'}
+                  icon="Bookmark"
+                  variant={selectedDetailJob.is_saved ? 'secondary' : 'soft'}
+                  onPress={() => handleToggleSave(selectedDetailJob)}
+                  disabled={savingId === selectedDetailJob.id}
+                />
+                {selectedDetailJob.source_url || selectedDetailJob.application_url || selectedDetailJob.apply_url ? (
+                  <IconButton
+                    icon="ExternalLink"
+                    variant="soft"
+                    accessibilityLabel="Open original listing"
+                    onPress={() => {
+                      const ext = selectedDetailJob.application_url || selectedDetailJob.apply_url || selectedDetailJob.source_url;
+                      if (ext && (ext.startsWith('http://') || ext.startsWith('https://'))) {
+                        Linking.openURL(ext).catch(() => {});
+                      }
+                    }}
+                  />
+                ) : null}
+              </Row>
+              <Row gap={8} align="center">
+                {isReady(selectedDetailJob) ? (
+                  <Button
+                    label="Apply Now"
+                    iconRight="ArrowUpRight"
+                    onPress={() => {
+                      setShowDetailsModal(false);
+                      handleApply(selectedDetailJob);
+                    }}
+                    loading={applyingId === selectedDetailJob.id}
+                  />
+                ) : (
+                  <Button
+                    label={tl('Improve match (Need {{v0}}%)', { v0: thresholdOf(selectedDetailJob) })}
+                    icon="Route"
+                    variant="accent"
+                    onPress={() => {
+                      setShowDetailsModal(false);
+                      openPlanModal(selectedDetailJob);
+                    }}
+                  />
+                )}
+              </Row>
+            </Row>
           ) : null
         }
       >
-        {selectedDetailJob ? (
-          <>
-            <Row wrap gap={6}>
-              <Pill label={tl('{{v0}}% match', {
-                v0: Math.round(selectedDetailJob.match_score || 0)
-              })} tone={isReady(selectedDetailJob) ? 'success' : 'warning'} icon="Target" />
-              {selectedDetailJob.stipend ? <Pill label={selectedDetailJob.stipend} tone="warning" icon="Wallet" /> : null}
-              <Pill label={isJobVerified(selectedDetailJob) ? 'Verified recruiter' : tl('Source: {{v0}}', {
-                v0: selectedDetailJob.source || 'external'
-              })} icon={isJobVerified(selectedDetailJob) ? 'ShieldCheck' : 'Globe'} />
-            </Row>
-            {(selectedDetailJob.missing_skills || []).length ? (
-              <Inset tone="warning">
-                <Txt variant="small" weight={700} color={colors.butterInk}>Missing skills</Txt>
-                <Row wrap gap={6} style={{ marginTop: 6 }}>
-                  {selectedDetailJob.missing_skills.map((s) => <Pill key={typeof s === 'string' ? s : s.skill_name} label={typeof s === 'string' ? s : s.skill_name} tone="peach" size="sm" />)}
+        {selectedDetailJob ? (() => {
+          const job = selectedDetailJob;
+          const score = Math.round(job.match_score || 0);
+          const threshold = thresholdOf(job);
+          const ready = isReady(job);
+          const hardFailed = job.hard_eligible === false || job.eligibility_status === 'NOT_ELIGIBLE';
+          const verified = isJobVerified(job);
+
+          // Deadline calculation
+          const deadlineRaw = job.application_deadline || job.deadline;
+          let deadlineText = 'Not specified';
+          let deadlineSubtext = null;
+          let deadlineTone = 'neutral';
+          if (deadlineRaw) {
+            const dlDate = new Date(deadlineRaw);
+            if (!isNaN(dlDate.getTime())) {
+              deadlineText = formatDate(dlDate, { month: 'short', day: 'numeric', year: 'numeric' });
+              const diffMs = dlDate.getTime() - Date.now();
+              const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+              if (diffDays < 0) {
+                deadlineSubtext = 'Application closed';
+                deadlineTone = 'danger';
+              } else if (diffDays === 0) {
+                deadlineSubtext = 'Due today';
+                deadlineTone = 'warning';
+              } else if (diffDays <= 7) {
+                deadlineSubtext = `${diffDays} days left`;
+                deadlineTone = 'warning';
+              } else {
+                deadlineSubtext = `${diffDays} days left`;
+                deadlineTone = 'info';
+              }
+            }
+          }
+
+          // Posted date
+          const postedRaw = job.posted_at || job.created_at;
+          const postedText = postedRaw ? formatDate(postedRaw, { month: 'short', day: 'numeric' }) : 'Not specified';
+
+          // Cleaned description
+          const fullDesc = sanitizeJobHtml(job.description);
+          const isDescLong = fullDesc.length > 420;
+          const displayedDesc = (!descExpanded && isDescLong) ? fullDesc.slice(0, 380) + '…' : fullDesc;
+
+          // Company overview deduplication
+          let compOverview = job.company_overview || '';
+          if (compOverview && fullDesc.includes(compOverview.slice(0, 50))) {
+            compOverview = '';
+          }
+
+          // Responsibilities text
+          const responsibilitiesText = job.responsibilities && job.responsibilities !== job.description ? sanitizeJobHtml(job.responsibilities) : '';
+
+          // Skills lists
+          const matchedSkills = job.matched_skills || [];
+          const missingSkills = job.missing_skills || [];
+          const allSkills = job.skills || [];
+
+          return (
+            <Stack gap={space.lg}>
+              {/* SECTION A: Header Badges & Company Meta */}
+              <Row wrap gap={8} align="center">
+                <Avatar name={companyOf(job)} uri={job.company_logo || undefined} size={44} />
+                <Stack gap={2} style={{ flex: 1, minWidth: 200 }}>
+                  <Txt variant="h2" tone="ink" numberOfLines={2}>{job.title}</Txt>
+                  <Txt variant="small" tone="muted">
+                    {companyOf(job)} · {job.work_mode || job.work_preference || (job.is_remote ? 'Remote' : 'On-site')}
+                    {job.location ? ` · ${job.location}` : ''}
+                  </Txt>
+                </Stack>
+                <Row wrap gap={6} align="center">
+                  <Pill
+                    label={ready ? tl('{{v0}}% Match · Ready', { v0: score }) : hardFailed ? tl('{{v0}}% Match · Ineligible', { v0: score }) : tl('{{v0}}% Match', { v0: score })}
+                    tone={ready ? 'success' : hardFailed ? 'danger' : 'warning'}
+                    icon="Target"
+                  />
+                  <Pill
+                    label={verified ? 'Verified Recruiter' : tl('Source: {{v0}}', { v0: job.source || 'external' })}
+                    icon={verified ? 'ShieldCheck' : 'Globe'}
+                    tone={verified ? 'success' : 'neutral'}
+                  />
                 </Row>
-              </Inset>
-            ) : null}
-            <Txt variant="body" tone="default" style={{ lineHeight: 22 }}>{stripHtml(selectedDetailJob.description) || 'No description provided.'}</Txt>
-          </>
-        ) : null}
+              </Row>
+
+              {/* SECTION B: Key Information Grid */}
+              <View>
+                <Txt variant="small" weight={700} tone="muted" style={{ marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Key Opportunity Details
+                </Txt>
+                <Row wrap gap={8}>
+                  {/* 1. Stipend / Compensation */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="Wallet" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Stipend / Salary</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {job.stipend || 'Not specified'}
+                    </Txt>
+                  </View>
+
+                  {/* 2. Duration */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="Clock" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Duration</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {job.duration || 'Not specified'}
+                    </Txt>
+                  </View>
+
+                  {/* 3. Deadline & Remaining */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="Calendar" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Application Deadline</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {deadlineText}
+                    </Txt>
+                    {deadlineSubtext ? (
+                      <Txt variant="caption" color={deadlineTone === 'danger' ? colors.berryInk : deadlineTone === 'warning' ? colors.butterInk : colors.mintInk} weight={600} style={{ marginTop: 2 }}>
+                        {deadlineSubtext}
+                      </Txt>
+                    ) : null}
+                  </View>
+
+                  {/* 4. Work Mode */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="House" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Work Mode</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {job.work_mode || job.work_preference || (job.is_remote ? 'Remote' : 'On-site')}
+                    </Txt>
+                  </View>
+
+                  {/* 5. Location & Regions */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="MapPin" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Location & Eligibility</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {job.location || job.eligible_regions || 'Not specified'}
+                    </Txt>
+                  </View>
+
+                  {/* 6. Internship Type */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="Briefcase" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Role Type</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {job.job_type || job.opportunity_type || 'Internship'}
+                    </Txt>
+                  </View>
+
+                  {/* 7. Experience */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="GraduationCap" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Required Experience</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {job.experience_required || (verified ? 'Fresher / Student' : 'Not specified')}
+                    </Txt>
+                  </View>
+
+                  {/* 8. Openings */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="Users" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Openings</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {job.openings ? `${job.openings} opening${job.openings > 1 ? 's' : ''}` : 'Not specified'}
+                    </Txt>
+                  </View>
+
+                  {/* 9. Posted Date */}
+                  <View style={styles.gridCell}>
+                    <Row gap={6} align="center">
+                      <Icon name="Clock" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Posted Date</Txt>
+                    </Row>
+                    <Txt variant="small" weight={600} tone="ink" numberOfLines={1} style={{ marginTop: 4 }}>
+                      {postedText}
+                    </Txt>
+                  </View>
+                </Row>
+              </View>
+
+              {/* SECTION C: About the Company */}
+              <Card padding={space.lg} radius={radii.lg} style={styles.sectionCard}>
+                <Row justify="space-between" align="center" wrap gap={8}>
+                  <Row gap={8} align="center">
+                    <Icon name="Building" size={18} color={colors.ink} />
+                    <Txt variant="h3" tone="ink">About {companyOf(job)}</Txt>
+                  </Row>
+                  {job.company_website ? (
+                    <Button
+                      label="Website"
+                      iconRight="ExternalLink"
+                      size="sm"
+                      variant="ghost"
+                      onPress={() => {
+                        const url = job.company_website;
+                        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                          Linking.openURL(url).catch(() => {});
+                        }
+                      }}
+                    />
+                  ) : null}
+                </Row>
+                <Stack gap={6} style={{ marginTop: 8 }}>
+                  <Txt variant="body" tone="default" style={{ lineHeight: 22 }}>
+                    {compOverview || `${companyOf(job)} is actively offering verified career opportunities for emerging student talent through SkillSetu.`}
+                  </Txt>
+                  {job.industry ? (
+                    <Row gap={6} align="center" style={{ marginTop: 4 }}>
+                      <Txt variant="caption" tone="muted">Industry:</Txt>
+                      <Pill label={job.industry} tone="neutral" size="sm" />
+                    </Row>
+                  ) : null}
+                </Stack>
+              </Card>
+
+              {/* SECTION D: About the Role */}
+              <Card padding={space.lg} radius={radii.lg} style={styles.sectionCard}>
+                <Row gap={8} align="center" style={{ marginBottom: 8 }}>
+                  <Icon name="FileText" size={18} color={colors.ink} />
+                  <Txt variant="h3" tone="ink">About the Role</Txt>
+                </Row>
+                <Txt variant="body" tone="default" style={{ lineHeight: 22 }}>
+                  {displayedDesc || 'No detailed role description provided by employer.'}
+                </Txt>
+                {isDescLong ? (
+                  <Button
+                    label={descExpanded ? 'Show less' : 'Show more'}
+                    size="sm"
+                    variant="ghost"
+                    icon={descExpanded ? 'ChevronUp' : 'ChevronDown'}
+                    style={{ alignSelf: 'flex-start', marginTop: 6 }}
+                    onPress={() => setDescExpanded(!descExpanded)}
+                  />
+                ) : null}
+              </Card>
+
+              {/* SECTION E: Responsibilities & Learning Outcomes */}
+              {responsibilitiesText ? (
+                <Card padding={space.lg} radius={radii.lg} style={styles.sectionCard}>
+                  <Row gap={8} align="center" style={{ marginBottom: 8 }}>
+                    <Icon name="Sparkles" size={18} color={colors.ink} />
+                    <Txt variant="h3" tone="ink">Responsibilities & Outcomes</Txt>
+                  </Row>
+                  <Txt variant="body" tone="default" style={{ lineHeight: 22 }}>
+                    {responsibilitiesText}
+                  </Txt>
+                </Card>
+              ) : null}
+
+              {/* SECTION F: Requirements & Qualifications */}
+              <Card padding={space.lg} radius={radii.lg} style={styles.sectionCard}>
+                <Row gap={8} align="center" style={{ marginBottom: 8 }}>
+                  <Icon name="ShieldCheck" size={18} color={colors.ink} />
+                  <Txt variant="h3" tone="ink">Requirements & Eligibility</Txt>
+                </Row>
+                <Stack gap={10}>
+                  {/* Mandatory qualifications */}
+                  <View>
+                    <Txt variant="small" weight={700} tone="ink">Mandatory Qualifications</Txt>
+                    <Stack gap={4} style={{ marginTop: 4 }}>
+                      {(job.mandatory_qualifications || [
+                        job.minimum_cgpa > 0 ? `Minimum CGPA requirement: ${job.minimum_cgpa.toFixed(1)}` : null,
+                        `Eligible Degree: ${job.degree || 'Degree in Computer Science, IT, or related field'}`,
+                        `Location & Authorization: ${job.eligible_regions || job.location || 'Eligible for remote/on-site work'}`
+                      ]).filter(Boolean).map((q, idx) => (
+                        <Row key={idx} gap={6} align="flex-start">
+                          <Txt variant="small" tone="accent">•</Txt>
+                          <Txt variant="small" tone="default" style={{ flex: 1 }}>{q}</Txt>
+                        </Row>
+                      ))}
+                    </Stack>
+                  </View>
+
+                  {/* Technical Skills required */}
+                  <View style={{ marginTop: 4 }}>
+                    <Txt variant="small" weight={700} tone="ink">Required Technical Skills</Txt>
+                    <Row wrap gap={6} style={{ marginTop: 6 }}>
+                      {allSkills.length ? allSkills.map((s, idx) => {
+                        const sName = typeof s === 'string' ? s : (s?.skill_name || s?.name || 'Skill');
+                        const sKey = typeof s === 'string' ? s : (s?.skill_id || s?.id || s?.skill_name || idx);
+                        const isMatched = matchedSkills.some((m) => (typeof m === 'string' ? m.toLowerCase() === sName.toLowerCase() : (m?.skill_name || '').toLowerCase() === sName.toLowerCase()));
+                        return (
+                          <Pill
+                            key={sKey}
+                            label={isMatched ? `✓ ${sName}` : sName}
+                            tone={isMatched ? 'success' : 'neutral'}
+                            size="sm"
+                          />
+                        );
+                      }) : <Txt variant="caption" tone="muted">Foundational software engineering skills</Txt>}
+                    </Row>
+                  </View>
+                </Stack>
+              </Card>
+
+              {/* SECTION G: Dedicated SkillSetu AI Match Analysis Section */}
+              <Card padding={space.lg} radius={radii.lg} tone={ready ? 'success' : hardFailed ? 'danger' : 'accent'} style={styles.matchAnalysisCard}>
+                <Row justify="space-between" align="center" wrap gap={8}>
+                  <Row gap={8} align="center">
+                    <Icon name="Brain" size={20} color={colors.ink} />
+                    <Txt variant="h3" tone="ink">SkillSetu AI Match Analysis</Txt>
+                  </Row>
+                  <Pill
+                    label={ready ? 'Eligible to Apply' : hardFailed ? 'Eligibility Blocker' : 'Needs Development'}
+                    tone={ready ? 'success' : hardFailed ? 'danger' : 'warning'}
+                    icon={ready ? 'CircleCheck' : hardFailed ? 'CircleAlert' : 'Clock'}
+                  />
+                </Row>
+
+                {/* Score vs Threshold */}
+                <View style={{ marginTop: space.md }}>
+                  <Row justify="space-between" align="center">
+                    <Txt variant="bodyStrong" tone="ink">
+                      Profile Match: <Txt variant="bodyStrong" weight={700}>{score}%</Txt>
+                    </Txt>
+                    <Txt variant="small" tone="muted">
+                      Application Threshold: <Txt variant="small" weight={700} tone="ink">{threshold}%</Txt>
+                    </Txt>
+                  </Row>
+                  <ProgressBar
+                    value={Math.min(100, (score / threshold) * 100)}
+                    tone={ready ? 'success' : hardFailed ? 'danger' : 'accent'}
+                    style={{ marginTop: 8 }}
+                  />
+                  <Txt variant="caption" tone={hardFailed ? 'danger' : ready ? 'success' : 'muted'} style={{ marginTop: 6 }}>
+                    {ready
+                      ? '✓ You meet the 80% application threshold and all mandatory criteria for this role.'
+                      : hardFailed
+                      ? (job.hard_failures?.join('. ') || 'A mandatory eligibility prerequisite is not currently satisfied.')
+                      : `You need ${Math.max(1, threshold - score)}% more match to reach the 80% application gate. Complete the recommended actions below to unlock direct application.`}
+                  </Txt>
+                </View>
+
+                {/* Matched vs Missing Skills breakdown */}
+                <View style={{ marginTop: space.md }}>
+                  <Row wrap gap={8}>
+                    {matchedSkills.length ? (
+                      <View style={{ flex: 1, minWidth: 200 }}>
+                        <Txt variant="caption" weight={700} tone="muted">MATCHED SKILLS</Txt>
+                        <Row wrap gap={6} style={{ marginTop: 6 }}>
+                          {matchedSkills.map((s, idx) => {
+                            const sName = typeof s === 'string' ? s : (s?.skill_name || s?.name || 'Skill');
+                            const sKey = typeof s === 'string' ? s : (s?.skill_id || s?.id || s?.skill_name || idx);
+                            return (
+                              <Pill key={sKey} label={`✓ ${sName}`} tone="success" size="sm" />
+                            );
+                          })}
+                        </Row>
+                      </View>
+                    ) : null}
+
+                    {missingSkills.length ? (
+                      <View style={{ flex: 1, minWidth: 200 }}>
+                        <Txt variant="caption" weight={700} tone="muted">MISSING MANDATORY SKILLS</Txt>
+                        <Row wrap gap={6} style={{ marginTop: 6 }}>
+                          {missingSkills.map((s, idx) => {
+                            const sName = typeof s === 'string' ? s : (s?.skill_name || s?.name || 'Skill');
+                            const sKey = typeof s === 'string' ? s : (s?.skill_id || s?.id || s?.skill_name || idx);
+                            return (
+                              <Pill key={sKey} label={sName} tone="peach" size="sm" />
+                            );
+                          })}
+                        </Row>
+                      </View>
+                    ) : null}
+                  </Row>
+                </View>
+
+                {/* Why this matches explanation */}
+                {job.why_this_matches ? (
+                  <Inset tone="neutral" style={{ marginTop: space.md }}>
+                    <Txt variant="caption" weight={700} tone="ink">MATCH REASONING</Txt>
+                    <Txt variant="small" tone="default" style={{ marginTop: 4, lineHeight: 18 }}>
+                      {job.why_this_matches}
+                    </Txt>
+                  </Inset>
+                ) : null}
+
+                {/* Recommended Actions for Below 80% */}
+                {!ready && (job.recommended_courses?.length || job.recommended_tests?.length || job.recommended_projects?.length) ? (
+                  <View style={{ marginTop: space.md, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.md }}>
+                    <Txt variant="small" weight={700} tone="ink" style={{ marginBottom: 8 }}>
+                      Recommended Actions to Reach 80%
+                    </Txt>
+
+                    <Stack gap={8}>
+                      {/* Course recommendation */}
+                      {(job.recommended_courses || []).slice(0, 2).map((c) => {
+                        const cid = c.id || c.course_id || c.title;
+                        return (
+                          <Card key={cid} padding={space.sm} radius={radii.md} style={{ backgroundColor: colors.surface }}>
+                            <Row justify="space-between" align="center" gap={8}>
+                              <Stack gap={2} style={{ flex: 1 }}>
+                                <Txt variant="small" weight={600} tone="ink">{c.title}</Txt>
+                                <Txt variant="caption" tone="muted">
+                                  {c.provider || 'NPTEL / Swayam'} · {c.reason || `Targeted course for ${c.skill_name || 'skill gap'}`}
+                                </Txt>
+                              </Stack>
+                              <Button
+                                label={c.status === 'COMPLETED' ? 'Done ✓' : 'Enroll Free'}
+                                size="sm"
+                                variant={c.status === 'COMPLETED' ? 'secondary' : 'primary'}
+                                onPress={() => handleEnrollCourse(c)}
+                                loading={enrollingCourseId === cid}
+                              />
+                            </Row>
+                          </Card>
+                        );
+                      })}
+
+                      {/* Assessment recommendation */}
+                      {(job.recommended_tests || []).slice(0, 2).map((t, idx) => (
+                        <Card key={t.id || idx} padding={space.sm} radius={radii.md} style={{ backgroundColor: colors.surface }}>
+                          <Row justify="space-between" align="center" gap={8}>
+                            <Stack gap={2} style={{ flex: 1 }}>
+                              <Txt variant="small" weight={600} tone="ink">{t.title || `${t.skill || 'Skill'} Diagnostic`}</Txt>
+                              <Txt variant="caption" tone="muted">
+                                Verify competency · {t.question_count || 15} questions · Boosts match score
+                              </Txt>
+                            </Stack>
+                            <Button
+                              label="Take Quiz"
+                              icon="Target"
+                              size="sm"
+                              onPress={() => {
+                                setShowDetailsModal(false);
+                                handleStartAssessment(t);
+                              }}
+                            />
+                          </Row>
+                        </Card>
+                      ))}
+                    </Stack>
+                  </View>
+                ) : null}
+              </Card>
+
+              {/* SECTION H: Application Process */}
+              <Card padding={space.lg} radius={radii.lg} style={styles.sectionCard}>
+                <Row gap={8} align="center" style={{ marginBottom: 8 }}>
+                  <Icon name="Send" size={18} color={colors.ink} />
+                  <Txt variant="h3" tone="ink">Application Process</Txt>
+                </Row>
+                <Stack gap={8}>
+                  <Txt variant="small" tone="default">
+                    {job.application_instructions || 'Click Apply Now below to register your application and proceed to the official employer portal.'}
+                  </Txt>
+                  <Row wrap gap={12} style={{ marginTop: 4 }}>
+                    <Row gap={4} align="center">
+                      <Icon name="FileText" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Documents: Resume (PDF), Portfolio</Txt>
+                    </Row>
+                    <Row gap={4} align="center">
+                      <Icon name="Globe" size={14} color={colors.textMuted} />
+                      <Txt variant="caption" tone="muted">Source: {job.source || 'External Provider'}</Txt>
+                    </Row>
+                  </Row>
+                </Stack>
+              </Card>
+            </Stack>
+          );
+        })() : null}
       </Sheet>
       {/* Targeted development plan */}
       <Sheet
@@ -1214,5 +1773,23 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: colors.mintStrong,
     backgroundColor: colors.mint,
+  },
+  gridCell: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sectionCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  matchAnalysisCard: {
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
   },
 });

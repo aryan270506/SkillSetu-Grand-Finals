@@ -53,12 +53,20 @@ Generate ${count} deep technical questions that test core engineering concepts r
   }
 
   /**
-   * Evaluates spoken or written theory answers from the transcript.
    */
   async evaluateAnswers(context, questions = [], transcript = []) {
-    const transcriptText = Array.isArray(transcript)
-      ? transcript.map((t) => `${t.role === 'ai' ? 'Interviewer' : 'Candidate'}: ${t.text}`).join('\n')
-      : String(transcript || '');
+    let transcriptText = '';
+    if (Array.isArray(transcript)) {
+      transcriptText = transcript
+        .map((t) => `${t.role === 'ai' ? 'Interviewer' : 'Candidate'}: ${t.text}`)
+        .join('\n');
+    } else if (typeof transcript === 'object' && transcript !== null) {
+      transcriptText = Object.entries(transcript)
+        .map(([qId, ans]) => `[Question ${qId}] Candidate Answer: ${typeof ans === 'string' ? ans : JSON.stringify(ans)}`)
+        .join('\n\n');
+    } else {
+      transcriptText = String(transcript || '');
+    }
 
     const userPrompt = `JOB DESCRIPTION:
 ${context.jd}

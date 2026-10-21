@@ -1,6 +1,9 @@
-from sqlalchemy import Column, Integer, Float, String, Boolean, DateTime, Text, func, ForeignKey, Numeric, UniqueConstraint
+from sqlalchemy import Column, Integer, Float, String, Boolean, DateTime, Text, func, ForeignKey, Numeric, UniqueConstraint, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+PortableJSON = JSON().with_variant(JSONB(), "postgresql")
 
 class StudentUser(Base):
     __tablename__ = "students"
@@ -814,11 +817,19 @@ class InternshipPosting(Base):
     application_threshold = Column(Integer, default=80, nullable=False)  # Configurable minimum match % to apply directly (50-100)
     deadline = Column(DateTime(timezone=True), nullable=True)
     status = Column(String, default="Active") # Active, Draft, Closed, Paused
+    active_pipeline_version_id = Column(Integer, ForeignKey("recruitment_pipeline_versions.id", ondelete="SET NULL", use_alter=True, name="fk_posting_active_pipeline_version"), nullable=True)
+    draft_pipeline_version_id = Column(Integer, ForeignKey("recruitment_pipeline_versions.id", ondelete="SET NULL", use_alter=True, name="fk_posting_draft_pipeline_version"), nullable=True)
+    automation_enabled = Column(Boolean, default=False, nullable=False)
+    automation_paused = Column(Boolean, default=False, nullable=False)
+    automation_mode = Column(String, default="REVIEW_GATED", nullable=False)  # FULL_AUTOMATION, REVIEW_GATED, MANUAL_ONLY
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     company = relationship("Company", back_populates="postings")
     recruiter = relationship("RecruiterUser")
+    active_pipeline_version = relationship("RecruitmentPipelineVersion", foreign_keys=[active_pipeline_version_id], post_update=True)
+    draft_pipeline_version = relationship("RecruitmentPipelineVersion", foreign_keys=[draft_pipeline_version_id], post_update=True)
+    pipeline_versions = relationship("RecruitmentPipelineVersion", foreign_keys="RecruitmentPipelineVersion.internship_id", back_populates="internship", cascade="all, delete-orphan")
 
 
 class InternshipListing(Base):
@@ -927,6 +938,11 @@ class InternshipApplication(Base):
     feedback = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     internship_id = Column(Integer, nullable=True, index=True)
+    pipeline_version_id = Column(Integer, ForeignKey("recruitment_pipeline_versions.id", ondelete="SET NULL"), nullable=True, index=True)
+    is_manually_overridden = Column(Boolean, default=False, nullable=False)
+    active_override_id = Column(Integer, ForeignKey("recruiter_decision_overrides.id", ondelete="SET NULL", use_alter=True, name="fk_application_active_override"), nullable=True)
+    eligibility_status = Column(String, default="PENDING", nullable=False)  # PENDING, ELIGIBLE, INELIGIBLE, AWAITING_MANUAL_REVIEW
+    eligibility_breakdown = Column(PortableJSON, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("student_id", "source", "source_id", name="uq_student_internship_app_ext"),
@@ -934,6 +950,9 @@ class InternshipApplication(Base):
 
     # Relationships
     student = relationship("StudentUser", back_populates="internship_applications")
+    pipeline_version = relationship("RecruitmentPipelineVersion", foreign_keys=[pipeline_version_id])
+    active_override = relationship("RecruiterDecisionOverride", foreign_keys=[active_override_id], post_update=True)
+    overrides = relationship("RecruiterDecisionOverride", foreign_keys="RecruiterDecisionOverride.application_id", back_populates="application", cascade="all, delete-orphan")
 
 
 class InternshipAssessmentConfig(Base):
@@ -972,6 +991,9 @@ class CandidateAssessmentSession(Base):
     round_results = Column(Text, nullable=True)  # JSON string of all round results (aptitude, technical, interview, gd, integrity)
     evaluation = Column(Text, nullable=True)  # JSON string of synthesized final evaluation dossier
     assessment_url = Column(String, nullable=True)
+    pipeline_version_id = Column(Integer, ForeignKey("recruitment_pipeline_versions.id", ondelete="SET NULL"), nullable=True)
+    execution_status = Column(String, default="PENDING", nullable=False)  # PASS, FAIL, PENDING, INCOMPLETE, INVALID_SUBMISSION, EVALUATION_ERROR, AWAITING_MANUAL_REVIEW, MANUALLY_OVERRIDDEN
+    client_telemetry_digest = Column(PortableJSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
@@ -981,6 +1003,7 @@ class CandidateAssessmentSession(Base):
     application = relationship("InternshipApplication")
     internship = relationship("InternshipPosting")
     company = relationship("Company")
+    pipeline_version = relationship("RecruitmentPipelineVersion", foreign_keys=[pipeline_version_id])
 
 
 class Scholarship(Base):
@@ -1150,8 +1173,13 @@ class ApplicationStatusAudit(Base):
     previous_status = Column(String, nullable=True)
     new_status = Column(String, nullable=False)
     changed_by_recruiter_id = Column(Integer, ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
+    actor_type = Column(String, default="SYSTEM", nullable=False)  # SYSTEM, RECRUITER, ADMIN
+    override_id = Column(Integer, ForeignKey("recruiter_decision_overrides.id", ondelete="SET NULL"), nullable=True)
+    metadata_json = Column(PortableJSON, nullable=True)
     changed_at = Column(DateTime(timezone=True), server_default=func.now())
     notes = Column(Text, nullable=True)
+
+    override = relationship("RecruiterDecisionOverride", foreign_keys=[override_id])
 
 
 class ApplicationEmailLog(Base):
@@ -1187,5 +1215,118 @@ class StudentInterviewPracticeSubmission(Base):
 
     # Relationships
     student = relationship("StudentUser")
+
+
+# ==========================================
+# 12. RECRUITMENT AUTOMATION & DURABLE ENGINE MODELS
+# ==========================================
+
+class RecruitmentPipelineVersion(Base):
+    __tablename__ = "recruitment_pipeline_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    internship_id = Column(Integer, ForeignKey("internship_postings.id", ondelete="CASCADE"), nullable=False, index=True)
+    version_number = Column(Integer, nullable=False, default=1)
+    status = Column(String, nullable=False, default="DRAFT", index=True)  # DRAFT, PUBLISHED, SUPERSEDED, ARCHIVED
+    content_hash = Column(String, nullable=False)  # SHA-256 fingerprint of the pipeline configuration
+    
+    # Validated structured configurations
+    pipeline_config = Column(PortableJSON, nullable=False)       # Rounds, sequences, durations, sandbox params
+    evaluation_rubrics = Column(PortableJSON, nullable=False)    # Detailed scoring rubrics per round
+    eligibility_rules = Column(PortableJSON, nullable=False)     # Whitelisted degrees, min CGPA, passing years
+    scoring_weights = Column(PortableJSON, nullable=False)       # Weights per round, pass thresholds, overall threshold
+    automation_policy = Column(PortableJSON, nullable=False)     # Auto-screen, auto-progress, auto-select flags, batch/immediate
+    
+    published_by_id = Column(Integer, ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("internship_id", "version_number", name="uq_internship_pipeline_version"),
+    )
+
+    internship = relationship("InternshipPosting", foreign_keys=[internship_id], back_populates="pipeline_versions")
+    published_by = relationship("RecruiterUser", foreign_keys=[published_by_id])
+
+
+class RecruitmentJob(Base):
+    __tablename__ = "recruitment_job_queue"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_type = Column(String, nullable=False, index=True)  # SCREEN_APPLICANT, PROGRESS_ROUND, SYNTHESIZE_RESULTS, SEND_NOTIFICATION, SWEEP_DEADLINES
+    status = Column(String, nullable=False, default="QUEUED", index=True)  # QUEUED, PROCESSING, COMPLETED, FAILED, DEAD_LETTER
+    priority = Column(Integer, default=0, nullable=False, index=True)
+    idempotency_key = Column(String, unique=True, nullable=True, index=True)
+    
+    payload = Column(PortableJSON, nullable=False)
+    result = Column(PortableJSON, nullable=True)
+    error_log = Column(Text, nullable=True)
+    
+    retry_count = Column(Integer, default=0, nullable=False)
+    max_retries = Column(Integer, default=5, nullable=False)
+    next_run_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    locked_by = Column(String, nullable=True)
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class AssessmentCallbackEvent(Base):
+    __tablename__ = "assessment_callback_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    idempotency_key = Column(String, unique=True, nullable=False, index=True)
+    session_id = Column(String, ForeignKey("candidate_assessment_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String, nullable=False, default="ROUND_COMPLETED")
+    source_service = Column(String, nullable=False, default="Archive2")
+    payload_hash = Column(String, nullable=False)
+    status = Column(String, default="PROCESSED", nullable=False)  # RECEIVED, PROCESSING, PROCESSED, FAILED
+    response_payload = Column(PortableJSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    processed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    session = relationship("CandidateAssessmentSession")
+
+
+class RecruiterDecisionOverride(Base):
+    __tablename__ = "recruiter_decision_overrides"
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("internship_applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    recruiter_id = Column(Integer, ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    override_type = Column(String, nullable=False)  # FORCE_ADVANCE_ROUND, REVERT_ROUND, MANUAL_SHORTLIST, MANUAL_REJECT, MANUAL_SCORE_REVISE, MANUAL_FINAL_SELECT, PUT_ON_HOLD
+    status = Column(String, default="ACTIVE", nullable=False, index=True)  # ACTIVE, SUPERSEDED, REVOKED
+    
+    previous_state = Column(PortableJSON, nullable=False)
+    new_state = Column(PortableJSON, nullable=False)
+    
+    reason_code = Column(String, nullable=False)   # EXCEPTIONAL_PORTFOLIO, AI_EVAL_MISMATCH, PROCTOR_FALSE_POSITIVE, etc.
+    justification = Column(Text, nullable=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_by_id = Column(Integer, ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
+
+    application = relationship("InternshipApplication", foreign_keys=[application_id], back_populates="overrides")
+    recruiter = relationship("RecruiterUser", foreign_keys=[recruiter_id])
+    revoked_by = relationship("RecruiterUser", foreign_keys=[revoked_by_id])
+
+
+class AIInvocationTelemetry(Base):
+    __tablename__ = "ai_invocation_telemetry"
+
+    id = Column(Integer, primary_key=True, index=True)
+    feature = Column(String, nullable=False, index=True)  # JD_ANALYSIS, RUBRIC_EVAL, INTERVIEW_SYNTHESIS
+    model = Column(String, nullable=False, index=True)    # e.g., gemini-3.5-flash-lite
+    latency_ms = Column(Integer, nullable=False)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    estimated_cost_usd = Column(Numeric(10, 6), nullable=True)
+    status = Column(String, nullable=False)  # SUCCESS, TIMEOUT, SCHEMA_PARSE_ERROR, API_ERROR
+    error_detail = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

@@ -3,6 +3,7 @@ import requests
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from app.services.live_opportunities.base_source import BaseLiveSource
+from app.services.live_opportunities.html_utils import clean_scraped_html, extract_structured_sections
 
 logger = logging.getLogger("live_source_remotive")
 
@@ -58,6 +59,8 @@ class RemotiveLiveSource(BaseLiveSource):
 
         now_dt = datetime.now(timezone.utc)
         salary = raw.get("salary")
+        cleaned_desc = clean_scraped_html(desc)
+        sections = extract_structured_sections(cleaned_desc)
 
         return {
             "id": f"remotive_{source_id}",
@@ -70,18 +73,31 @@ class RemotiveLiveSource(BaseLiveSource):
             "title": title,
             "company_name": str(raw.get("company_name", "Global Employer")).strip(),
             "company_logo": raw.get("company_logo") or "",
-            "description": (desc[:500] if desc else ""),
+            "company_website": raw.get("url") or "",
+            "company_overview": sections.get("company_overview"),
+            "industry": "Software Engineering",
+            "description": cleaned_desc,
+            "responsibilities": sections.get("responsibilities"),
+            "requirements": sections.get("requirements"),
             "location": raw.get("candidate_required_location") or "Worldwide / Remote",
+            "eligible_regions": raw.get("candidate_required_location") or "Worldwide / Remote",
             "work_preference": "Remote",
+            "work_mode": "Remote",
+            "job_type": raw.get("job_type") or "Internship / Full-time",
+            "opportunity_type": "Internship",
+            "experience_required": "Fresher / Junior",
             "stipend": salary if salary and ("₹" in salary or "$" in salary) else None,
             "stipend_min": None,
             "stipend_max": None,
             "currency": "INR" if salary and "₹" in str(salary) else ("USD" if salary and "$" in str(salary) else None),
             "duration": None,
+            "openings": 1,
             "min_cgpa": None,
             "application_threshold": int(raw.get("application_threshold", 80) or 80),
             "minimum_match_threshold": int(raw.get("application_threshold", 80) or 80),
             "application_deadline": None,
+            "posted_at": raw.get("publication_date"),
+            "created_at": raw.get("publication_date"),
             "fetched_at": now_dt.isoformat(),
             "required_skills": skills,
             "is_active": True,

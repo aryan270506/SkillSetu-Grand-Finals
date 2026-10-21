@@ -3,6 +3,7 @@ import requests
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from app.services.live_opportunities.base_source import BaseLiveSource
+from app.services.live_opportunities.html_utils import clean_scraped_html, extract_structured_sections
 
 logger = logging.getLogger("live_source_jobicy")
 
@@ -77,6 +78,9 @@ class JobicyLiveSource(BaseLiveSource):
 
         now_dt = datetime.now(timezone.utc)
 
+        cleaned_desc = clean_scraped_html(desc)
+        sections = extract_structured_sections(cleaned_desc)
+
         min_sal = raw.get("annualSalaryMin")
         max_sal = raw.get("annualSalaryMax")
         stipend_str = None
@@ -96,18 +100,31 @@ class JobicyLiveSource(BaseLiveSource):
             "title": title,
             "company_name": str(raw.get("companyName", "Tech Employer")).strip(),
             "company_logo": raw.get("companyLogo") or "",
-            "description": (desc[:500] if desc else ""),
+            "company_website": raw.get("companyWebsite") or raw.get("url") or "",
+            "company_overview": sections.get("company_overview"),
+            "industry": raw.get("jobIndustry") or "",
+            "description": cleaned_desc,
+            "responsibilities": sections.get("responsibilities"),
+            "requirements": sections.get("requirements"),
             "location": raw.get("jobGeo", "Remote"),
+            "eligible_regions": raw.get("jobGeo", "Anywhere"),
             "work_preference": "Remote",
+            "work_mode": "Remote",
+            "job_type": raw.get("jobType") or "Internship / Full-time",
+            "opportunity_type": raw.get("jobType") or "Internship",
+            "experience_required": raw.get("jobLevel") or "Entry / Junior",
             "stipend": stipend_str,
             "stipend_min": float(min_sal) if min_sal else None,
             "stipend_max": float(max_sal) if max_sal else None,
             "currency": "USD" if stipend_str else None,
             "duration": None,
+            "openings": 1,
             "min_cgpa": None,
             "application_threshold": int(raw.get("application_threshold", 80) or 80),
             "minimum_match_threshold": int(raw.get("application_threshold", 80) or 80),
             "application_deadline": None,
+            "posted_at": raw.get("pubDate"),
+            "created_at": raw.get("pubDate"),
             "fetched_at": now_dt.isoformat(),
             "required_skills": skills,
             "is_active": True,

@@ -248,14 +248,23 @@ def get_internship_detail(
     email: Optional[str] = Query(None),
     session_id: Optional[str] = Query(None),
     x_session_id: Optional[str] = Header(None, alias="X-Session-ID"),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
     """
     Returns full details, match breakdown, and personalized roadmap for a specific live internship.
     """
     student = None
-    if email:
-        student = db.query(models.StudentUser).filter(models.StudentUser.email == email.lower().strip()).first()
+    target_email = email
+    if not target_email and authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "").strip()
+        if "@" in token:
+            target_email = token
+
+    if target_email:
+        student = db.query(models.StudentUser).filter(models.StudentUser.email == target_email.lower().strip()).first()
+    if not student:
+        student = db.query(models.StudentUser).first()
 
     listing = None
     if str(internship_id).isdigit():
@@ -544,6 +553,31 @@ def apply_internship(
     db.add(app_entry)
     db.commit()
     db.refresh(app_entry)
+
+    # 6. Automatic Recruitment Automation Enqueue (if opening has automation enabled)
+    if app_entry.internship_id:
+        posting = db.query(models.InternshipPosting).filter(models.InternshipPosting.id == app_entry.internship_id).first()
+        if posting and posting.automation_enabled and posting.active_pipeline_version_id and not posting.automation_paused:
+            from app.services.pipeline_versioning_service import pin_candidate_to_active_version
+            from app.services.job_queue_service import enqueue_job
+
+            version = pin_candidate_to_active_version(db, app_entry.id)
+            enqueue_job(
+                db=db,
+                job_type="SCREEN_APPLICANT",
+                payload={"application_id": app_entry.id, "student_id": student.id, "internship_id": posting.id},
+                idempotency_key=f"screen_app_{app_entry.id}_v{version.version_number}"
+            )
+            db.add(models.ApplicationStatusAudit(
+                application_id=app_entry.id,
+                previous_status=None,
+                new_status="APPLIED",
+                actor_type="STUDENT",
+                notes="Application submitted and enqueued for automated screening.",
+                metadata_json={"event": "APPLICATION_SUBMITTED", "pipeline_version": version.version_number}
+            ))
+            db.commit()
+            logger.info(f"⚡ Enqueued automated screening job for Application {app_entry.id} (Pipeline v{version.version_number})")
 
     logger.info(f"⚡ Application successfully authorized & tracked for student {student.email} on {title} (Match: {current_match}%, Threshold: {app_threshold}%)")
     return ApplicationActionResponse(

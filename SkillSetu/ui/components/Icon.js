@@ -20,6 +20,7 @@ import Check from 'lucide-react-native/icons/check';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import Circle from 'lucide-react-native/icons/circle';
 import CircleAlert from 'lucide-react-native/icons/circle-alert';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
@@ -79,7 +80,7 @@ import Zap from 'lucide-react-native/icons/zap';
 
 const ICONS = {
   ArrowLeft, ArrowRight, ArrowUpRight, AudioLines, Award, Bell, BookOpen, Bookmark, Bot, Brain,
-  Briefcase, Building, Calendar, ChartColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle,
+  Briefcase, Building, Calendar, ChartColumn, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle,
   CircleAlert, CircleCheck, Clock, Code, Download, Ellipsis, ExternalLink, Eye, EyeOff, FileText,
   Flame, Funnel, GitBranch, Globe, GraduationCap, House, Inbox, Info, LayoutDashboard, LayoutGrid,
   Link, List, Lock, LogOut, Mail, MapPin, Menu, MessageCircle, Mic, Minus, Pencil, Phone, Pin, Play,
