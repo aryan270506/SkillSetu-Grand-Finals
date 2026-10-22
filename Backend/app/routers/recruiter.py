@@ -871,10 +871,10 @@ def get_recruiter_dashboard(
             "department": p.department or company.name,
             "location": p.location or company.headquarters or "Hybrid",
             "work_mode": p.work_mode or "Hybrid",
-            "stipend": p.stipend or "₹35,000/mo",
-            "duration": p.duration or "6 Months",
+            "stipend": p.stipend or "",
+            "duration": p.duration or "",
             "status": p.status,
-            "application_threshold": p.application_threshold or 75,
+            "application_threshold": p.application_threshold,
             "applied_count": app_counts.get(p.id, {}).get("applied", 0),
             "shortlisted_count": app_counts.get(p.id, {}).get("shortlisted", 0),
             "interview_count": app_counts.get(p.id, {}).get("interview", 0),
@@ -890,10 +890,10 @@ def get_recruiter_dashboard(
         stu = students_map.get(app.student_id)
         post = postings_map.get(app.internship_id)
         stu_name = stu.name if stu and stu.name else (app.name_snapshot or "Candidate")
-        univ_name = stu.university or stu.college if stu else "Sanjay Ghodawat University"
-        deg_name = stu.degree if stu else "B.Tech"
+        univ_name = (stu.university or stu.college) if stu else (app.college_snapshot or "")
+        deg_name = (stu.degree or stu.branch) if stu else (app.degree_snapshot or "")
         role_title = post.title if post else (app.title_snapshot or "Intern")
-        match_val = int(round(app.match_score_at_apply)) if app.match_score_at_apply is not None else 85
+        match_val = int(round(app.match_score_at_apply)) if app.match_score_at_apply is not None else None
 
         st_raw = (app.status or "APPLIED").upper()
         if any(kw in st_raw for kw in ["SHORTLIST", "SENT_TO_NEXT"]):
@@ -955,11 +955,14 @@ def get_recruiter_dashboard(
             role_title = post.title if post else "Internship Role"
             round_label = get_canonical_round_label(sess.current_round or "technical")
 
-            sched_time = "10:30"
-            sched_period = "AM • TODAY"
-            if sess.created_at:
-                sched_time = sess.created_at.strftime("%I:%M")
-                sched_period = f"{sess.created_at.strftime('%p')} • TODAY"
+            sched_time = ""
+            sched_period = ""
+            if sess.scheduled_at:
+                sched_time = sess.scheduled_at.strftime("%I:%M %p")
+                sched_period = sess.scheduled_at.strftime("%b %d")
+            elif sess.created_at:
+                sched_time = sess.created_at.strftime("%I:%M %p")
+                sched_period = "Today" if sess.created_at.date() == now.date() else sess.created_at.strftime("%b %d")
 
             upcoming_interviews.append({
                 "id": str(sess.id),
@@ -973,7 +976,7 @@ def get_recruiter_dashboard(
                 "round_name": round_label,
                 "time": sched_time,
                 "day": sched_period,
-                "filter_day": "Today",
+                "filter_day": "Today" if (sess.scheduled_at and sess.scheduled_at.date() == now.date()) or (sess.created_at and sess.created_at.date() == now.date()) else "Upcoming",
                 "mode": "📹 Live Code Sandbox + Meet",
                 "sub_text": "💻 Assessment Session Active",
                 "status": "In Progress" if sess.status == "IN_PROGRESS" else "Scheduled",
@@ -982,18 +985,20 @@ def get_recruiter_dashboard(
             })
 
     for intv in recruiter_interviews:
+        intv_time = intv.interview_time or (intv.scheduled_at.strftime("%I:%M %p") if getattr(intv, "scheduled_at", None) else "")
+        intv_day = intv.interview_date or (intv.scheduled_at.strftime("%b %d") if getattr(intv, "scheduled_at", None) else "")
         upcoming_interviews.append({
             "id": f"RI-{intv.id}",
             "candidate_name": intv.candidate_name,
             "student": intv.candidate_name,
-            "college": intv.candidate_college or "University",
+            "college": intv.candidate_college or "",
             "role": intv.role_title,
             "role_title": intv.role_title,
             "round": f"{intv.role_title} • {intv.round_name or 'Technical Interview'}",
             "round_name": intv.round_name or "Technical Interview",
-            "time": intv.interview_time or "02:00",
-            "day": "PM • TODAY",
-            "filter_day": "Today",
+            "time": intv_time,
+            "day": intv_day,
+            "filter_day": "Today" if intv_day.lower() == "today" or (getattr(intv, "scheduled_at", None) and intv.scheduled_at.date() == now.date()) else "Upcoming",
             "mode": intv.mode or "📹 Google Meet Active",
             "sub_text": "📹 Google Meet Scheduled",
             "status": intv.status or "Scheduled",
@@ -1012,6 +1017,13 @@ def get_recruiter_dashboard(
     funnel_sel_pct = round((total_sel / total_apps * 100), 1) if total_apps > 0 else 0
     funnel_eff = round((total_sel / total_apps * 100), 1) if total_apps > 0 else 0
 
+    completed_apps = [a for a in apps if a.applied_at and (getattr(a, "updated_at", None) or getattr(a, "reviewed_at", None)) and (a.status or "").upper() in ["SELECTED", "HIRED", "REJECTED", "NOT_SELECTED"]]
+    if completed_apps:
+        total_days = sum((((getattr(a, "updated_at", None) or getattr(a, "reviewed_at", None)) - a.applied_at).total_seconds() / 86400.0) for a in completed_apps)
+        avg_turnaround_val = f"{round(max(0.1, total_days / len(completed_apps)), 1)}"
+    else:
+        avg_turnaround_val = "—"
+
     selection_funnel = {
         "total_applications": total_apps,
         "shortlisted": total_short,
@@ -1021,7 +1033,7 @@ def get_recruiter_dashboard(
         "interviews_percentage": funnel_intv_pct,
         "selected_percentage": funnel_sel_pct,
         "efficiency_rate": f"{funnel_eff}%",
-        "avg_turnaround_days": "2.4"
+        "avg_turnaround_days": avg_turnaround_val
     }
 
     # 9. Top Recommended Students for company
@@ -1042,12 +1054,10 @@ def get_recruiter_dashboard(
                     cand_skills = [f"{s} ✓" for s in sk_raw[:4]]
             except Exception:
                 pass
-        if not cand_skills:
-            cand_skills = ["React ✓", "Python ✓", "SQL ✓", "Git/GitHub ✓"]
 
-        cgpa_val = cand.cgpa_or_percentage if cand.cgpa_or_percentage else "8.8"
-        degree_label = f"{cand.degree or 'CS'} (CGPA {cgpa_val})"
-        match_score = max(86, min(97, (cand.resume_score or 85) + 6))
+        cgpa_val = cand.cgpa_or_percentage
+        degree_label = f"{cand.degree or 'Engineering'}" + (f" (CGPA {cgpa_val})" if cgpa_val else "")
+        match_score = int(round(cand.resume_score)) if cand.resume_score is not None else None
 
         recommended_students.append({
             "id": f"REC-{cand.id}",
@@ -1090,18 +1100,9 @@ def get_recruiter_dashboard(
             "time": time_ago,
         })
 
-    # If no activity yet, provide friendly initial guide activity
+    # If no activity yet, keep empty list (zero hallucinated data)
     if not recent_activity:
-        recent_activity = [
-            {
-                "id": "ACT-INIT-1",
-                "student_name": "SkillSetu Engine",
-                "internship_title": company.name,
-                "description": f"Company profile verified for {company.name}.",
-                "icon": "✅",
-                "time": "Today",
-            }
-        ]
+        recent_activity = []
 
     # 11. Application Activity Graph breakdown
     activity_peak = f"Peak: {max(len(apps), 1)} applications"
@@ -1113,6 +1114,9 @@ def get_recruiter_dashboard(
         "week4_count": len([a for a in apps if a.applied_at and a.applied_at >= now - timedelta(days=7)]),
         "total": total_apps
     }
+
+    match_scores = [a.match_score_at_apply for a in apps if a.match_score_at_apply is not None]
+    avg_match_score_str = f"{round(sum(match_scores) / len(match_scores))}%" if match_scores else "—"
 
     return {
         "status": "success",
@@ -1131,7 +1135,7 @@ def get_recruiter_dashboard(
                 "interviews_scheduled": total_intvs,
                 "shortlisted_students": total_short,
                 "selected_students": total_sel,
-                "avg_match_score": "88%"
+                "avg_match_score": avg_match_score_str
             },
             "active_internships": active_internships,
             "recent_applications": recent_applications,
@@ -1215,10 +1219,10 @@ def get_company_internships(
                 "location": p.location or company.headquarters,
                 "work_mode": p.work_mode or "Hybrid",
                 "stipend": p.stipend or "",
-                "duration": p.duration or "6 Months",
+                "duration": p.duration or "",
                 "openings": p.openings or 1,
-                "application_threshold": p.application_threshold if p.application_threshold is not None else 80,
-                "minimum_match_threshold": p.application_threshold if p.application_threshold is not None else 80,
+                "application_threshold": p.application_threshold,
+                "minimum_match_threshold": p.application_threshold,
                 "deadline": p.deadline.isoformat() if p.deadline else None,
                 "status": p.status or "Active",
                 "automation_mode": p.automation_mode or "REVIEW_GATED",
@@ -1387,7 +1391,7 @@ def get_company_internship_detail(
         if len(resolved_skills) > 4:
             top_preview += f" +{len(resolved_skills) - 4}"
 
-        match_val = int(round(a.match_score_at_apply)) if a.match_score_at_apply is not None else 85
+        match_val = int(round(a.match_score_at_apply)) if a.match_score_at_apply is not None else None
         
         sess = session_map.get(a.id)
         c_round_k = (sess.current_round if sess and sess.current_round else (round_seq[0] if round_seq else "aptitude")).lower().strip()
@@ -1405,11 +1409,14 @@ def get_company_internship_detail(
         next_r_name = get_canonical_round_label(next_r_k) if next_r_k else "Ready for Final Evaluation"
 
         integ = (sess.integrity_status if sess and sess.integrity_status else "VERIFIED").upper()
+        is_sess_done = (sess is not None and getattr(sess, "status", None) == "COMPLETED")
         if (a.status or "").upper() in ["NOT_SELECTED", "REJECTED"]:
             qual_status = "NOT_SELECTED"
+        elif not is_sess_done:
+            qual_status = "AWAITING_ASSESSMENT" if not sess or sess.status == "CREATED" else "IN_PROGRESS"
         elif (a.status or "").upper() in ["SELECTED_FOR_NEXT_ROUND", "ASSESSMENT_IN_PROGRESS"] and c_round_idx > 0:
             qual_status = "SELECTED_FOR_NEXT_ROUND"
-        elif r_score >= r_thresh and integ not in ["FLAGGED", "HIGH_RISK", "FAILED"]:
+        elif r_score is not None and r_score >= r_thresh and integ not in ["FLAGGED", "HIGH_RISK", "FAILED"]:
             qual_status = "QUALIFIED"
         else:
             qual_status = "NOT_QUALIFIED"
@@ -1418,7 +1425,7 @@ def get_company_internship_detail(
             "current_round_key": c_round_k,
             "current_round_name": c_round_name,
             "current_round_index": c_round_idx,
-            "assessment_score": int(round(r_score)),
+            "assessment_score": int(round(r_score)) if r_score is not None else None,
             "passing_threshold": int(round(r_thresh)),
             "rank": r_rank,
             "total_candidates_in_round": r_total,
@@ -1470,10 +1477,10 @@ def get_company_internship_detail(
             "location": posting.location or company.headquarters,
             "work_mode": posting.work_mode or "Hybrid",
             "stipend": posting.stipend or "",
-            "duration": posting.duration or "6 Months",
+            "duration": posting.duration or "",
             "openings": posting.openings or 1,
-            "application_threshold": posting.application_threshold if posting.application_threshold is not None else 80,
-            "minimum_match_threshold": posting.application_threshold if posting.application_threshold is not None else 80,
+            "application_threshold": posting.application_threshold,
+            "minimum_match_threshold": posting.application_threshold,
             "deadline": posting.deadline.isoformat() if posting.deadline else None,
             "status": posting.status or "Active",
             "automation_mode": posting.automation_mode or "REVIEW_GATED",
@@ -1507,82 +1514,102 @@ def build_candidate_evaluation_payload(
         db=db
     )
 
-    overall_match_pct = match_eval.get("match_score", 85)
+    overall_match_pct = match_eval.get("match_score", 0)
     skill_match_pct = match_eval.get("skill_match_score", overall_match_pct)
-    req_threshold = posting.application_threshold if posting.application_threshold is not None else 80
+    req_threshold = posting.application_threshold if posting.application_threshold is not None else 70
     snapshot_threshold = app.application_threshold_at_apply or req_threshold
     snapshot_match = app.match_score_at_apply if app.match_score_at_apply is not None else overall_match_pct
 
     # 2. Hard eligibility analysis vs Match score
-    cgpa_str = student.cgpa_or_percentage or "7.5"
-    try:
-        cgpa_val = float(str(cgpa_str).split("/")[0].replace("%", "").strip())
-        if cgpa_val > 10.0:
-            cgpa_val = cgpa_val / 10.0
-    except Exception:
-        cgpa_val = 7.5
+    cgpa_str = student.cgpa_or_percentage
+    if cgpa_str:
+        try:
+            cgpa_val = float(str(cgpa_str).split("/")[0].replace("%", "").strip())
+            if cgpa_val > 10.0:
+                cgpa_val = cgpa_val / 10.0
+            cgpa_pass = cgpa_val >= 6.0
+            cgpa_val_display = f"{cgpa_val:.2f} / 10.0"
+            cgpa_status_text = "✓ CGPA requirement satisfied" if cgpa_pass else "✕ CGPA requirement not satisfied"
+            cgpa_detail = f"Student CGPA of {cgpa_val:.2f} exceeds minimum threshold."
+        except Exception:
+            cgpa_pass = True
+            cgpa_val_display = str(cgpa_str)
+            cgpa_status_text = "✓ Academic credentials submitted"
+            cgpa_detail = "Academic record submitted for review."
+    else:
+        cgpa_pass = True
+        cgpa_val_display = "Not specified"
+        cgpa_status_text = "— Academic performance pending verification"
+        cgpa_detail = "Student has not specified CGPA; pending verification."
 
-    degree_pass = bool(student.degree and any(k in student.degree.lower() for k in ["b.tech", "b.e", "bachelor", "b.sc", "m.tech", "master", "mca", "bca", "engineering", "tech"]))
-    branch_pass = bool(student.branch and any(k in student.branch.lower() for k in ["computer", "science", "information", "software", "tech", "it", "cse", "data", "ai", "electronics"]))
-    cgpa_pass = cgpa_val >= 6.0
-    threshold_pass = snapshot_match >= snapshot_threshold
+    student_deg = student.degree or ""
+    degree_pass = bool(student_deg and any(k in student_deg.lower() for k in ["b.tech", "b.e", "bachelor", "b.sc", "m.tech", "master", "mca", "bca", "engineering", "tech"])) if student_deg else True
+
+    student_branch = student.branch or ""
+    branch_pass = bool(student_branch and any(k in student_branch.lower() for k in ["computer", "science", "information", "software", "tech", "it", "cse", "data", "ai", "electronics"])) if student_branch else True
+
+    threshold_pass = (snapshot_match >= snapshot_threshold) if snapshot_match is not None else True
 
     hard_checks = [
         {
             "id": "degree_req",
             "name": "Degree Qualification",
             "required": "B.Tech / B.E. / Equivalent Technical Degree",
-            "student_value": student.degree or "B.Tech",
+            "student_value": student_deg or "Engineering Degree",
             "is_met": degree_pass,
             "status_text": "✓ Degree requirement satisfied" if degree_pass else "✕ Degree requirement not satisfied",
-            "detail": f"{student.degree or 'Enrolled Degree'} aligns with technical internship requirements."
+            "detail": f"{student_deg or 'Enrolled Degree'} aligns with technical internship requirements."
         },
         {
             "id": "branch_req",
             "name": "Branch / Discipline",
             "required": "Computer Science, IT, or Allied Engineering",
-            "student_value": student.branch or "Computer Science and Engineering",
+            "student_value": student_branch or "Technical Branch",
             "is_met": branch_pass,
             "status_text": "✓ Branch requirement satisfied" if branch_pass else "✕ Branch requirement not satisfied",
-            "detail": f"{student.branch or 'Technical Major'} directly matches role engineering curriculum."
+            "detail": f"{student_branch or 'Technical Major'} directly matches role engineering curriculum."
         },
         {
             "id": "cgpa_req",
             "name": "Academic Performance (CGPA)",
             "required": "Minimum 6.0 / 10.0 Cutoff",
-            "student_value": f"{cgpa_val:.2f} / 10.0",
+            "student_value": cgpa_val_display,
             "is_met": cgpa_pass,
-            "status_text": "✓ CGPA requirement satisfied" if cgpa_pass else "✕ CGPA requirement not satisfied",
-            "detail": f"Student CGPA of {cgpa_val:.2f} exceeds minimum threshold."
+            "status_text": cgpa_status_text,
+            "detail": cgpa_detail
         },
         {
             "id": "grad_year_req",
             "name": "Graduation Timeline",
             "required": "Class of 2026 - 2029",
-            "student_value": f"Batch of {student.graduation_year or '2028'}",
+            "student_value": f"Batch of {student.graduation_year}" if student.graduation_year else "Not specified",
             "is_met": True,
             "status_text": "✓ Graduation timeline verified",
-            "detail": f"Target graduation year {student.graduation_year or '2028'} is eligible for current cohort."
+            "detail": f"Target graduation year {student.graduation_year or 'Cohort'} is eligible for current cohort."
         }
     ]
 
     all_hard_met = all(c["is_met"] for c in hard_checks)
     is_overall_eligible = all_hard_met and threshold_pass
 
-    # 3. Match score breakdown
-    raw_breakdown = match_eval.get("scoring_breakdown", {})
+    # 3. Dynamic match score breakdown
+    bd = match_eval.get("breakdown", {})
+    skill_m = int(round(bd.get("skill_match", skill_match_pct)))
+    career_m = int(round(bd.get("career_alignment", 100.0)))
+    work_m = int(round(bd.get("work_mode_fit", 100.0)))
+    loc_m = int(round(bd.get("location_fit", 100.0)))
+
     breakdown_components = [
-        {"component": "Skill Match", "score": f"{int(skill_match_pct)}%", "weight": "40%", "score_num": int(skill_match_pct), "desc": "Canonical match across all required technologies"},
-        {"component": "Career Match", "score": "90%", "weight": "20%", "score_num": 90, "desc": "Alignment with student saved target career trajectory"},
-        {"component": "Target Industry", "score": "85%", "weight": "15%", "score_num": 85, "desc": "Industry sector preference compatibility"},
-        {"component": "Work Mode & Locality", "score": "100%", "weight": "15%", "score_num": 100, "desc": f"Availability for {posting.work_mode or 'Remote'} format"},
-        {"component": "Academic Standing", "score": "95%", "weight": "10%", "score_num": 95, "desc": "Coursework and university academic benchmark"}
+        {"component": "Skill Match", "score": f"{skill_m}%", "weight": "45%", "score_num": skill_m, "desc": "Authoritative match against listing required skills"},
+        {"component": "Career Alignment", "score": f"{career_m}%", "weight": "25%", "score_num": career_m, "desc": "Student target career trajectory compatibility"},
+        {"component": "Work Mode Fit", "score": f"{work_m}%", "weight": "15%", "score_num": work_m, "desc": f"Preference match for {posting.work_mode or 'Remote'} format"},
+        {"component": "Location Fit", "score": f"{loc_m}%", "weight": "15%", "score_num": loc_m, "desc": f"Alignment with {posting.location or 'Listing location'}"}
     ]
 
     # 4. Required Skills & Gaps Analysis - Single Canonical Source of Truth
     raw_req_skills = parse_json_safely(posting.required_skills, [])
-    if not raw_req_skills:
-        raw_req_skills = ["React", "JavaScript", "TypeScript", "REST APIs", "Git/GitHub"]
+    if not isinstance(raw_req_skills, list):
+        raw_req_skills = []
 
     resolved_req_skills = resolve_human_readable_skills(db, raw_req_skills)
     if not resolved_req_skills:
@@ -2433,12 +2460,12 @@ def discover_verified_students(
             {
                 "id": s.id,
                 "name": s.name,
-                "degree": f"{s.degree or 'B.Tech'} • {s.university or 'University'} (CGPA {s.cgpa_or_percentage or '8.5'})",
-                "location": s.location or "India",
-                "headline": s.headline or "Software Engineering Student",
+                "degree": f"{s.degree or 'Engineering'}" + (f" • {s.university}" if s.university else "") + (f" (CGPA {s.cgpa_or_percentage})" if s.cgpa_or_percentage else ""),
+                "location": s.location or "",
+                "headline": s.headline or "Student",
                 "skills": parse_json_safely(s.skill_ids, []),
-                "resume_score": s.resume_score or 85,
-                "match_score": "92%",
+                "resume_score": s.resume_score,
+                "match_score": f"{s.resume_score}%" if s.resume_score is not None else None,
                 "is_verified": s.is_verified
             }
             for s in students
@@ -2515,10 +2542,10 @@ def get_company_applications_summary(
             interview_count += 1
 
         post = posting_map.get(a.internship_id)
-        thresh = a.application_threshold_at_apply or (post.application_threshold if post else 80)
-        match_val = a.match_score_at_apply if a.match_score_at_apply is not None else 85.0
+        thresh = a.application_threshold_at_apply if a.application_threshold_at_apply is not None else (post.application_threshold if post and post.application_threshold is not None else 70)
+        match_val = a.match_score_at_apply
         raw_elig = str(a.eligibility_snapshot or "").upper()
-        if raw_elig in ["PASSED", "PASS", "READY_TO_APPLY"] or match_val >= thresh:
+        if raw_elig in ["PASSED", "PASS", "READY_TO_APPLY", "ELIGIBLE"] or (match_val is not None and match_val >= thresh):
             eligible_count += 1
 
     applied_pct = 100.0 if total > 0 else 0.0
@@ -2666,12 +2693,12 @@ def get_company_applications(
         post = posting_map.get(a.internship_id)
         
         # Match score resolution
-        app_thresh = a.application_threshold_at_apply or (post.application_threshold if post else 80)
-        match_val = float(a.match_score_at_apply if a.match_score_at_apply is not None else 85.0)
-        match_int = int(round(match_val))
+        app_thresh = a.application_threshold_at_apply if a.application_threshold_at_apply is not None else (post.application_threshold if post and post.application_threshold is not None else 70)
+        match_val = float(a.match_score_at_apply) if a.match_score_at_apply is not None else None
+        match_int = int(round(match_val)) if match_val is not None else None
 
-        raw_elig = a.eligibility_snapshot or ("Passed" if match_val >= app_thresh else "Needs Development")
-        eligibility_val = "Passed" if str(raw_elig).upper() in ["PASSED", "PASS", "READY_TO_APPLY"] else "Needs Development"
+        raw_elig = a.eligibility_snapshot or ("Passed" if (match_val is not None and match_val >= app_thresh) else "Needs Development")
+        eligibility_val = "Passed" if str(raw_elig).upper() in ["PASSED", "PASS", "READY_TO_APPLY", "ELIGIBLE"] else ("Needs Development" if match_val is not None else "Pending")
 
         # Search filter (name, email, university, title)
         if search and search.strip():
@@ -2697,7 +2724,7 @@ def get_company_applications(
 
         # Min Match Score Filter
         if min_match_score is not None:
-            if match_int < min_match_score:
+            if match_int is None or match_int < min_match_score:
                 continue
 
         # Screening Status Filter
@@ -2784,18 +2811,18 @@ def get_company_applications(
             status_display = "Applied" if status_upper in ["NEW", "APPLIED"] else status_raw.title()
             step_badge = status_display
 
-        match_lbl = "High" if match_int >= 90 else ("Good" if match_int >= 80 else "< 80%")
-        audit_note = "Strong matching profile" if eligibility_val == "Passed" else "Missing required skills"
+        match_lbl = ("High" if match_int >= 90 else ("Good" if match_int >= 80 else "< 80%")) if match_int is not None else "—"
+        audit_note = ("Strong matching profile" if eligibility_val == "Passed" else "Missing required skills") if match_int is not None else "Awaiting assessment evaluation"
 
-        stu_name = stu.name if stu else "Applicant"
+        stu_name = stu.name if stu and stu.name else (a.name_snapshot or "Applicant")
         stu_initials = ("".join([part[0].upper() for part in stu_name.split() if part][:2]) or "ST")
-        stu_degree = stu.degree or "B.Tech" if stu else "B.Tech"
-        stu_uni = stu.university or "University" if stu else "University"
-        stu_grad = stu.graduation_year or "2027" if stu else "2027"
-        grad_short = stu_grad[-2:] if len(stu_grad) >= 2 else "27"
-        degree_line = f"{stu_degree} • {stu_uni} '{grad_short}"
+        stu_degree = stu.degree if stu and stu.degree else (a.degree_snapshot or "")
+        stu_uni = (stu.university or stu.college) if stu else (a.college_snapshot or "")
+        stu_grad = stu.graduation_year if stu and stu.graduation_year else ""
+        grad_short = stu_grad[-2:] if len(stu_grad) >= 2 else ""
+        degree_line = f"{stu_degree}" + (f" • {stu_uni}" if stu_uni else "") + (f" '{grad_short}" if grad_short else "")
 
-        stu_cgpa_str = "8.5/10"
+        stu_cgpa_str = None
         if stu and stu.cgpa_or_percentage:
             raw_cgpa = str(stu.cgpa_or_percentage).strip()
             if "/ 10" in raw_cgpa or "/10" in raw_cgpa:
@@ -2824,16 +2851,16 @@ def get_company_applications(
             "candidate_degree": stu_degree,
             "college": stu_uni,
             "candidate_college": stu_uni,
-            "branch": stu.branch or "Computer Science" if stu else "Computer Science",
-            "cgpa": stu_cgpa_str,
+            "branch": stu.branch if stu and stu.branch else "",
+            "cgpa": stu_cgpa_str or "",
             "profile_image": stu.profile_image or "" if stu else "",
             "avatar": stu_initials,
             "internship": a.title_snapshot or (post.title if post else "Internship Position"),
             "internship_title": a.title_snapshot or (post.title if post else "Internship Position"),
             "dept": post.department if post else (company.name or "Engineering"),
             "match_score": match_int,
-            "matchPct": f"{match_int}%",
-            "threshold": f"{app_thresh}%",
+            "matchPct": f"{match_int}%" if match_int is not None else "—",
+            "threshold": f"{app_thresh}%" if app_thresh is not None else "—",
             "threshold_val": app_thresh,
             "application_threshold": app_thresh,
             "eligibility": eligibility_val,
@@ -2860,9 +2887,9 @@ def get_company_applications(
 
     # 4. Sorting
     if sort_by == "match_desc":
-        filtered_list.sort(key=lambda x: x["match_score"], reverse=True)
+        filtered_list.sort(key=lambda x: (x["match_score"] is not None, x["match_score"] or 0), reverse=True)
     elif sort_by == "match_asc":
-        filtered_list.sort(key=lambda x: x["match_score"])
+        filtered_list.sort(key=lambda x: (x["match_score"] is None, x["match_score"] or 0))
     elif sort_by == "date_desc":
         filtered_list.sort(key=lambda x: x["applied_at"] or "", reverse=True)
     elif sort_by == "date_asc":
@@ -2966,9 +2993,9 @@ def export_applications_csv(
         stu = student_map.get(a.student_id)
         post = posting_map.get(a.internship_id)
         
-        match_val = int(round(float(a.match_score_at_apply if a.match_score_at_apply is not None else 85.0)))
-        thresh_val = a.application_threshold_at_apply or (post.application_threshold if post else 80)
-        elig = "Passed" if match_val >= thresh_val else "Needs Development"
+        match_val = int(round(float(a.match_score_at_apply))) if a.match_score_at_apply is not None else None
+        thresh_val = a.application_threshold_at_apply if a.application_threshold_at_apply is not None else (post.application_threshold if post and post.application_threshold is not None else None)
+        elig = ("Passed" if (match_val is not None and thresh_val is not None and match_val >= thresh_val) else "Needs Development") if match_val is not None else "Pending"
 
         writer.writerow([
             f"APP-{a.id:02d}",
@@ -2980,8 +3007,8 @@ def export_applications_csv(
             stu.cgpa_or_percentage if stu else "",
             post.title if post else (a.title_snapshot or "Internship"),
             a.status or "Applied",
-            f"{match_val}%",
-            f"{thresh_val}%",
+            f"{match_val}%" if match_val is not None else "—",
+            f"{thresh_val}%" if thresh_val is not None else "—",
             elig,
             a.applied_at.strftime("%Y-%m-%d %H:%M") if a.applied_at else ""
         ])
@@ -3092,9 +3119,9 @@ def get_single_candidate_application(
     payload = build_candidate_evaluation_payload(db, company, posting, app, student)
     payload["id"] = app.id
     payload["student_name"] = student.name
-    payload["degree"] = student.degree or "B.Tech"
-    payload["college"] = student.university or "University"
-    payload["cgpa"] = student.cgpa_or_percentage or "8.5/10"
+    payload["degree"] = student.degree or ""
+    payload["college"] = student.university or student.college or ""
+    payload["cgpa"] = student.cgpa_or_percentage or ""
     payload["profile_image"] = student.profile_image or ""
     payload["avatar"] = "".join([p[0].upper() for p in (student.name or "ST").split() if p][:2]) or "ST"
     audits = db.query(models.ApplicationStatusAudit).filter_by(application_id=app.id).order_by(models.ApplicationStatusAudit.changed_at.asc()).all()
@@ -3527,9 +3554,12 @@ def get_recruiter_analytics(
     ).all()
 
     total_apps = len(applications)
-    shortlisted = len([a for a in applications if a.status in ("SHORTLISTED", "Shortlisted")])
-    interview_count = len(interviews)
-    selected_count = len([a for a in applications if a.status in ("OFFERED", "Selected", "Offered")])
+    shortlisted = len([a for a in applications if (a.status or "").upper() in ("SHORTLISTED", "SHORTLIST", "SENT_TO_NEXT_ROUND")])
+    sessions_count = db.query(models.CandidateAssessmentSession).filter(
+        models.CandidateAssessmentSession.company_id == company.id
+    ).count()
+    interview_count = max(len(interviews), sessions_count)
+    selected_count = len([a for a in applications if (a.status or "").upper() in ("OFFERED", "SELECTED", "HIRED", "ACCEPTED")])
 
     return {
         "status": "success",

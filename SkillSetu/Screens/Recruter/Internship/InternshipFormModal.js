@@ -126,7 +126,7 @@ export default function InternshipFormModal({
     setWorkMode(data.work_mode || 'Hybrid');
     setLocation(data.location || '');
     setStipend(data.stipend || '');
-    setDuration(data.duration || '6 Months');
+    setDuration(data.duration || '');
     setOpenings(String(data.openings || 1));
 
     let parsedSkills = [];

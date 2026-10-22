@@ -178,7 +178,6 @@ export default function RecruterDashboard({
         if (v.includes('not selected') || v.includes('reject')) return 'danger';
         return 'neutral';
     };
-    const CANNED_SKILLS = ['React ✓', 'Python ✓', 'SQL ✓', 'Git/GitHub ✓'];
     const funnel = [
         { label: 'Applied', value: fTotal, pct: fTotal ? 100 : 0, tone: 'info' },
         { label: 'Shortlisted', value: fShort, pct: fShortPct, tone: 'accent' },
@@ -269,6 +268,9 @@ export default function RecruterDashboard({
                 <StatTile value={loadingData ? '…' : dashboardMetrics.total_applications} label="Applicants" tone="accent" style={styles.stat} onPress={() => go('Applications')} />
                 <StatTile value={loadingData ? '…' : dashboardMetrics.shortlisted_students} label="Shortlisted" tone="warning" style={styles.stat} onPress={() => go('Applications')} />
                 <StatTile value={loadingData ? '…' : dashboardMetrics.selected_students} label="Selected" tone="success" style={styles.stat} />
+                {dashboardMetrics.avg_match_score && dashboardMetrics.avg_match_score !== '—' ? (
+                    <StatTile value={loadingData ? '…' : dashboardMetrics.avg_match_score} label="Avg match" tone="accent" style={styles.stat} />
+                ) : null}
             </View>
             <Card>
                 <Row justify="space-between">
@@ -355,7 +357,7 @@ export default function RecruterDashboard({
                             <Txt variant="caption" color={colors.skyInk}>Highest resume scores on SkillSetu</Txt>
                             <Stack gap={8} style={{ marginTop: space.sm }}>
                                 {recommendedStudents.slice(0, 4).map((s) => {
-                                    const skills = (s.skills || []).filter((k) => !CANNED_SKILLS.includes(k));
+                                    const skills = s.skills || [];
                                     return (
                                         <Inset key={s.id} tone="info" padding={space.sm}>
                                             <Row gap={10}>

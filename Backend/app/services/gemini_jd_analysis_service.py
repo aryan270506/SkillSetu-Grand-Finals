@@ -180,19 +180,27 @@ Generate a JSON object with EXACTLY these top-level keys:
 
         # Normalize round keys to canonical forms
         rounds = parsed.get("pipeline_config", {}).get("rounds", [])
+        canonical_keys = ["aptitude", "technical", "interview", "gd"]
         for idx, r in enumerate(rounds):
             rk = str(r.get("round_key", "")).lower().strip()
             rn = str(r.get("round_name", "")).lower()
-            if rk in ["r1", "round1", "round_1", "stage1", "1"] or (idx == 0 and not any(x.get("round_key") == "aptitude" for x in rounds)):
+
+            if "aptitude" in rk or "aptitude" in rn or "screening" in rn or "cognitive" in rn:
                 r["round_key"] = "aptitude"
-            elif rk in ["r2", "round2", "round_2", "stage2", "2"] or ("tech" in rn or "code" in rn):
-                r["round_key"] = "technical"
-            elif rk in ["r3", "round3", "round_3", "stage3", "3"] or ("interview" in rn or "voice" in rn):
+            elif "interview" in rk or "voice" in rk or "interview" in rn or "voice" in rn:
                 r["round_key"] = "interview"
-            elif rk in ["r4", "round4", "round_4", "stage4", "4"] or ("discussion" in rn or "gd" in rn):
+            elif "discussion" in rk or "gd" in rk or "discussion" in rn or "gd" in rn:
                 r["round_key"] = "gd"
-            else:
+            elif "tech" in rk or "code" in rk or "tech" in rn or "code" in rn:
+                r["round_key"] = "technical"
+            elif rk in canonical_keys:
                 r["round_key"] = rk
+            else:
+                r["round_key"] = canonical_keys[min(idx, len(canonical_keys) - 1)]
+
+        # Guarantee canonical aptitude is present in rounds
+        if rounds and not any(r.get("round_key") == "aptitude" for r in rounds):
+            rounds[0]["round_key"] = "aptitude"
 
         # Validate with Pydantic
         PipelineConfigSchema.model_validate(parsed["pipeline_config"])

@@ -2638,7 +2638,7 @@ def get_student_rounds_dashboard(
             "company_name": comp_name,
             "role_title": intern_title,
             "round_name": (s.current_round or "Interview").title(),
-            "overall_score": round(s.overall_score, 1) if s.overall_score is not None else 75.0,
+            "overall_score": round(s.overall_score, 1) if s.overall_score is not None else None,
             "integrity_status": s.integrity_status or "VERIFIED",
             "decision": eval_json.get("recommendation", "Completed"),
             "completed_at": s.completed_at.strftime("%b %d, %Y") if s.completed_at else (s.created_at.strftime("%b %d, %Y") if s.created_at else "Recent"),
@@ -2646,14 +2646,15 @@ def get_student_rounds_dashboard(
         })
 
     # 4. Trajectory Analytics
+    scored_completed = [s for s in completed_sessions if s.overall_score is not None]
     trajectory = {
-        "has_sufficient_data": len(completed_sessions) >= 2,
+        "has_sufficient_data": len(scored_completed) >= 2,
         "total_assessments": len(completed_sessions),
         "strongest_competency": skill_matrix[0]["skill_name"] if skill_matrix else "General Aptitude",
         "strongest_competency_score": skill_matrix[0]["percentage"] if skill_matrix else 0,
     }
-    if len(completed_sessions) >= 2:
-        chronological = sorted(completed_sessions, key=lambda x: x.created_at or datetime.min)
+    if len(scored_completed) >= 2:
+        chronological = sorted(scored_completed, key=lambda x: x.created_at or datetime.min)
         first_half = chronological[:len(chronological)//2]
         second_half = chronological[len(chronological)//2:]
         base_avg = sum(s.overall_score for s in first_half) / max(1, len(first_half))

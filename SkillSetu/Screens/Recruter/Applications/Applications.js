@@ -553,7 +553,7 @@ export default function Applications({ user }) {
                   <Txt variant="small" weight={700} tone="ink" numberOfLines={1}>{cand.student_name}</Txt>
                   <Txt variant="caption" tone="muted" numberOfLines={1}>{[cand.internship_title, cand.college].filter(Boolean).join(' · ')}</Txt>
                 </Stack>
-                <Pill label={`${Math.round(cand.match_score ?? 0)}%`} tone={(cand.eligibility === 'PASSED' || cand.eligibility === 'Passed') ? 'success' : 'warning'} size="sm" />
+                <Pill label={cand.match_score != null ? `${Math.round(cand.match_score)}%` : '—'} tone={(cand.eligibility === 'PASSED' || cand.eligibility === 'Passed') ? 'success' : 'neutral'} size="sm" />
                 {isDesktop ? <Pill label={pretty(cand.status)} tone={statusTone(cand.status)} size="sm" /> : null}
               </Pressable>
             );
@@ -586,7 +586,7 @@ export default function Applications({ user }) {
               <Txt variant="small" tone="muted">{[candDegree, candCollege].filter(Boolean).join(' · ') || '—'}</Txt>
               <Row wrap gap={6}>
                 <Pill label={pretty(candStatus)} tone={statusTone(candStatus)} size="sm" />
-                <Pill label={`CGPA ${candCgpa}`} size="sm" />
+                {candCgpa && candCgpa !== 'N/A' && candCgpa !== '' ? <Pill label={`CGPA ${candCgpa}`} size="sm" /> : null}
                 <Pill label={isCandidateEligible ? 'Meets threshold' : tl('Below {{candThreshold}}', {
                   candThreshold: candThreshold
                 })} tone={isCandidateEligible ? 'success' : 'warning'} size="sm" />

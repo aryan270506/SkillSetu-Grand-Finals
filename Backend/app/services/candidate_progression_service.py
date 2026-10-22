@@ -84,12 +84,11 @@ class CandidateProgressionService:
                 logger.warning(f"Error parsing round_results for score extraction: {e}")
 
         if session and session.overall_score is not None:
-            return float(session.overall_score)
+            c_round = (session.current_round or "").lower().strip()
+            if not c_round or c_round == str(round_key).lower().strip():
+                return float(session.overall_score)
 
-        if app and app.match_score_at_apply is not None:
-            return float(app.match_score_at_apply)
-
-        return 80.0
+        return None
 
     @staticmethod
     def get_round_threshold(
@@ -169,7 +168,7 @@ class CandidateProgressionService:
                 })
 
         # Sort descending by score, tiebreaker earlier application date
-        candidate_scores.sort(key=lambda x: (-x["score"], x["applied_at"]))
+        candidate_scores.sort(key=lambda x: (-(x["score"] if x["score"] is not None else -1.0), x["applied_at"]))
 
         total_in_round = len(candidate_scores)
         ranking_map: Dict[int, Tuple[int, int]] = {}
@@ -245,7 +244,7 @@ class CandidateProgressionService:
 
         # IF NO PIPELINE CONFIGURED: Return clean unconfigured state
         if not has_pipeline:
-            match_sc = int(round(app.match_score_at_apply or 80.0))
+            match_sc = int(round(app.match_score_at_apply)) if app.match_score_at_apply is not None else None
             return {
                 "has_pipeline": False,
                 "has_assessment_config": False,
@@ -256,7 +255,7 @@ class CandidateProgressionService:
                 "current_round_index": 0,
                 "total_rounds": 0,
                 "assessment_score": match_sc,
-                "passing_threshold": int(round(posting.application_threshold or 70.0)),
+                "passing_threshold": int(round(posting.application_threshold)) if posting and posting.application_threshold is not None else 70,
                 "overall_score": match_sc,
                 "rank": 1,
                 "total_candidates_in_round": 1,
@@ -313,7 +312,7 @@ class CandidateProgressionService:
 
             is_session_completed = (session is not None and getattr(session, "status", None) == "COMPLETED")
             has_integrity_issue = bool(session and getattr(session, "integrity_status", None) in ["FLAGGED", "HIGH_RISK"] and not app.is_manually_overridden)
-            is_score_qualified = bool(round_score >= threshold or app.is_manually_overridden)
+            is_score_qualified = bool(app.is_manually_overridden or (round_score is not None and round_score >= threshold))
 
             is_eligible_to_advance = is_session_completed and is_score_qualified and not has_integrity_issue
             
@@ -348,13 +347,13 @@ class CandidateProgressionService:
             "current_round_name": current_round_name,
             "current_round_index": current_round_idx,
             "total_rounds": len(round_seq),
-            "assessment_score": int(round(round_score)),
+            "assessment_score": int(round(round_score)) if round_score is not None else None,
             "passing_threshold": int(round(threshold)),
-            "overall_score": int(round(session.overall_score if session and session.overall_score is not None else round_score)),
+            "overall_score": int(round(session.overall_score)) if (session and session.overall_score is not None) else (int(round(round_score)) if round_score is not None else None),
             "rank": rank,
             "total_candidates_in_round": total_in_round,
             "qualification_status": qualification_status,
-            "is_score_qualified": round_score >= threshold,
+            "is_score_qualified": bool(app.is_manually_overridden or (round_score is not None and round_score >= threshold)),
             "integrity_status": integrity_status,
             "application_status": app_status,
             "assessment_status": assessment_status,
@@ -439,7 +438,7 @@ class CandidateProgressionService:
                         company_id=company_id,
                         status="IN_PROGRESS",
                         current_round=first_round_key,
-                        overall_score=app.match_score_at_apply or 80.0,
+                        overall_score=None,
                         integrity_status="VERIFIED"
                     )
                     db.add(session)
@@ -536,8 +535,27 @@ class CandidateProgressionService:
                 next_round_key = round_seq[current_idx + 1]
                 next_round_name = get_canonical_round_label(next_round_key)
 
+                # Archive previous round results before advancing
+                res_dict = {}
+                if session.round_results:
+                    try:
+                        res_dict = json.loads(session.round_results) if isinstance(session.round_results, str) else dict(session.round_results)
+                    except Exception:
+                        res_dict = {}
+                if current_round_key not in res_dict and session.overall_score is not None:
+                    res_dict[current_round_key] = {
+                        "score": session.overall_score,
+                        "status": session.status or "COMPLETED",
+                        "completed_at": session.completed_at.isoformat() if session.completed_at else datetime.now(timezone.utc).isoformat(),
+                        "evaluation": session.evaluation
+                    }
+                    session.round_results = json.dumps(res_dict)
+
                 session.current_round = next_round_key
                 session.status = "IN_PROGRESS"
+                session.overall_score = None
+                session.evaluation = None
+                session.completed_at = None
                 # Keep shortlisted status or advance stage
                 if app.status not in ["SHORTLISTED", "SELECTED"]:
                     app.status = "SHORTLISTED"
