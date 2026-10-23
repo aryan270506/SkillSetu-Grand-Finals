@@ -955,11 +955,12 @@ def get_recruiter_dashboard(
             role_title = post.title if post else "Internship Role"
             round_label = get_canonical_round_label(sess.current_round or "technical")
 
+            sess_sched = getattr(sess, "scheduled_at", None)
             sched_time = ""
             sched_period = ""
-            if sess.scheduled_at:
-                sched_time = sess.scheduled_at.strftime("%I:%M %p")
-                sched_period = sess.scheduled_at.strftime("%b %d")
+            if sess_sched:
+                sched_time = sess_sched.strftime("%I:%M %p")
+                sched_period = sess_sched.strftime("%b %d")
             elif sess.created_at:
                 sched_time = sess.created_at.strftime("%I:%M %p")
                 sched_period = "Today" if sess.created_at.date() == now.date() else sess.created_at.strftime("%b %d")
@@ -976,7 +977,7 @@ def get_recruiter_dashboard(
                 "round_name": round_label,
                 "time": sched_time,
                 "day": sched_period,
-                "filter_day": "Today" if (sess.scheduled_at and sess.scheduled_at.date() == now.date()) or (sess.created_at and sess.created_at.date() == now.date()) else "Upcoming",
+                "filter_day": "Today" if (sess_sched and sess_sched.date() == now.date()) or (sess.created_at and sess.created_at.date() == now.date()) else "Upcoming",
                 "mode": "📹 Live Code Sandbox + Meet",
                 "sub_text": "💻 Assessment Session Active",
                 "status": "In Progress" if sess.status == "IN_PROGRESS" else "Scheduled",
